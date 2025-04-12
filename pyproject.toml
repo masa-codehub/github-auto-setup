@@ -1,0 +1,20 @@
+[project]
+name = "github-automation-tool"
+version = "0.1.0" # ここのバージョンが __init__.py で読まれる
+description = "GitHub Automation Tool"
+# ...
+
+[project.scripts]
+gh-auto-tool = "github_automation_tool.main:app" # gh-auto-tool は好きな名前に
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src"  # src ディレクトリをPythonパスに追加
+]
+testpaths = [
+  "tests" # tests ディレクトリをテスト対象として指定
+]
+# オプション: pytest の最低バージョンを指定する場合
+# minversion = "6.0"
+# オプション: よく使うpytestのオプションがあれば
+# addopts = "-ra -q"
