@@ -1,0 +1,29 @@
+# .build/requirements.in
+
+# --- Application Dependencies ---
+# アプリケーションの実行に必須のライブラリ
+# pip-compile によって requirements.txt に依存関係も含めて書き出されます
+
+typer[all]              # CLIフレームワーク (引数解析, コマンド定義, ヘルプ表示等)
+githubkit               # GitHub APIクライアント (REST & GraphQL対応)
+langchain               # LangChainコアフレームワーク (LLMアプリケーション構築用)
+langchain-openai        # LangChain用 OpenAI (ChatGPT) 連携ライブラリ
+langchain-google-genai  # LangChain用 Google Generative AI (Gemini) 連携ライブラリ
+pydantic-settings       # Pydanticを利用した設定管理 (環境変数/.env読み込み, 型検証)
+python-dotenv           # .env ファイルから環境変数を読み込む (pydantic-settingsが内部で利用)
+
+
+# --- Development Dependencies ---
+# 開発時にのみ使用するツール (テスト, Lint, Format, 依存関係管理等)
+# 本番環境のイメージには含めないことが望ましいが、今回は含める方針
+
+pip-tools               # requirements.in から requirements.txt を生成するツール
+pytest                  # テストフレームワーク
+ruff                    # 高速な Linter & Formatter
+mypy                    # 静的型チェッカー
+
+# 他に必要な開発ツールがあれば以下に追加
+#例:
+# pre-commit
+# ipython
+# pytest-cov

@@ -10,8 +10,9 @@ RUN apt-get update && \
 
 # 必要なPythonパッケージのインストール
 RUN pip install --upgrade pip
-COPY requirements.txt .
+COPY requirements.in .
 RUN pip install pip-tools
+RUN pip-compile requirements.in
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pythonが.pycファイルを生成しないようにします。
