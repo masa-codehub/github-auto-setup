@@ -1,0 +1,32 @@
+{
+    "name": "name",
+    "service": "service-name",
+    "workspaceFolder": "/app",
+    "dockerComposeFile": "../docker-compose.yml",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "workbench.colorTheme": "Visual Studio Light",
+                "editor.formatOnSave": true,
+                "editor.formatOnType": true,
+                "editor.defaultFormatter": "ms-python.autopep8",
+                "git.enableSmartCommit": true,
+                "git.autofetch": true,
+                "github.copilot.editor.enableAutoCompletions": true
+            },
+            "extensions": [
+                "github.copilot",
+                "github.copilot-chat",
+                "mhutchie.git-graph",
+                "ms-azuretools.vscode-docker",
+                "ms-ceintl.vscode-language-pack-ja",
+                "ms-python.autopep8",
+                "ms-python.debugpy",
+                "ms-python.isort",
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-vscode-remote.remote-containers"
+            ]
+        }
+    }
+}
