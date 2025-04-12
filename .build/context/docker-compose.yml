@@ -1,0 +1,14 @@
+services:
+  github-auto-setup:
+    build:
+      context: ./${PROJECT_NAME}/.build
+      dockerfile: Dockerfile
+    image: ${PROJECT_NAME}_image
+    volumes:
+      - ./${PROJECT_NAME}:${CONTAINER_VOLUME:-/app}
+    working_dir: ${CONTAINER_VOLUME:-/app}
+    environment:
+      - PROJECT_NAME=${PROJECT_NAME}
+    # command: ["bash", "run.sh"]
+    stdin_open: true
+    tty: true
