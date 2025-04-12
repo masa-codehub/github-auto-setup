@@ -1,6 +1,8 @@
 # ベースイメージとしてPythonを使用
 FROM python:3.13.3-slim-bullseye
 
+WORKDIR /app
+
 # 最新版のgitのインストール  
 RUN apt-get update && \
     apt-get install -y git && \
