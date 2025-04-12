@@ -19,6 +19,7 @@ python-dotenv           # .env ファイルから環境変数を読み込む (py
 
 pip-tools               # requirements.in から requirements.txt を生成するツール
 pytest                  # テストフレームワーク
+pytest-cov            # pytest 用のカバレッジ測定ツール
 ruff                    # 高速な Linter & Formatter
 mypy                    # 静的型チェッカー
 
