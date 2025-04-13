@@ -14,7 +14,7 @@ from github_automation_tool.use_cases.create_issues import CreateIssuesUseCase
 from github_automation_tool.adapters.cli_reporter import CliReporter
 from github_automation_tool.domain.models import ParsedRequirementData, IssueData, CreateIssuesResult
 from github_automation_tool.domain.exceptions import (
-    FileProcessingError, AiParserError, GitHubClientError, GitHubValidationError, GitHubAuthenticationError
+    AiParserError, GitHubClientError, GitHubValidationError, GitHubAuthenticationError
 )
 
 # --- Fixtures ---
@@ -152,11 +152,11 @@ def test_execute_dry_run(use_case: CreateGitHubResourcesUseCase, mock_file_reade
 
 def test_execute_file_read_error(use_case: CreateGitHubResourcesUseCase, mock_file_reader, mock_ai_parser, mock_create_repo_uc, mock_create_issues_uc):
     """ファイル読み込みでエラーが発生した場合、処理が中断し例外が送出される"""
-    # FileProcessingError をインポートしておくこと
-    mock_error = FileProcessingError("Cannot read file", original_exception=IOError())
+    # FileNotFoundErrorを使用
+    mock_error = FileNotFoundError("Cannot read file")
     mock_file_reader.side_effect = mock_error
 
-    with pytest.raises(FileProcessingError):
+    with pytest.raises(FileNotFoundError):
         use_case.execute(DUMMY_FILE_PATH, DUMMY_REPO_NAME_FULL, DUMMY_PROJECT_NAME)
 
     # 後続処理は呼ばれない
