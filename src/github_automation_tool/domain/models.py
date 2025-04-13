@@ -26,3 +26,25 @@ class CreateIssuesResult(BaseModel):
     skipped_issue_titles: List[str] = Field(default_factory=list, description="既に存在したためスキップされたIssueのタイトルリスト")
     failed_issue_titles: List[str] = Field(default_factory=list, description="作成中にエラーが発生したIssueのタイトルリスト")
     errors: List[str] = Field(default_factory=list, description="発生したエラーの詳細メッセージリスト")
+
+class CreateIssuesResult(BaseModel):
+    """
+    CreateIssuesUseCase の実行結果を格納するデータクラス。
+    どのIssueが作成され、スキップされ、失敗したかの情報を持つ。
+    """
+    created_issue_urls: List[str] = Field(
+        default_factory=list, # デフォルト値を空リストにする
+        description="正常に作成されたIssueのGitHub URLリスト"
+    )
+    skipped_issue_titles: List[str] = Field(
+        default_factory=list,
+        description="既に存在していたため作成がスキップされたIssueのタイトルリスト"
+    )
+    failed_issue_titles: List[str] = Field(
+        default_factory=list,
+        description="作成中にエラーが発生したIssueのタイトルリスト"
+    )
+    errors: List[str] = Field(
+        default_factory=list,
+        description="発生したエラーの詳細メッセージ（failed_issue_titlesに対応）のリスト"
+    )
