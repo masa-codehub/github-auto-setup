@@ -19,3 +19,10 @@ class ParsedRequirementData(BaseModel):
     # --- 以下は今後のIssueで追加予定 ---
     # labels_to_create: Optional[List[str]] = Field(default=None, description="ファイル全体で定義された共通ラベル等")
     # milestone_to_create: Optional[str] = Field(default=None, description="ファイル全体で定義された共通マイルストーン等")
+
+class CreateIssuesResult(BaseModel):
+    """Issue作成ユースケースの実行結果を格納するクラス"""
+    created_issue_urls: List[str] = Field(default_factory=list, description="正常に作成されたIssueのURLリスト")
+    skipped_issue_titles: List[str] = Field(default_factory=list, description="既に存在したためスキップされたIssueのタイトルリスト")
+    failed_issue_titles: List[str] = Field(default_factory=list, description="作成中にエラーが発生したIssueのタイトルリスト")
+    errors: List[str] = Field(default_factory=list, description="発生したエラーの詳細メッセージリスト")
