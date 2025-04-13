@@ -1,146 +1,152 @@
 import typer
 from pathlib import Path
 from typing import Optional
-# Python 3.9+ なら typing.Annotated, それ未満なら typing_extensions.Annotated を使う
+# Python 3.9+ なら typing.Annotated, それ未満なら typing_extensions.Annotated
 from typing_extensions import Annotated
 import importlib.metadata
 import sys
-import logging  # ロギングのためにインポート
-# import os # テストモード削除により不要になった
+import logging
 
+# --- Project Imports ---
 from github_automation_tool import __version__
-# config モジュールから load_settings 関数と Settings 型をインポート
+# Infrastructure / Adapters
 from github_automation_tool.infrastructure.config import load_settings, Settings
+from github_automation_tool.infrastructure.file_reader import read_markdown_file # 関数をインポート
+from github_automation_tool.adapters.ai_parser import AIParser
+from github_automation_tool.adapters.github_client import GitHubAppClient
+from github_automation_tool.adapters.cli_reporter import CliReporter
+# Use Cases
+from github_automation_tool.use_cases.create_repository import CreateRepositoryUseCase
+from github_automation_tool.use_cases.create_issues import CreateIssuesUseCase
+from github_automation_tool.use_cases.create_github_resources import CreateGitHubResourcesUseCase # ★ 統合UseCase
+# Exceptions
+from github_automation_tool.domain.exceptions import (
+    AiParserError, GitHubClientError, GitHubAuthenticationError, GitHubValidationError
+)
 
-# ロガーの基本設定 (アプリケーションの早い段階で設定)
-# ログレベルは後で settings から読み込んだ値で上書きします
+# --- Logger Setup ---
 logging.basicConfig(
-    level=logging.INFO,  # デフォルトレベル
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
-# このモジュール用のロガーを取得
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("github_automation_tool.main") # モジュール名を指定
 
 
+# --- Typer App ---
 app = typer.Typer(
     help="GitHub Automation Tool: Create repositories and issues from a file."
 )
 
-# バージョン表示用のコールバック関数
-
-
+# --- Callbacks ---
 def version_callback(value: bool):
     if value:
         print(f"GitHub Automation Tool Version: {__version__}")
         raise typer.Exit()
 
-
+# --- Main Command ---
 @app.command()
 def run(
     # --- Required Options ---
-    file_path: Annotated[Path, typer.Option("--file",
-                                            help="Path to the input Markdown file.",
-                                            exists=True,
-                                            file_okay=True,
-                                            dir_okay=False,
-                                            readable=True,
-                                            resolve_path=True,
-                                            show_default=False)],
-    repo_name: Annotated[str, typer.Option("--repo",
-                                           help="Name of the GitHub repository to create (e.g., 'owner/repo-name' or just 'repo-name').",
-                                           show_default=False)],
-    project_name: Annotated[str, typer.Option("--project",
-                                              help="Name of the GitHub project (V2) to create or add issues to.",
-                                              show_default=False)],
+    file_path: Annotated[Path, typer.Option("--file", help="Path to the input Markdown file.", exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True, show_default=False)],
+    repo_name_input: Annotated[str, typer.Option("--repo", help="Name of the GitHub repository (e.g., 'owner/repo-name' or just 'repo-name').", show_default=False)],
+    project_name: Annotated[str, typer.Option("--project", help="Name of the GitHub project (V2) to create or add issues to.", show_default=False)],
 
     # --- Optional Arguments ---
-    config_path: Annotated[Optional[Path], typer.Option("--config",
-                                                        help="Path to a custom configuration file.",
-                                                        exists=True,
-                                                        file_okay=True,
-                                                        dir_okay=False,
-                                                        readable=True,
-                                                        resolve_path=True)] = None,
-    dry_run: Annotated[bool, typer.Option("--dry-run",
-                                          help="Simulate the process without making actual changes on GitHub.")] = False,
+    config_path: Annotated[Optional[Path], typer.Option("--config", help="Path to a custom configuration file (Currently not used).", exists=True, file_okay=True, dir_okay=False, readable=True, resolve_path=True)] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Simulate the process without making actual changes on GitHub.")] = False,
 
     # --- Version Option ---
-    version: Annotated[Optional[bool], typer.Option("--version",
-                                                    help="Show the application version and exit.",
-                                                    callback=version_callback,
-                                                    is_eager=True)] = None,
-
-    # --- ★ テスト用オプションは削除 ---
-    # test_mode: Annotated[bool, typer.Option(...)] = False,
+    version: Annotated[Optional[bool], typer.Option("--version", help="Show the application version and exit.", callback=version_callback, is_eager=True)] = None,
 ):
     """
     Reads a Markdown file, parses it using AI, and automatically creates
-    GitHub repository, project, issues, labels, and milestones.
+    GitHub repository, project, issues, labels, and milestones (basic MVP flow).
     """
-    settings: Settings  # 設定を格納する変数
+    # 結果表示用の Reporter を最初にインスタンス化
+    reporter = CliReporter()
 
-    # --- 設定ファイルの読み込みとエラーハンドリング ---
     try:
-        # ★ test_mode の if ブロックを削除
-        settings = load_settings()  # アプリケーション開始時に設定をロード
-
-        # 設定に基づいてログレベルを更新
+        # --- 1. 設定読み込み ---
+        settings = load_settings()
         log_level_name = settings.log_level.upper()
         numeric_level = getattr(logging, log_level_name, logging.INFO)
-        logging.getLogger().setLevel(numeric_level)  # ルートロガーのレベルを設定
-        logger.info(f"Log level set to {log_level_name}")
-
+        logging.getLogger().setLevel(numeric_level) # Root logger のレベルを設定
         logger.info("Settings loaded successfully.")
-        # デバッグログで設定内容の一部を表示 (APIキーはマスク推奨)
-        logger.debug(
-            f"GitHub PAT: {'Loaded' if settings.github_pat else 'Not Set'}")
-        logger.debug(
-            f"OpenAI Key: {'Loaded' if settings.openai_api_key else 'Not Set'}")
-        logger.debug(
-            f"Gemini Key: {'Loaded' if settings.gemini_api_key else 'Not Set'}")
+        logger.debug(f"Log Level set to: {log_level_name}")
+        # APIキーなどの機密情報はデバッグログでも直接表示しない方が安全
+        logger.debug(f"GitHub PAT: {'Loaded' if settings.github_pat else 'Not Set'}")
         logger.debug(f"Using AI model: {settings.ai_model}")
 
-    except ValueError as e:
-        # load_settings でエラーが発生した場合
-        # エラー詳細は load_settings 内でログ出力されているはず
-        logger.critical(f"Configuration error: {e}")  # Criticalレベルでログ出力
-        # print(f"\nCritical Error: {e}", file=sys.stderr) # 標準エラーへのprintは必須ではない
-        raise typer.Exit(code=1)  # 終了コード 1 でプログラムを終了
-    # --- 設定読み込みここまで ---
+        # --- 2. 依存コンポーネントのインスタンス化 (手動DI) ---
+        logger.debug("Initializing core components...")
+        # file_reader は関数なのでそのまま利用
+        github_client = GitHubAppClient(auth_token=settings.github_pat)
+        ai_parser = AIParser(settings=settings)
+        create_repo_uc = CreateRepositoryUseCase(github_client=github_client)
+        create_issues_uc = CreateIssuesUseCase(github_client=github_client)
 
-    # --- logger.info による情報表示 ---
-    logger.info("Starting GitHub Automation Tool Core Process...")
-    logger.info(f"Input File Path : {file_path}")
-    logger.info(f"Repository Name : {repo_name}")
-    logger.info(f"Project Name    : {project_name}")  # アラインメント調整
-    if config_path:
-        # TODO: config_path を実際に利用する処理
-        logger.info(
-            f"Config File Path: {config_path} (Note: Currently not used)")
-    logger.info(f"Dry Run Mode    : {dry_run}")  # アラインメント調整
-    logger.info("------------------------------------")
-    # ★ info_messages リストと print を使った表示ロジックは削除
+        # メインとなる統合UseCaseをインスタンス化
+        main_use_case = CreateGitHubResourcesUseCase(
+            settings=settings,
+            file_reader=read_markdown_file, # 関数を渡す
+            ai_parser=ai_parser,
+            github_client=github_client, # owner取得用に渡す
+            create_repo_uc=create_repo_uc,
+            create_issues_uc=create_issues_uc,
+            reporter=reporter # 結果表示用に渡す
+        )
+        logger.debug("Core components initialized.")
 
-    # --- ここに後続の処理を実装していく ---
-    # 'settings' オブジェクトを渡して処理を進めます
-    logger.info("Placeholder for core application logic...")
-    # 例:
-    # try:
-    #     from github_automation_tool.infrastructure.file_reader import read_markdown_file
-    #     from github_automation_tool.use_cases.create_resources import CreateResourcesUseCase
-    #     # ... (依存関係の準備)
-    #     use_case = CreateResourcesUseCase(...)
-    #     use_case.execute(file_path, repo_name, project_name, settings, dry_run)
-    #     logger.info("Automation process completed successfully.")
-    # except Exception as e:
-    #     logger.error(f"An unexpected error occurred: {e}", exc_info=True) # トレースバックも記録
-    #     raise typer.Exit(code=1)
+        # --- 3. メインUseCaseの実行 ---
+        logger.info("Executing the main resource creation workflow...")
+        # 実行前にINFOログに引数情報を出力
+        logger.info(f"Input File Path : {file_path}")
+        logger.info(f"Repository Input: {repo_name_input}")
+        logger.info(f"Project Name    : {project_name}")
+        if config_path:
+            logger.info(f"Config File Path: {config_path} (Note: Currently not used)")
+        logger.info(f"Dry Run Mode    : {dry_run}")
+        logger.info("------------------------------------")
 
-    # ★ 最後の print も logger に統一
-    finish_message = "--- GitHub Automation Tool Finish (Placeholder) ---"
-    logger.info(finish_message)
+        main_use_case.execute(
+            file_path=file_path,
+            repo_name_input=repo_name_input,
+            project_name=project_name, # 現在はUseCase内で未使用だが渡しておく
+            dry_run=dry_run
+        )
+        logger.info("Workflow execution completed.") # 正常終了ログ
 
+    # --- 4. エラーハンドリング (UseCaseから送出された例外を捕捉) ---
+    except FileNotFoundError as e:
+        error_message = f"Input file not found: {e}"
+        logger.error(error_message)
+        print(f"\nERROR: {error_message}", file=sys.stderr) # ユーザーへのフィードバック
+        raise typer.Exit(code=1)
+    except PermissionError as e:
+        error_message = f"Permission denied for input file: {e}"
+        logger.error(error_message)
+        print(f"\nERROR: {error_message}", file=sys.stderr)
+        raise typer.Exit(code=1)
+    except IOError as e: # UnicodeDecodeErrorなども含む
+        error_message = f"Error reading input file: {e}"
+        logger.error(error_message)
+        reporter.display_general_error(e, context="reading input file") # 詳細表示
+        print(f"\nERROR: {error_message}", file=sys.stderr) # 簡潔なメッセージも出す
+        raise typer.Exit(code=1)
+    except (ValueError, AiParserError, GitHubValidationError, GitHubAuthenticationError, GitHubClientError) as e:
+        # アプリケーション内の予期されたエラー
+        error_message = f"Workflow failed: {type(e).__name__} - {e}"
+        logger.error(error_message)
+        print(f"\nERROR: {error_message}", file=sys.stderr)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        # 予期しないその他の重大なエラー
+        error_message = f"An unexpected critical error occurred: {e}"
+        logger.exception(error_message) # トレースバック付きでログ記録
+        reporter.display_general_error(e, context="during main execution") # 詳細表示
+        print(f"\nCRITICAL ERROR: An unexpected error occurred. Check logs for details.", file=sys.stderr)
+        raise typer.Exit(code=1)
 
 # スクリプトとして直接実行する場合のエントリーポイント (通常は不要)
 # if __name__ == "__main__":
