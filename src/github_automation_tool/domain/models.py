@@ -7,7 +7,7 @@ class IssueData(BaseModel):
     description: str = Field(description="抽出されたGitHub issueの説明（概要、目的、背景など）")
     tasks: list = Field(
         default_factory=list,
-        description=""抽出されたGitHub issueのタスク（例: 'タスク1', 'タスク2'など）"
+        description="抽出されたGitHub issueのタスク（例: 'タスク1', 'タスク2'など）"
     )
     relational_definition: list[str] = Field(
         default_factory=list,
@@ -23,7 +23,8 @@ class IssueData(BaseModel):
     )
     labels: list[str] | None = Field(default=None, description="抽出されたラベル名のリスト")
     milestone: str | None = Field(default=None, description="抽出されたマイルストーン名")
-    assignees: list[str] | None = Field(default=None, description="抽出された担当者名のリスト (例: '@username')")
+    assignees: list[str] | None = Field(
+        default=None, description="抽出された担当者名のリスト (例: '@username')")
 
 
 class ParsedRequirementData(BaseModel):
@@ -33,13 +34,14 @@ class ParsedRequirementData(BaseModel):
     # labels_to_create: Optional[list[str]] = Field(default=None, description="ファイル全体で定義された共通ラベル等")
     # milestone_to_create: Optional[str] = Field(default=None, description="ファイル全体で定義された共通マイルストーン等")
 
+
 class CreateIssuesResult(BaseModel):
     """
     CreateIssuesUseCase の実行結果を格納するデータクラス。
     どのIssueが作成され、スキップされ、失敗したかの情報を持つ。
     """
     created_issue_urls: list[str] = Field(
-        default_factory=list, # デフォルト値を空リストにする
+        default_factory=list,  # デフォルト値を空リストにする
         description="正常に作成されたIssueのGitHub URLリスト"
     )
     skipped_issue_titles: list[str] = Field(
