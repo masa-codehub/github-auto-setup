@@ -739,3 +739,62 @@ def test_create_issue_empty_title(github_client: GitHubAppClient):
     with pytest.raises(ValueError, match="cannot be empty or whitespace"):
         github_client.create_issue(OWNER, REPO, "   ", "Body")
     github_client._mock_rest_api.issues.create.assert_not_called()
+
+# ★ 新規追加: 空の担当者リスト
+def test_create_issue_with_empty_assignees_list(github_client: GitHubAppClient):
+    """Issue作成成功 (担当者リストが空の場合)"""
+    owner, repo, title, body = OWNER, REPO, "Issue with Empty Assignees", "Body"
+    assignees_to_set: list[str] = []  # 空のリスト
+    expected_url = f"https://github.com/{owner}/{repo}/issues/8"
+    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url)
+    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
+    github_client._mock_rest_api.issues.create.return_value = mock_response
+
+    created_url = github_client.create_issue(owner, repo, title, body, assignees=assignees_to_set)
+
+    assert created_url == expected_url
+    # ペイロードに assignees キーが含まれないことを確認
+    call_args, call_kwargs = github_client._mock_rest_api.issues.create.call_args
+    assert "assignees" not in call_kwargs
+
+# ★ 新規追加: 不正な担当者フォーマット
+def test_create_issue_with_invalid_assignee_format(github_client: GitHubAppClient, caplog):
+    """Issue作成成功 (担当者のフォーマットが不正な場合、無視される)"""
+    owner, repo, title, body = OWNER, REPO, "Issue with Invalid Assignee Format", "Body"
+    invalid_assignees = "user1"  # 文字列 (リストではない)
+    expected_url = f"https://github.com/{owner}/{repo}/issues/9"
+    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url)
+    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
+    github_client._mock_rest_api.issues.create.return_value = mock_response
+
+    with caplog.at_level(logging.WARNING):
+        created_url = github_client.create_issue(owner, repo, title, body, assignees=invalid_assignees)  # type: ignore
+
+    assert created_url == expected_url
+    # ペイロードに assignees キーが含まれないことを確認
+    call_args, call_kwargs = github_client._mock_rest_api.issues.create.call_args
+    assert "assignees" not in call_kwargs
+    # 警告ログを確認
+    assert "Invalid format for assignees" in caplog.text
+    assert "Expected list[str]. Ignoring assignees." in caplog.text
+
+# ★ 新規追加: 一部無効なユーザー名を含む担当者リスト
+def test_create_issue_with_partially_invalid_assignees(github_client: GitHubAppClient):
+    """Issue作成 (担当者リストに無効なユーザー名が含まれる場合、リストはそのまま渡される)"""
+    owner, repo, title, body = OWNER, REPO, "Issue with Potentially Invalid Assignees", "Body"
+    # GitHubに存在しない、または権限のないユーザーが含まれる可能性があるリスト
+    assignees_to_set = ["valid-user", "invalid-or-no-permission-user", ""]  # 空文字も含む
+    expected_url = f"https://github.com/{owner}/{repo}/issues/10"
+    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url)
+    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
+    github_client._mock_rest_api.issues.create.return_value = mock_response
+
+    created_url = github_client.create_issue(owner, repo, title, body, assignees=assignees_to_set)
+
+    assert created_url == expected_url
+    # API呼び出し時にリストが渡されること、空文字はフィルタリングされることを確認
+    github_client._mock_rest_api.issues.create.assert_called_once_with(
+        owner=owner, repo=repo, title=title, body=body or "",
+        assignees=["valid-user", "invalid-or-no-permission-user"]  # 空文字は除去される
+    )
+    # GitHub APIが422などを返さない限り、クライアント側では成功扱いになる
