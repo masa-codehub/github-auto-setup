@@ -64,3 +64,31 @@ class CreateIssuesResult(BaseModel):
         default_factory=list,
         description="発生したエラーの詳細メッセージ（failed_issue_titlesに対応）のリスト"
     )
+
+
+class CreateGitHubResourcesResult(BaseModel):
+    """
+    CreateGitHubResourcesUseCase の全体的な実行結果を格納するデータクラス。
+    リポジトリ、ラベル、マイルストーン、Issue作成、プロジェクト連携の結果を包括的に管理する。
+    """
+    repository_url: str | None = Field(default=None, description="作成/確認されたリポジトリのURL")
+    project_node_id: str | None = Field(default=None, description="対象プロジェクトのNode ID (見つかった場合)")
+    project_name: str | None = Field(default=None, description="対象プロジェクト名")
+
+    created_labels: list[str] = Field(default_factory=list, description="正常に作成された(または既存だった)ラベル名のリスト")
+    failed_labels: list[tuple[str, str]] = Field(default_factory=list, description="作成に失敗したラベルとそのエラーメッセージのタプルのリスト")
+
+    # マイルストーン名は一つと仮定（仕様に応じて変更）
+    milestone_name: str | None = Field(default=None, description="処理対象のマイルストーン名")
+    milestone_id: int | None = Field(default=None, description="作成/確認されたマイルストーンのID")
+    milestone_creation_error: str | None = Field(default=None, description="マイルストーン作成/確認時のエラー")
+
+    # Issue作成の結果は既存のモデルで保持
+    issue_result: CreateIssuesResult | None = Field(default=None, description="Issue作成処理の結果")
+
+    # プロジェクト連携の結果
+    project_items_added_count: int = Field(default=0, description="プロジェクトに正常に追加されたアイテム数")
+    project_items_failed: list[tuple[str, str]] = Field(default_factory=list, description="プロジェクトへの追加に失敗したIssue Node IDとそのエラーメッセージのタプルのリスト")
+
+    # 全体的な致命的エラー
+    fatal_error: str | None = Field(default=None, description="処理を中断させた致命的なエラーメッセージ")
