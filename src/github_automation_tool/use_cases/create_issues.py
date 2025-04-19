@@ -61,15 +61,24 @@ class CreateIssuesUseCase:
                 else:
                     # 2b. 存在しない場合: 作成
                     logger.debug(f"Issue '{issue_title}' does not exist. Attempting creation...")
-                    created_url = self.github_client.create_issue(
+                    # create_issue の戻り値として (URL, Node ID) を受け取る
+                    created_url, created_node_id = self.github_client.create_issue(
                         owner=owner,
                         repo=repo,
                         title=issue_title,
-                        body=issue_data.body # models.pyでデフォルトがNoneなら or "" は不要かも
+                        body=issue_data.body,
+                        labels=issue_data.labels,
+                        milestone=issue_data.milestone,
+                        assignees=issue_data.assignees
                     )
-                    # create_issue が成功したら URL が返る想定
-                    result.created_issue_urls.append(created_url)
-                    logger.info(f"Successfully created issue '{issue_title}': {created_url}")
+                    # 正常に URL と Node ID が取得できた場合のみ result に追加
+                    if created_url and created_node_id:
+                        result.created_issue_details.append((created_url, created_node_id))
+                    else:
+                        error_msg = f"Failed to get URL or Node ID after creating issue '{issue_title}'."
+                        logger.error(error_msg)
+                        result.failed_issue_titles.append(issue_title)
+                        result.errors.append(error_msg)
 
             # エラーハンドリング: 例外が発生してもループは止めずに記録する
             except GitHubClientError as e:
@@ -86,7 +95,7 @@ class CreateIssuesUseCase:
         # ループ完了後に最終結果をログ出力
         log_summary = (
             f"CreateIssuesUseCase finished for {owner}/{repo}. "
-            f"Created: {len(result.created_issue_urls)}, "
+            f"Created: {len(result.created_issue_details)}, "
             f"Skipped: {len(result.skipped_issue_titles)}, "
             f"Failed: {len(result.failed_issue_titles)}."
         )

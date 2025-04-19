@@ -16,7 +16,7 @@ def reporter() -> CliReporter:
 
 def test_display_issue_creation_success_only(reporter: CliReporter, caplog):
     """Issue作成がすべて成功した場合のログ出力テスト"""
-    result = CreateIssuesResult(created_issue_urls=["https://github.com/test/repo/issues/1", "https://github.com/test/repo/issues/2"])
+    result = CreateIssuesResult(created_issue_details=[("https://github.com/test/repo/issues/1", "node_id_1"), ("https://github.com/test/repo/issues/2", "node_id_2")])
     # テスト実行中のログレベルをINFO以上に設定してキャプチャ
     with caplog.at_level(logging.INFO):
         reporter.display_issue_creation_result(result, "owner/repo")
@@ -64,7 +64,7 @@ def test_display_issue_creation_failed_only(reporter: CliReporter, caplog):
 def test_display_issue_creation_mixed(reporter: CliReporter, caplog):
     """成功・スキップ・失敗が混在する場合のログ出力テスト"""
     result = CreateIssuesResult(
-        created_issue_urls=["https://good.url/1"],
+        created_issue_details=[("https://good.url/1", "node_good")],
         skipped_issue_titles=["Already There"],
         failed_issue_titles=["Bad One"],
         errors=["API Error 500"]

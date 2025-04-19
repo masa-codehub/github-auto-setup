@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
+# Removed typing imports; using built-in generics for Python 3.13
 
 
 class IssueData(BaseModel):
@@ -47,9 +48,9 @@ class CreateIssuesResult(BaseModel):
     CreateIssuesUseCase の実行結果を格納するデータクラス。
     どのIssueが作成され、スキップされ、失敗したかの情報を持つ。
     """
-    created_issue_urls: list[str] = Field(
-        default_factory=list,  # デフォルト値を空リストにする
-        description="正常に作成されたIssueのGitHub URLリスト"
+    created_issue_details: list[tuple[str, str]] = Field(
+        default_factory=list,
+        description="正常に作成されたIssueの (GitHub URL, Node ID) タプルのリスト"
     )
     skipped_issue_titles: list[str] = Field(
         default_factory=list,

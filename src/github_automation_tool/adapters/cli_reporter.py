@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 # domain/models.py から結果用データクラスをインポートすることを想定
 # (CreateIssuesResult は前回定義済み)
@@ -26,18 +26,21 @@ class CliReporter:
         repo_info = f" for repository '{repo_full_name}'" if repo_full_name else ""
         # --- 結果のサマリーを INFO レベルで表示 ---
         logger.info(f"--- Issue Creation Summary{repo_info} ---")
+        created_count = len(result.created_issue_details)
+        skipped_count = len(result.skipped_issue_titles)
+        failed_count = len(result.failed_issue_titles)
         summary = (
-            f"Total processed: {len(result.created_issue_urls) + len(result.skipped_issue_titles) + len(result.failed_issue_titles)}, "
-            f"Created: {len(result.created_issue_urls)}, "
-            f"Skipped: {len(result.skipped_issue_titles)}, "
-            f"Failed: {len(result.failed_issue_titles)}"
+            f"Total processed: {created_count + skipped_count + failed_count}, "
+            f"Created: {created_count}, "
+            f"Skipped: {skipped_count}, "
+            f"Failed: {failed_count}"
         )
         logger.info(summary)
 
         # --- 各詳細情報を適切なログレベルで表示 ---
-        if result.created_issue_urls:
+        if result.created_issue_details:
             logger.info("[Created Issues]")
-            for url in result.created_issue_urls:
+            for url, node_id in result.created_issue_details:
                 logger.info(f"- {url}")
 
         if result.skipped_issue_titles:
