@@ -3,7 +3,7 @@ import logging # caplog を使うために必要
 
 # テスト対象とデータモデル、テスト用例外をインポート
 from github_automation_tool.adapters.cli_reporter import CliReporter
-from github_automation_tool.domain.models import CreateIssuesResult
+from github_automation_tool.domain.models import CreateIssuesResult, CreateGitHubResourcesResult
 from github_automation_tool.domain.exceptions import GitHubValidationError, GitHubClientError
 
 # --- Fixtures ---
@@ -121,3 +121,103 @@ def test_display_general_error(reporter: CliReporter, caplog):
     assert "An unexpected error occurred: ZeroDivisionError - division by zero" in caplog.text
     assert "Traceback" in caplog.text # exc_info=True でトレースバックが出力される
     assert "Processing halted." in caplog.text
+
+# --- 新しい結果表示メソッド用のテストを追加 ---
+
+def test_display_create_github_resources_result_success(reporter: CliReporter, caplog):
+    """総合結果表示メソッドの正常系テスト"""
+    # テストデータ準備
+    issue_result = CreateIssuesResult(
+        created_issue_details=[("https://github.com/o/r/issues/1", "id1"), ("https://github.com/o/r/issues/2", "id2")],
+        skipped_issue_titles=["skipped"],
+        failed_issue_titles=["failed"],
+        errors=["Some error"]
+    )
+    overall_result = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        project_name="My Project",
+        project_node_id="proj_id",
+        created_labels=["bug", "feature"],
+        failed_labels=[("invalid", "Validation Error")],
+        milestone_name="Sprint 1",
+        milestone_id=1,
+        issue_result=issue_result,
+        project_items_added_count=2,
+        project_items_failed=[("failed_issue_id", "Permission Denied")]
+    )
+
+    with caplog.at_level(logging.INFO):
+        reporter.display_create_github_resources_result(overall_result)
+
+    # リポジトリ情報の確認
+    assert "GITHUB RESOURCE CREATION SUMMARY" in caplog.text
+    assert "[Repository]" in caplog.text
+    assert "https://github.com/o/r" in caplog.text
+    
+    # ラベル情報の確認
+    assert "[Labels]" in caplog.text
+    assert "Successful: 2" in caplog.text
+    assert "Failed: 1" in caplog.text
+    assert "Created/Existing Labels: bug, feature" in caplog.text
+    assert "Failed Labels:" in caplog.text
+    assert "'invalid': Validation Error" in caplog.text
+    
+    # マイルストーン情報の確認
+    assert "[Milestone]" in caplog.text
+    assert "'Sprint 1' (ID: 1)" in caplog.text
+    
+    # プロジェクト情報の確認
+    assert "[Project] Found 'My Project'" in caplog.text
+    assert "Project Integration: Added 2/2 issues" in caplog.text
+    assert "Failed to add 1 issues to project:" in caplog.text
+    assert "Issue (Node ID: failed_issue_id): Permission Denied" in caplog.text
+    
+    # Issue作成情報（ネストされた呼び出し）の確認
+    assert "Issue Creation Summary" in caplog.text
+    assert "Created: 2, Skipped: 1, Failed: 1" in caplog.text
+
+def test_display_create_github_resources_result_fatal_error(reporter: CliReporter, caplog):
+    """総合結果表示メソッドの致命的エラーテスト"""
+    overall_result = CreateGitHubResourcesResult(
+        fatal_error="Critical: Repository creation failed due to auth error."
+    )
+
+    with caplog.at_level(logging.CRITICAL):  # 致命的エラーはCRITICAL以上で出る想定
+        reporter.display_create_github_resources_result(overall_result)
+    
+    assert "[FATAL ERROR]" in caplog.text
+    assert "Critical: Repository creation failed due to auth error." in caplog.text
+    # 他の結果は表示されないことを確認
+    assert "[Repository]" not in caplog.text
+    assert "[Labels]" not in caplog.text
+
+def test_display_create_github_resources_result_dry_run(reporter: CliReporter, caplog):
+    """Dry Runモード時の表示テスト"""
+    # Dry Run用の結果を作成
+    issue_result = CreateIssuesResult(
+        created_issue_details=[
+            ("https://github.com/o/r/issues/X (Dry Run)", "DUMMY_ID_1"),
+            ("https://github.com/o/r/issues/X (Dry Run)", "DUMMY_ID_2")
+        ]
+    )
+    overall_result = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r (Dry Run)",
+        project_name="My Project",
+        created_labels=["bug", "feature"],
+        milestone_name="Sprint 1",
+        issue_result=issue_result,
+        project_node_id="DUMMY_PROJECT_ID (Dry Run)",
+        project_items_added_count=2
+    )
+
+    with caplog.at_level(logging.INFO):
+        reporter.display_create_github_resources_result(overall_result)
+
+    # Dry Runモードであることを表示
+    assert "[DRY RUN MODE]" in caplog.text
+    assert "No actual GitHub operations were performed" in caplog.text
+    # 各要素が表示されることを確認
+    assert "[Repository]: https://github.com/o/r (Dry Run)" in caplog.text
+    assert "[Labels]: Would create: bug, feature" in caplog.text
+    assert "[Milestone]: Would create: Sprint 1" in caplog.text
+    assert "[Project]: Would add 2 issues to My Project" in caplog.text

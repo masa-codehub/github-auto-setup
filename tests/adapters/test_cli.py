@@ -58,20 +58,19 @@ def test_cli_version():
 
 def test_cli_missing_required_options(dummy_md_file: Path):
     """必須オプションが欠けている場合にエラー終了するか"""
-    result_no_repo = runner.invoke(app, ["--file", str(dummy_md_file), "--project", "P"])
+    # --repoオプションがない場合
+    result_no_repo = runner.invoke(app, ["--file", str(dummy_md_file)])
     assert result_no_repo.exit_code != 0
     assert "Missing option" in result_no_repo.stderr
     assert "'--repo'" in result_no_repo.stderr
 
-    result_no_file = runner.invoke(app, ["--repo", "R", "--project", "P"])
+    # --fileオプションがない場合
+    result_no_file = runner.invoke(app, ["--repo", "R"])
     assert result_no_file.exit_code != 0
     assert "Missing option" in result_no_file.stderr
     assert "'--file'" in result_no_file.stderr
 
-    result_no_project = runner.invoke(app, ["--file", str(dummy_md_file), "--repo", "R"])
-    assert result_no_project.exit_code != 0
-    assert "Missing option" in result_no_project.stderr
-    assert "'--project'" in result_no_project.stderr
+    # --projectオプションは任意なので、省略してもエラーにならない（削除）
 
 def test_cli_file_not_exists():
     """--file オプションで存在しないファイルを指定した場合にエラー終了するか"""
