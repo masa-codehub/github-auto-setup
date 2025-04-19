@@ -8,6 +8,7 @@ from githubkit.versions.latest.models import Label, Issue, Milestone, Repository
 from githubkit.exception import RequestError, RequestTimeout, RequestFailed
 from pydantic import SecretStr
 # typing からのインポートは不要 (list, dict, any, | None を使用)
+from githubkit.graphql import GraphQLResponse
 
 # ドメイン例外をインポート
 from github_automation_tool.domain.exceptions import (
@@ -106,10 +107,54 @@ class GitHubAppClient:
                 f"Unexpected non-API error during {context}: {error}", exc_info=True)
             return GitHubClientError(f"Unexpected error during {context}: {error}", original_exception=error)
 
+    def _handle_graphql_error(self, error: GraphQLResponse | Exception, context: str) -> GitHubClientError:
+        """GraphQL API 呼び出しのエラーを処理します。"""
+        error_message = f"GraphQL error during {context}: {error}"
+        errors_list = []
+        
+        if isinstance(error, GraphQLResponse) and getattr(error, 'errors', None):
+            errors_list = error.errors
+            error_message = f"GraphQL response contained errors during {context}: {error.errors}"
+            
+            # エラータイプの抽出を追加（テスト対応のため）
+            error_types = []
+            for err in errors_list:
+                if isinstance(err, dict):
+                    err_type = err.get('type', '').upper()
+                    if err_type:
+                        error_types.append(err_type)
+                    
+            # テストケースのエラータイプ対応
+            if 'FORBIDDEN' in error_types:
+                return GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}", 
+                    original_exception=error if isinstance(error, Exception) else None)
+            if 'NOT_FOUND' in error_types:
+                return GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}", 
+                    original_exception=error if isinstance(error, Exception) else None)
+            
+        logger.warning(error_message)
+        msg_lower = error_message.lower()
+        
+        if "not found" in msg_lower:
+            return GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}", 
+                original_exception=error if isinstance(error, Exception) else None)
+        elif "permission denied" in msg_lower or "forbidden" in msg_lower:
+            return GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}", 
+                original_exception=error if isinstance(error, Exception) else None)
+        else:
+            return GitHubClientError(f"GraphQL operation failed during {context}: {errors_list}", 
+                original_exception=error if isinstance(error, Exception) else None)
+
     def _handle_api_error(self, error: Exception, context: str) -> GitHubClientError:
-        """API呼び出し中のエラーを処理し、適切な例外にラップします。"""
-        if isinstance(error, RequestFailed):
+        """API呼び出し中のエラーを処理し、適切な例外にラップします。すでに適切なカスタム例外の場合はそのまま返します。"""
+        # すでにカスタム例外の場合はそのまま返す
+        if isinstance(error, GitHubClientError):
+            logger.debug(f"Passing through existing custom exception: {type(error).__name__} during {context}")
+            return error
+        elif isinstance(error, RequestFailed):
             return self._handle_request_failed(error, context)
+        elif isinstance(error, GraphQLResponse):
+            return self._handle_graphql_error(error, context)
         else:
             return self._handle_other_error(error, context)
 
@@ -326,9 +371,9 @@ class GitHubAppClient:
     def create_issue(self, owner: str, repo: str, title: str,
                      body: str | None = None,
                      labels: list[str] | None = None,
-                     milestone: int | str | None = None, # 文字列 (タイトル) も許容
+                     milestone: int | str | None = None,
                      assignees: list[str] | None = None
-                     ) -> str:
+                     ) -> tuple[str | None, str | None]:
         """
         指定されたリポジトリに新しい Issue を作成し、関連情報を設定します。
         Milestone は数値IDまたはタイトル文字列で指定可能です。
@@ -398,11 +443,16 @@ class GitHubAppClient:
             response = self.gh.rest.issues.create(**payload)
 
             # ステータスコード 201 (Created) で、かつ URL が取得できることを確認
-            if response and response.status_code == 201 and response.parsed_data and hasattr(response.parsed_data, 'html_url') and response.parsed_data.html_url:
-                issue_url = response.parsed_data.html_url
-                logger.info(
-                    f"Successfully created issue '{trimmed_title}' (Milestone ID: {milestone_id_to_set if milestone_id_to_set is not None else 'None'}): {issue_url}")
-                return issue_url
+            if response and response.status_code == 201 and response.parsed_data:
+                issue_data = response.parsed_data
+                issue_url = getattr(issue_data, 'html_url', None)
+                issue_node_id = getattr(issue_data, 'node_id', None)
+                if issue_url and issue_node_id:
+                    logger.info(f"Successfully created issue '{trimmed_title}' (Node ID: {issue_node_id}): {issue_url}")
+                    return issue_url, issue_node_id
+                else:
+                    logger.error(f"Could not retrieve issue URL or Node ID after creation during {context}.")
+                    raise GitHubClientError("Could not retrieve issue URL or Node ID after creation.")
             else:
                 status_code = getattr(response, 'status_code', 'N/A')
                 parsed_data_info = "No parsed data" if not response or not response.parsed_data else "Parsed data available but no 'html_url'"
@@ -442,3 +492,130 @@ class GitHubAppClient:
                     f"Unexpected response format from issue search API during {context}.")
         except Exception as e:
              raise self._handle_api_error(e, context)
+
+    def find_project_v2_node_id(self, owner: str, project_name: str) -> str | None:
+        if not owner or not owner.strip():
+            raise ValueError("Owner login cannot be empty.")
+        if not project_name or not project_name.strip():
+            raise ValueError("Project name cannot be empty.")
+        trimmed_owner = owner.strip()
+        trimmed_name = project_name.strip()
+        context = f"finding Project V2 Node ID for '{trimmed_name}' owned by '{trimmed_owner}'"
+        logger.info(f"Attempting to {context}...")
+        query = """
+        query GetProjectV2Id($ownerLogin: String!, $projectName: String!) {
+          repositoryOwner(login: $ownerLogin) {
+            ... on ProjectV2Owner {
+              projectsV2(query: $projectName, first: 1) {
+                nodes { id title }
+              }
+            }
+          }
+        }
+        """
+        variables = {"ownerLogin": trimmed_owner, "projectName": trimmed_name}
+        try:
+            response = self.gh.graphql(query, variables)
+            
+            # GraphQL レベルのエラー確認を改善
+            errors_list = getattr(response, 'errors', None)
+            if errors_list and isinstance(errors_list, list) and len(errors_list) > 0:
+                error_messages = [error.get('message', '') for error in errors_list if isinstance(error, dict)]
+                error_message = ' '.join(error_messages).lower() if error_messages else ''
+                
+                # エラータイプの抽出
+                error_types = []
+                for err in errors_list:
+                    if isinstance(err, dict) and 'type' in err:
+                        err_type = err.get('type', '').upper()
+                        if err_type:
+                            error_types.append(err_type)
+                            
+                # エラータイプに基づく例外
+                if 'FORBIDDEN' in error_types or 'permission denied' in error_message or 'forbidden' in error_message:
+                    # 権限エラーは401/403に相当するエラー
+                    raise GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}")
+                elif 'NOT_FOUND' in error_types or 'not found' in error_message:
+                    # リソースが見つからないエラーは404に相当するエラー
+                    raise GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}")
+                else:
+                    # その他のエラー
+                    raise GitHubClientError(f"GraphQL operation failed during {context}: {errors_list}")
+                    
+            # 正常なレスポンスを処理
+            if response and hasattr(response, 'data') and response.data:
+                owner_data = response.data.get("repositoryOwner")
+                if owner_data:
+                    projects_v2 = owner_data.get("projectsV2", {})
+                    if projects_v2:
+                        nodes = projects_v2.get("nodes", [])
+                        if nodes and len(nodes) > 0:
+                            proj = nodes[0]
+                            proj_id = proj.get("id")
+                            if proj_id:
+                                logger.info(f"Found project '{proj.get('title')}' Node ID: {proj_id}")
+                                return proj_id
+            
+            logger.warning(f"Project V2 '{trimmed_name}' not found for owner '{trimmed_owner}'.")
+            return None
+        except Exception as e:
+            # Wrap all exceptions, including GraphQLResponse, into appropriate GitHubClientError
+            raise self._handle_api_error(e, context)
+
+    def add_item_to_project_v2(self, project_node_id: str, content_node_id: str) -> str | None:
+        if not project_node_id or not project_node_id.strip():
+            raise ValueError("Project Node ID cannot be empty.")
+        if not content_node_id or not content_node_id.strip():
+            raise ValueError("Content Node ID cannot be empty.")
+        p_id, c_id = project_node_id.strip(), content_node_id.strip()
+        context = f"adding item '{c_id}' to project '{p_id}'"
+        logger.info(f"Attempting to {context}...")
+        mutation = """
+        mutation AddItemToProject($projectId: ID!, $contentId: ID!) {
+          addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) { item { id } }
+        }
+        """
+        variables = {"projectId": p_id, "contentId": c_id}
+        try:
+            response = self.gh.graphql(mutation, variables)
+            
+            # GraphQL レベルのエラー確認を改善
+            errors_list = getattr(response, 'errors', None)
+            if errors_list and isinstance(errors_list, list) and len(errors_list) > 0:
+                error_messages = [error.get('message', '') for error in errors_list if isinstance(error, dict)]
+                error_message = ' '.join(error_messages).lower() if error_messages else ''
+                
+                # エラータイプの抽出
+                error_types = []
+                for err in errors_list:
+                    if isinstance(err, dict) and 'type' in err:
+                        err_type = err.get('type', '').upper()
+                        if err_type:
+                            error_types.append(err_type)
+                            
+                # エラータイプに基づく例外
+                if 'FORBIDDEN' in error_types or 'permission denied' in error_message or 'forbidden' in error_message:
+                    # 権限エラーは401/403に相当するエラー
+                    raise GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}")
+                elif 'NOT_FOUND' in error_types or 'not found' in error_message:
+                    # リソースが見つからないエラーは404に相当するエラー
+                    raise GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}")
+                else:
+                    # その他のエラー
+                    raise GitHubClientError(f"GraphQL operation failed during {context}: {errors_list}")
+                    
+            # 正常なレスポンスを処理
+            if response and hasattr(response, 'data') and response.data:
+                add_item_response = response.data.get("addProjectV2ItemById")
+                if add_item_response:
+                    item = add_item_response.get("item")
+                    if item and "id" in item:
+                        item_id = item["id"]
+                        logger.info(f"Added item '{c_id}' to project '{p_id}', new item ID: {item_id}")
+                        return item_id
+                        
+            # 有効な項目IDが取得できない場合
+            raise GitHubClientError(f"Failed to add item to project V2: Invalid response format or missing item ID during {context}")
+        except Exception as e:
+            # Wrap all exceptions, including GraphQLResponse, into appropriate GitHubClientError
+            raise self._handle_api_error(e, context)
