@@ -1,10 +1,12 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class IssueData(BaseModel):
     """AIによって抽出された単一のIssue情報"""
+    # Allow population of 'description' field via alias 'body' to support existing tests
+    model_config = ConfigDict(populate_by_name=True)
     title: str = Field(description="抽出されたGitHub issueのタイトル")
-    description: str = Field(description="抽出されたGitHub issueの説明（概要、目的、背景など）")
+    description: str = Field(alias="body", description="抽出されたGitHub issueの説明（概要、目的、背景など）")
     tasks: list = Field(
         default_factory=list,
         description="抽出されたGitHub issueのタスク（例: 'タスク1', 'タスク2'など）"
@@ -25,6 +27,11 @@ class IssueData(BaseModel):
     milestone: str | None = Field(default=None, description="抽出されたマイルストーン名")
     assignees: list[str] | None = Field(
         default=None, description="抽出された担当者名のリスト (例: '@username')")
+
+    @property
+    def body(self) -> str:
+        """Alias for description to support code referencing issue_data.body"""
+        return self.description
 
 
 class ParsedRequirementData(BaseModel):
