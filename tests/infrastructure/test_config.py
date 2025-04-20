@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError  # pydantic 本体から ValidationError をインポート
 from unittest import mock
 import os
+import logging  # ログキャプチャのためにloggingをインポート
 from pathlib import Path
 
 # テスト対象のモジュールをインポート
@@ -100,3 +101,80 @@ def test_settings_env_overrides_dotenv(tmp_path: Path):
         # 環境変数の値が優先されるはず
         assert settings.github_pat.get_secret_value() == "ghp_env_token_override"
         assert settings.openai_api_key.get_secret_value() == "sk_env_key_override"
+
+
+def test_model_names_from_env_success():
+    """環境変数からモデル名が正しく読み込まれるか"""
+    mock_env = {
+        "GITHUB_PAT": "ghp_test_token",
+        "OPENAI_API_KEY": "sk-test-key",
+        "OPENAI_MODEL_NAME": "gpt-4-turbo",
+        "GEMINI_MODEL_NAME": "gemini-pro",
+    }
+    with mock.patch.dict(os.environ, mock_env, clear=True):
+        settings = Settings()
+        assert settings.openai_model_name == "gpt-4-turbo"
+        assert settings.gemini_model_name == "gemini-pro"
+
+
+def test_model_names_from_dotenv_success(tmp_path: Path):
+    """.env ファイルからモデル名が正しく読み込まれるか"""
+    env_content = """
+    GITHUB_PAT=ghp_dotenv_token
+    OPENAI_API_KEY=sk-dotenv-key
+    OPENAI_MODEL_NAME=gpt-4
+    GEMINI_MODEL_NAME=gemini-1.5-pro
+    """
+    dotenv_path = tmp_path / ".env.models"
+    dotenv_path.write_text(env_content, encoding='utf-8')
+
+    with mock.patch.dict(os.environ, {}, clear=True):
+        class TestSettingsDotenvModels(Settings):
+            model_config = Settings.model_config.copy()
+            model_config['env_file'] = str(dotenv_path)
+
+        settings = TestSettingsDotenvModels()
+        assert settings.openai_model_name == "gpt-4"
+        assert settings.gemini_model_name == "gemini-1.5-pro"
+
+
+def test_model_names_missing_are_none():
+    """モデル名が未設定の場合にNoneになるか"""
+    mock_env = {
+        "GITHUB_PAT": "ghp_test_token",
+        "OPENAI_API_KEY": "sk-test-key",
+        # モデル名は設定しない
+    }
+    with mock.patch.dict(os.environ, mock_env, clear=True):
+        settings = Settings()
+        assert settings.openai_model_name is None
+        assert settings.gemini_model_name is None
+
+
+def test_load_settings_logs_error_on_validation_failure(caplog):
+    """load_settingsがValidationError時にエラーログを出力するかテストする"""
+    # ログレベルを設定して ERROR ログがキャプチャされるようにする
+    caplog.set_level(logging.ERROR)
+    
+    # 必須環境変数のGITHUB_PATを欠いた環境を用意
+    mock_env = {"OPENAI_API_KEY": "sk-test-key"}  # GITHUB_PAT がない
+    
+    with mock.patch.dict(os.environ, mock_env, clear=True):
+        # load_settings が ValueError を送出することを期待
+        with pytest.raises(ValueError) as excinfo:
+            from github_automation_tool.infrastructure.config import load_settings
+            load_settings()
+            
+        # ValueErrorのメッセージを確認
+        assert "Configuration error(s) detected" in str(excinfo.value)
+        
+        # キャプチャされたログレコードを確認
+        assert len(caplog.records) >= 2  # 全体エラーログ + 詳細エラーログの最低2つはあるはず
+        
+        # 最初のログメッセージを確認
+        assert "ERROR: Configuration validation failed!" in caplog.records[0].message
+        assert caplog.records[0].levelname == "ERROR"
+        
+        # 2番目のログメッセージで欠落している変数名が含まれているか確認
+        assert "GITHUB_PAT" in caplog.text
+        assert "Variable:" in caplog.text
