@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     gemini_api_key: Optional[SecretStr] = Field(
         default=None, validation_alias='GEMINI_API_KEY')
 
+    # オプション: 環境変数 'OPENAI_MODEL_NAME' または .env の 'OPENAI_MODEL_NAME' があれば読み込む
+    openai_model_name: Optional[str] = Field(
+        default=None, validation_alias='OPENAI_MODEL_NAME')
+
+    # オプション: 環境変数 'GEMINI_MODEL_NAME' または .env の 'GEMINI_MODEL_NAME' があれば読み込む
+    gemini_model_name: Optional[str] = Field(
+        default=None, validation_alias='GEMINI_MODEL_NAME')
+
     # 利用するAIモデル (デフォルトは 'openai')
     ai_model: str = Field(default="openai", validation_alias='AI_MODEL')
 

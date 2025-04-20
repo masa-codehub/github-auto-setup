@@ -1,75 +1,49 @@
 [project]
 name = "github-automation-tool"
-version = "0.1.0" # ここのバージョンが __init__.py で読まれる
+version = "0.1.0"
 description = "GitHub Automation Tool"
-# Readme を指定（任意）
 readme = "README.md"
-# Pythonの要求バージョンを指定
 requires-python = ">=3.10"
-# ライセンスを指定（任意）
 license = {file = "LICENSE"}
-# 作者情報を指定（任意）
 authors = [
-  {name = "Your Name", email = "you@example.com"},
+  {name = "Your Name", email = "you@example.com"}
 ]
-# プロジェクトのURLを指定（任意）
-urls = {
-  "Homepage" = "https://github.com/your-username/github-automation-tool",
-  "Bug Tracker" = "https://github.com/your-username/github-automation-tool/issues",
-}
-# 分類子 (PyPI用、任意)
-# classifiers = [
-#     "Programming Language :: Python :: 3",
-#     "License :: OSI Approved :: MIT License",
-#     "Operating System :: OS Independent",
-# ]
-# 依存関係は requirements.in/txt で管理するため、ここでは指定しないか、
-# Poetry などを使用している場合は [tool.poetry.dependencies] に記述する
+
+[project.urls]
+Homepage = "https://github.com/your-username/github-automation-tool"
+"Bug Tracker" = "https://github.com/your-username/github-automation-tool/issues"
 
 [project.scripts]
-gh-auto-tool = "github_automation_tool.main:app" # gh-auto-tool は好きな名前に
+gh-auto-tool = "github_automation_tool.main:app"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-# オプション: pytest の最低バージョンを指定する場合
-# minversion = "6.0"
-# オプション: よく使うpytestのオプションがあれば
-# addopts = "-ra -q --cov=src/github_automation_tool --cov-report=term-missing" # カバレッジも常時実行する場合
 
 [tool.coverage.run]
-# カバレッジ計測から除外するファイルを指定
 omit = [
     "src/github_automation_tool/__init__.py",
-    "src/github_automation_tool/main.py", # CLIのエントリーポイントはテストしにくい部分があるため除外する場合も
-    "src/github_automation_tool/domain/exceptions.py", # 例外定義のみのファイルはカバレッジ計測から除外しても良い場合がある
-    "*/__init__.py", # 空の __init__.py
+    "src/github_automation_tool/main.py",
+    "src/github_automation_tool/domain/exceptions.py",
+    "*/__init__.py"
 ]
 
 [tool.coverage.report]
-# カバレッジレポートの設定
-fail_under = 80 # カバレッジがこの値を下回ったらエラーにする（要件と合わせる）
-show_missing = true # カバレッジが取得できていない行を表示する
+fail_under = 80
+show_missing = true
 
 [tool.ruff]
-# Pythonのバージョンを指定
-target-version = "py313" # プロジェクトで使用するPythonバージョンに合わせる
-
-# チェックするルールを選択 (例: Flake8相当 + α)
-# https://docs.astral.sh/ruff/rules/ を参照して調整
+target-version = "py310"
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # Pyflakes
-    "I",  # isort (import sorting)
-    "UP", # pyupgrade
-    "B",  # flake8-bugbear
-    "C4", # flake8-comprehensions
-    # 必要に応じてルールを追加・除外
+    "E",
+    "W",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "C4"
 ]
-ignore = [] # 特定のルールを無視する場合
-
-# チェック対象外のディレクトリやファイル
+ignore = []
 exclude = [
     ".bzr",
     ".direnv",
@@ -89,39 +63,14 @@ exclude = [
     "build",
     "dist",
     "node_modules",
-    "venv",
+    "venv"
 ]
 
 [tool.ruff.lint]
-# 1行の最大文字数
-line-length = 88 # Blackと互換性のあるデフォルト値
-
-[tool.ruff.format]
-# Ruffのフォーマッタを有効にする場合 (Blackと似たスタイル)
-# quote-style = "double"
-# indent-style = "space"
-# skip-magic-trailing-comma = false
-# line-ending = "auto"
+line-length = 88
 
 [tool.mypy]
-# Mypyの設定 (基本的な設定例)
-python_version = "3.13" # プロジェクトのPythonバージョン
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
-ignore_missing_imports = true # 最初はTrueにしておき、徐々に解消するのが現実的
-# より厳格にする場合は以下のようなオプションを追加
-# disallow_untyped_defs = true
-# check_untyped_defs = true
-# no_implicit_optional = true
-# warn_redundant_casts = true
-
-# Mypyがチェックする対象を指定 (省略するとカレントディレクトリ以下になることが多い)
-# files = ["src/github_automation_tool"]
-
-# (必要に応じて) 外部ライブラリのスタブがない場合の警告を抑制
-# follow_imports = "skip"
-
-# (必要に応じて) テストコードに対する設定を別にする
-# [[tool.mypy.overrides]]
-# module = "tests.*"
-# ignore_errors = true # テストコードでは型エラーを無視する場合など
+ignore_missing_imports = true
