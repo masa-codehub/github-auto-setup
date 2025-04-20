@@ -46,6 +46,15 @@ def version_callback(value: bool):
         print(f"GitHub Automation Tool Version: {__version__}")
         raise typer.Exit()
 
+# --- エラーメッセージ出力用のヘルパー関数 ---
+def print_error(message: str):
+    """
+    エラーメッセージをログと標準エラー出力の両方に出力する。
+    テストで検証しやすいように標準化する。
+    """
+    logger.error(message)
+    print(f"\nERROR: {message}", file=sys.stderr)
+
 # --- Main Command ---
 @app.command()
 def run(
@@ -70,14 +79,20 @@ def run(
 
     try:
         # --- 1. 設定読み込み ---
-        settings = load_settings()
-        log_level_name = settings.log_level.upper()
-        numeric_level = getattr(logging, log_level_name, logging.INFO)
-        logging.getLogger().setLevel(numeric_level)
-        logger.info("Settings loaded successfully.")
-        logger.debug(f"Log Level set to: {log_level_name}")
-        logger.debug(f"GitHub PAT: {'Loaded' if settings.github_pat else 'Not Set'}")
-        logger.debug(f"Using AI model: {settings.ai_model}")
+        try:
+            settings = load_settings()
+            log_level_name = settings.log_level.upper()
+            numeric_level = getattr(logging, log_level_name, logging.INFO)
+            logging.getLogger().setLevel(numeric_level)
+            logger.info("Settings loaded successfully.")
+            logger.debug(f"Log Level set to: {log_level_name}")
+            logger.debug(f"GitHub PAT: {'Loaded' if settings.github_pat else 'Not Set'}")
+            logger.debug(f"Using AI model: {settings.ai_model}")
+        except ValueError as e:
+            # 設定のバリデーションエラーは明示的に補足して標準化されたメッセージを出力
+            error_message = f"Configuration error(s) detected: {e}"
+            print_error(f"Workflow failed: ValueError - {error_message}")
+            raise typer.Exit(code=1)
 
         # --- 2. 依存コンポーネントのインスタンス化 (手動DI) ---
         logger.debug("Initializing core components...")
@@ -107,24 +122,21 @@ def run(
             logger.info(f"AI parsing complete. Found {len(parsed_data.issues)} potential issue(s).")
         except FileNotFoundError as e:
             error_message = f"Input file not found: {e}"
-            logger.error(error_message)
-            print(f"\nERROR: {error_message}", file=sys.stderr)
+            print_error(error_message)
             raise typer.Exit(code=1)
         except PermissionError as e:
             error_message = f"Permission denied for input file: {e}"
-            logger.error(error_message)
-            print(f"\nERROR: {error_message}", file=sys.stderr)
+            print_error(error_message)
             raise typer.Exit(code=1)
         except IOError as e:
             error_message = f"Error reading input file: {e}"
             logger.error(error_message)
             reporter.display_general_error(e, context="reading input file")
-            print(f"\nERROR: {error_message}", file=sys.stderr)
+            print_error(error_message)
             raise typer.Exit(code=1)
         except AiParserError as e:
             error_message = f"AI parsing error: {e}"
-            logger.error(error_message)
-            print(f"\nERROR: {error_message}", file=sys.stderr)
+            print_error(error_message)
             raise typer.Exit(code=1)
 
         # --- 4. メインUseCaseの実行 ---
@@ -151,11 +163,10 @@ def run(
         logger.info("Workflow execution completed.")
 
     # --- 5. エラーハンドリング (UseCaseから送出された例外を捕捉) ---
-    except (ValueError, GitHubValidationError, GitHubAuthenticationError, GitHubClientError) as e:
+    except (GitHubValidationError, GitHubAuthenticationError, GitHubClientError) as e:
         # アプリケーション内の予期されたエラー
         error_message = f"Workflow failed: {type(e).__name__} - {e}"
-        logger.error(error_message)
-        print(f"\nERROR: {error_message}", file=sys.stderr)
+        print_error(error_message)
         raise typer.Exit(code=1)
     except Exception as e:
         # 予期しないその他の重大なエラー
@@ -166,5 +177,5 @@ def run(
         raise typer.Exit(code=1)
 
 # スクリプトとして直接実行する場合のエントリーポイント (通常は不要)
-# if __name__ == "__main__":
-#     app()
+if __name__ == "__main__":
+    app()
