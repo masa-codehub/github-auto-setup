@@ -33,22 +33,26 @@ class CreateIssuesUseCase:
         Returns:
             CreateIssuesResult オブジェクト（作成成功URL、スキップタイトル、失敗タイトル、エラーリスト）。
         """
-        logger.info(f"Executing CreateIssuesUseCase for {owner}/{repo} with {len(parsed_data.issues)} potential issues.")
+        total_issues = len(parsed_data.issues)
+        logger.info(f"Executing CreateIssuesUseCase for {owner}/{repo} with {total_issues} potential issues.")
         result = CreateIssuesResult() # 結果を格納するオブジェクト
 
         if not parsed_data.issues:
             logger.info("No issues found in parsed data. Nothing to create.")
             return result
 
-        for issue_data in parsed_data.issues:
+        # enumerate を使ってインデックスを取得し、進捗を表示
+        for i, issue_data in enumerate(parsed_data.issues):
             issue_title = issue_data.title
+            logger.info(f"Processing issue {i+1}/{total_issues}: '{issue_title if issue_title else '(Empty Title)'}'") # 進捗ログ
+
             if not issue_title: # タイトルがないデータはスキップ (またはエラー)
                 logger.warning("Skipping issue data with empty title.")
                 result.failed_issue_titles.append("(Empty Title)")
                 result.errors.append("Skipped issue due to empty title.")
                 continue
 
-            logger.debug(f"Processing issue: '{issue_title}'")
+            # logger.debug(f"Processing issue: '{issue_title}'") # より詳細なので DEBUG レベルに変更 or 削除
             try:
                 # 1. Issue 存在確認
                 logger.debug(f"Checking if issue '{issue_title}' already exists...")
@@ -60,7 +64,7 @@ class CreateIssuesUseCase:
                     result.skipped_issue_titles.append(issue_title)
                 else:
                     # 2b. 存在しない場合: 作成
-                    logger.debug(f"Issue '{issue_title}' does not exist. Attempting creation...")
+                    logger.info(f"Issue '{issue_title}' does not exist. Attempting creation...") # INFOレベルに変更
                     # create_issue の戻り値として (URL, Node ID) を受け取る
                     created_url, created_node_id = self.github_client.create_issue(
                         owner=owner,
@@ -73,9 +77,11 @@ class CreateIssuesUseCase:
                     )
                     # 正常に URL と Node ID が取得できた場合のみ result に追加
                     if created_url and created_node_id:
+                        # 成功ログは create_issue 内にあるのでここでは省略しても良いかも
                         result.created_issue_details.append((created_url, created_node_id))
                     else:
-                        error_msg = f"Failed to get URL or Node ID after creating issue '{issue_title}'."
+                        # create_issue が成功しても URL/NodeID が返らないケース (通常は考えにくい)
+                        error_msg = f"Failed to get URL or Node ID after attempting to create issue '{issue_title}'."
                         logger.error(error_msg)
                         result.failed_issue_titles.append(issue_title)
                         result.errors.append(error_msg)
