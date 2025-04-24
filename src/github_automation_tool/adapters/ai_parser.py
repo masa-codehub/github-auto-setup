@@ -80,21 +80,36 @@ class AIParser:
                 if ChatOpenAI is None:
                     raise ImportError("langchain-openai not installed.")
                 api_key = self.settings.openai_api_key
+                # Check if the required API key is present
                 if not api_key or not api_key.get_secret_value():
-                    raise ValueError("OpenAI API Key missing.")
-                llm = ChatOpenAI(openai_api_key=api_key.get_secret_value(
-                ), temperature=0, model_name="gpt-3.5-turbo")  # モデル名は設定で可変にすると良い
-                logger.info("ChatOpenAI client initialized.")
+                    raise ValueError("OpenAI API Key is required but missing in settings.")
+                # Use model name from settings or fallback
+                model_name = self.settings.openai_model_name or "gpt-4o" # Fallback model updated
+                logger.info(f"Using OpenAI model: {model_name}")
+                llm = ChatOpenAI(
+                    openai_api_key=api_key.get_secret_value(),
+                    temperature=0,
+                    model_name=model_name # Use potentially fallback model name
+                )
+                logger.info(f"ChatOpenAI client initialized with model: {model_name}")
                 return llm
             elif model_type == "gemini":
                 if ChatGoogleGenerativeAI is None:
                     raise ImportError("langchain-google-genai not installed.")
                 api_key = self.settings.gemini_api_key
+                 # Check if the required API key is present
                 if not api_key or not api_key.get_secret_value():
-                    raise ValueError("Gemini API Key missing.")
-                llm = ChatGoogleGenerativeAI(google_api_key=api_key.get_secret_value(
-                ), model="gemini-pro", temperature=0, convert_system_message_to_human=True)
-                logger.info("ChatGoogleGenerativeAI client initialized.")
+                    raise ValueError("Gemini API Key is required but missing in settings.")
+                # Use model name from settings or fallback
+                model_name = self.settings.gemini_model_name or "gemini-2.0-flash" # Fallback model updated
+                logger.info(f"Using Gemini model: {model_name}")
+                llm = ChatGoogleGenerativeAI(
+                    google_api_key=api_key.get_secret_value(),
+                    model=model_name, # Use potentially fallback model name
+                    temperature=0,
+                    convert_system_message_to_human=True
+                )
+                logger.info(f"ChatGoogleGenerativeAI client initialized with model: {model_name}")
                 return llm
             else:
                 raise ValueError(

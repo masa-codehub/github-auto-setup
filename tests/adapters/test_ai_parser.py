@@ -57,7 +57,13 @@ def mock_settings() -> MagicMock:
     settings.openai_api_key = openai_key_mock
     settings.gemini_api_key = gemini_key_mock
     settings.ai_model = "openai" # デフォルトは openai
-    settings.log_level = "DEBUG"
+    
+    # model_name 属性を追加
+    settings.openai_model_name = None
+    settings.gemini_model_name = None
+    
+    # log_level 属性を追加
+    settings.log_level = "info"
     
     return settings
 
@@ -97,20 +103,24 @@ def ai_parser(mock_settings: MagicMock, mock_llm_chain: MagicMock) -> AIParser:
 # --- ★ AI モデル切り替えと初期化テスト ★ ---
 
 # parametrize で openai と gemini のケースをテスト
-@pytest.mark.parametrize("model_name, expected_llm_class_path, expected_api_key", [
-    ("openai", "github_automation_tool.adapters.ai_parser.ChatOpenAI", "fake-openai-key"),
-    ("gemini", "github_automation_tool.adapters.ai_parser.ChatGoogleGenerativeAI", "fake-gemini-key"),
+# フォールバックモデル名の期待値を追加
+@pytest.mark.parametrize("model_name, expected_llm_class_path, expected_api_key, expected_fallback_model", [
+    ("openai", "github_automation_tool.adapters.ai_parser.ChatOpenAI", "fake-openai-key", "gpt-4o"),
+    ("gemini", "github_automation_tool.adapters.ai_parser.ChatGoogleGenerativeAI", "fake-gemini-key", "gemini-2.0-flash"),
 ])
 # LangChain クライアントのコンストラクタをモック
 @patch('github_automation_tool.adapters.ai_parser.ChatOpenAI', autospec=True)
 @patch('github_automation_tool.adapters.ai_parser.ChatGoogleGenerativeAI', autospec=True)
 def test_ai_parser_initializes_correct_llm(
     mock_chat_google: MagicMock, mock_chat_openai: MagicMock, # patchデコレータの引数順に注意
-    mock_settings: MagicMock, model_name: str, expected_llm_class_path: str, expected_api_key: str
+    mock_settings: MagicMock, model_name: str, expected_llm_class_path: str, expected_api_key: str, expected_fallback_model: str # expected_fallback_model を追加
 ):
     """AIParserが設定に応じて正しいLLMクライアントを正しいAPIキーで初期化するか"""
     # Arrange: 設定の ai_model をパラメータに合わせて変更
     mock_settings.ai_model = model_name
+    # Arrange: model_name を None に設定してフォールバックをテスト
+    mock_settings.openai_model_name = None
+    mock_settings.gemini_model_name = None
     # _build_chain はダミーで良いのでモック
     mock_chain = MagicMock()
 
@@ -125,14 +135,16 @@ def test_ai_parser_initializes_correct_llm(
         _, kwargs = mock_chat_openai.call_args
         assert kwargs.get('openai_api_key') == expected_api_key
         assert kwargs.get('temperature') == 0 # 他の引数も必要なら検証
-        assert kwargs.get('model_name') == "gpt-3.5-turbo"
+        # フォールバックモデル名が使われることを確認
+        assert kwargs.get('model_name') == expected_fallback_model
         mock_chat_google.assert_not_called() # Gemini は呼ばれない
         assert isinstance(parser.llm, MagicMock) # モックされたインスタンスが設定されている
     elif model_name == "gemini":
         mock_chat_google.assert_called_once()
         _, kwargs = mock_chat_google.call_args
         assert kwargs.get('google_api_key') == expected_api_key
-        assert kwargs.get('model') == "gemini-pro"
+        # フォールバックモデル名が使われることを確認
+        assert kwargs.get('model') == expected_fallback_model
         assert kwargs.get('temperature') == 0
         assert kwargs.get('convert_system_message_to_human') is True
         mock_chat_openai.assert_not_called() # OpenAI は呼ばれない
@@ -170,10 +182,12 @@ def test_ai_parser_handles_missing_api_key(
     # setattr(mock_settings, missing_key_attr, SecretStr(""))
 
     # Act & Assert: AiParserError が発生し、メッセージにエラー内容が含まれるか
-    with pytest.raises(AiParserError, match=f"Configuration error for '{model_name}'") as excinfo:
+    with pytest.raises(AiParserError, match=f"Configuration error for \'{model_name}\'") as excinfo:
         AIParser(settings=mock_settings)
-    # エラーメッセージの詳細（例: "OpenAI API Key missing."）も確認できるとより良い
-    assert "Key missing" in str(excinfo.value) or "API Key missing" in str(excinfo.value)
+    # エラーメッセージの詳細も確認できるとより良い
+    # 実際のエラーメッセージに合わせてアサーションを修正
+    assert "API Key is required but missing in settings" in str(excinfo.value)
+
 
 def test_ai_parser_handles_unsupported_model(mock_settings: MagicMock):
     """サポートされていないai_modelが指定された場合にAiParserErrorを発生させるか"""
