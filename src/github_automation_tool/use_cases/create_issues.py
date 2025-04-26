@@ -33,7 +33,7 @@ class CreateIssuesUseCase:
             milestone_id_map: マイルストーン名からIDへのマッピング辞書（オプション）。
 
         Returns:
-            CreateIssuesResult オブジェクト（作成成功URL、スキップタイトル、失敗タイトル、エラーリスト）。
+            CreateIssuesResult オブジェクト（作成成功URL、スキップタイトル、失敗タイトル、エラーリスト、検証失敗担当者情報）。
         """
         total_issues = len(parsed_data.issues)
         logger.info(f"Executing CreateIssuesUseCase for {owner}/{repo} with {total_issues} potential issues.")
@@ -117,6 +117,27 @@ class CreateIssuesUseCase:
                     constructed_body = "\n".join(body_parts)
                     logger.debug(f"Constructed issue body with {len(body_parts)} sections")
                     
+                    # 担当者検証処理のための変数を初期化
+                    valid_assignees = None
+                    
+                    # 担当者が指定されている場合、検証処理を行う
+                    if issue_data.assignees:
+                        logger.info(f"Validating {len(issue_data.assignees)} assignee(s) for issue '{issue_title}'")
+                        # 担当者検証処理を追加
+                        original_assignees = issue_data.assignees.copy()
+                        valid_assignees, invalid_assignees = self.github_client.validate_assignees(owner, repo, original_assignees)
+                        
+                        # 一部もしくは全員が検証に失敗した場合の処理
+                        if invalid_assignees:
+                            # 無効な担当者のリストを正規化（@マークを削除）
+                            normalized_invalid_assignees = [a[1:] if a.startswith('@') else a for a in invalid_assignees if a.strip()]
+                            
+                            # 警告ログを出力
+                            logger.warning(f"Found {len(invalid_assignees)} invalid assignee(s) for issue '{issue_title}': {normalized_invalid_assignees}")
+                            
+                            # 検証失敗した担当者情報を記録
+                            result.validation_failed_assignees.append((issue_title, normalized_invalid_assignees))
+                    
                     # create_issue の戻り値として (URL, Node ID) を受け取る
                     created_url, created_node_id = self.github_client.create_issue(
                         owner=owner,
@@ -125,7 +146,7 @@ class CreateIssuesUseCase:
                         body=constructed_body,  # 構築した本文を使用
                         labels=issue_data.labels,
                         milestone=milestone_id,  # ID が見つからなかった場合は None を渡す
-                        assignees=issue_data.assignees
+                        assignees=valid_assignees  # 検証済みの担当者リストを使用
                     )
                     # 正常に URL と Node ID が取得できた場合のみ result に追加
                     if created_url and created_node_id:
@@ -157,6 +178,11 @@ class CreateIssuesUseCase:
             f"Skipped: {len(result.skipped_issue_titles)}, "
             f"Failed: {len(result.failed_issue_titles)}."
         )
+        
+        # 検証失敗担当者情報を含める
+        if result.validation_failed_assignees:
+            log_summary += f" Issues with invalid assignees: {len(result.validation_failed_assignees)}."
+            
         if result.errors:
             logger.warning(log_summary + f" Encountered {len(result.errors)} error(s). Check results and logs for details.")
         else:

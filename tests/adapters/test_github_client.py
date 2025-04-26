@@ -915,3 +915,200 @@ def test_add_item_to_project_v2_empty_input(github_client: GitHubAppClient):
         github_client.add_item_to_project_v2(PROJECT_NODE_ID, "")
     with pytest.raises(ValueError, match="Content Node ID cannot be empty"):
         github_client.add_item_to_project_v2(PROJECT_NODE_ID, "  ")
+
+# --- validate_assignees Tests ---
+def test_validate_assignees_success(github_client: GitHubAppClient):
+    """validate_assignees: 有効なユーザーと無効なユーザーが正しく分類されるケース"""
+    # 有効なユーザーの応答をモック
+    valid_response = create_mock_response(204)
+    # 無効なユーザーの応答をモック（404 エラー）
+    invalid_error_response = create_mock_response(404)
+    invalid_api_error = RequestFailed(response=invalid_error_response)
+    
+    # 最初のユーザーは有効、2番目のユーザーは無効、3番目のユーザーは有効とする
+    def mock_check_collaborator(owner, repo, username):
+        if username in ["valid-user1", "valid-user2"]:
+            return valid_response
+        elif username == "invalid-user":
+            raise invalid_api_error
+        else:
+            raise Exception(f"Unexpected username: {username}")
+    
+    github_client._mock_rest_api.repos.check_collaborator = MagicMock(side_effect=mock_check_collaborator)
+    
+    # テスト実行
+    valid_assignees, invalid_assignees = github_client.validate_assignees(
+        OWNER, REPO, ["valid-user1", "invalid-user", "valid-user2"]
+    )
+    
+    # 検証
+    assert valid_assignees == ["valid-user1", "valid-user2"]
+    assert invalid_assignees == ["invalid-user"]
+    # API が正しく呼び出されたことを確認
+    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 3
+    github_client._mock_rest_api.repos.check_collaborator.assert_any_call(
+        owner=OWNER, repo=REPO, username="valid-user1"
+    )
+    github_client._mock_rest_api.repos.check_collaborator.assert_any_call(
+        owner=OWNER, repo=REPO, username="invalid-user"
+    )
+    github_client._mock_rest_api.repos.check_collaborator.assert_any_call(
+        owner=OWNER, repo=REPO, username="valid-user2"
+    )
+
+def test_validate_assignees_empty_list(github_client: GitHubAppClient):
+    """validate_assignees: 空のリストが渡された場合、空のタプルを返す"""
+    valid_assignees, invalid_assignees = github_client.validate_assignees(OWNER, REPO, [])
+    assert valid_assignees == []
+    assert invalid_assignees == []
+    github_client._mock_rest_api.repos.check_collaborator.assert_not_called()
+
+def test_validate_assignees_with_at_symbol(github_client: GitHubAppClient):
+    """validate_assignees: @記号付きのユーザー名が正しく処理されるケース"""
+    # 有効なユーザーの応答をモック
+    valid_response = create_mock_response(204)
+    github_client._mock_rest_api.repos.check_collaborator.return_value = valid_response
+    
+    # テスト実行（@記号付きユーザー名）
+    valid_assignees, invalid_assignees = github_client.validate_assignees(
+        OWNER, REPO, ["@valid-user"]
+    )
+    
+    # 検証（@記号が削除されている）
+    assert valid_assignees == ["valid-user"]
+    assert invalid_assignees == []
+    # API が正しく呼び出されたことを確認（@記号なしで呼ばれる）
+    github_client._mock_rest_api.repos.check_collaborator.assert_called_once_with(
+        owner=OWNER, repo=REPO, username="valid-user"
+    )
+
+def test_validate_assignees_permission_error(github_client: GitHubAppClient):
+    """validate_assignees: 権限エラー（403）が発生するケース"""
+    # 権限エラーの応答をモック
+    permission_error_response = create_mock_response(403)
+    permission_api_error = RequestFailed(response=permission_error_response)
+    github_client._mock_rest_api.repos.check_collaborator.side_effect = permission_api_error
+    
+    # テスト実行
+    valid_assignees, invalid_assignees = github_client.validate_assignees(
+        OWNER, REPO, ["user-with-permission-issue"]
+    )
+    
+    # 検証（権限エラーでもユーザーは無効と判断される）
+    assert valid_assignees == []
+    assert invalid_assignees == ["user-with-permission-issue"]
+    github_client._mock_rest_api.repos.check_collaborator.assert_called_once()
+
+def test_validate_assignees_network_error(github_client: GitHubAppClient):
+    """validate_assignees: ネットワークエラーが発生するケース"""
+    # ネットワークエラーをモック
+    github_client._mock_rest_api.repos.check_collaborator.side_effect = RequestTimeout("Connection timeout")
+    
+    # テスト実行
+    valid_assignees, invalid_assignees = github_client.validate_assignees(
+        OWNER, REPO, ["user-with-network-issue"]
+    )
+    
+    # 検証（ネットワークエラーでもユーザーは無効と判断される）
+    assert valid_assignees == []
+    assert invalid_assignees == ["user-with-network-issue"]
+
+
+# --- ★★★ Project V2 Method Tests (New) ★★★
+# --- find_project_v2_node_id Tests ---
+def test_find_project_v2_node_id_success(github_client: GitHubAppClient):
+    """find_project_v2_node_id: 正常に Node ID が見つかるケース"""
+    mock_gql_data = {"repositoryOwner": {"projectsV2": {"nodes": [{"id": PROJECT_NODE_ID, "title": PROJECT_NAME}]}}}
+    mock_resp = create_mock_graphql_response(data=mock_gql_data)
+    github_client._mock_graphql.return_value = mock_resp
+    node_id = github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
+    assert node_id == PROJECT_NODE_ID
+    github_client._mock_graphql.assert_called_once()
+
+def test_find_project_v2_node_id_not_found(github_client: GitHubAppClient):
+    """find_project_v2_node_id: プロジェクトが見つからないケース"""
+    mock_resp = create_mock_graphql_response(data={"repositoryOwner": {"projectsV2": {"nodes": []}}})
+    github_client._mock_graphql.return_value = mock_resp
+    assert github_client.find_project_v2_node_id(OWNER, "None") is None
+
+def test_find_project_v2_node_id_owner_not_found(github_client: GitHubAppClient):
+    """find_project_v2_node_id: オーナーが見つからないケース"""
+    mock_resp = create_mock_graphql_response(data={"repositoryOwner": None})
+    github_client._mock_graphql.return_value = mock_resp
+    assert github_client.find_project_v2_node_id("ghost-owner", PROJECT_NAME) is None
+    github_client._mock_graphql.assert_called()
+
+def test_find_project_v2_node_id_graphql_error(github_client: GitHubAppClient):
+    """find_project_v2_node_id: GraphQL API自体がエラーを返すケース"""
+    mock_errors = [{"message": "Field 'projectsV2' doesn't exist", "type": "INVALID_FIELD"}]
+    mock_resp = create_mock_graphql_response(data=None, errors=mock_errors)
+    github_client._mock_graphql.return_value = mock_resp
+    import pytest
+    with pytest.raises(GitHubClientError, match="GraphQL operation failed"):
+        github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
+
+def test_find_project_v2_node_id_permission_error(github_client: GitHubAppClient):
+    """find_project_v2_node_id: GraphQLで権限エラーが発生するケース"""
+    mock_errors = [{"message": "Permission denied to access project", "type": "FORBIDDEN"}]
+    mock_resp = create_mock_graphql_response(data=None, errors=mock_errors)
+    github_client._mock_graphql.return_value = mock_resp
+    import pytest
+    with pytest.raises(GitHubAuthenticationError, match="GraphQL permission denied"):
+        github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
+
+def test_find_project_v2_node_id_empty_input(github_client: GitHubAppClient):
+    """find_project_v2_node_id: empty owner or project name should raise ValueError"""
+    import pytest
+    with pytest.raises(ValueError, match="Owner login cannot be empty"):
+        github_client.find_project_v2_node_id("", PROJECT_NAME)
+    with pytest.raises(ValueError, match="Project name cannot be empty"):
+        github_client.find_project_v2_node_id(OWNER, "")
+    with pytest.raises(ValueError, match="Project name cannot be empty"):
+        github_client.find_project_v2_node_id(OWNER, "  ")
+
+# --- add_item_to_project_v2 Tests ---
+def test_add_item_to_project_v2_success(github_client: GitHubAppClient):
+    """add_item_to_project_v2: 正常にアイテムが追加されるケース"""
+    mock_gql_data = {"addProjectV2ItemById": {"item": {"id": PROJECT_ITEM_NODE_ID}}}
+    mock_resp = create_mock_graphql_response(data=mock_gql_data)
+    github_client._mock_graphql.return_value = mock_resp
+    item_id = github_client.add_item_to_project_v2(PROJECT_NODE_ID, MOCK_ISSUE_NODE_ID)
+    assert item_id == PROJECT_ITEM_NODE_ID
+    github_client._mock_graphql.assert_called_once()
+
+def test_add_item_to_project_v2_graphql_error(github_client: GitHubAppClient):
+    """add_item_to_project_v2: GraphQL APIエラー"""
+    mock_errors = [{"message": "Project not found.", "type": "NOT_FOUND"}]
+    mock_resp = create_mock_graphql_response(data=None, errors=mock_errors)
+    github_client._mock_graphql.return_value = mock_resp
+    import pytest
+    with pytest.raises(GitHubResourceNotFoundError, match="GraphQL resource not found"):
+        github_client.add_item_to_project_v2(PROJECT_NODE_ID, MOCK_ISSUE_NODE_ID)
+
+def test_add_item_to_project_v2_permission_error(github_client: GitHubAppClient):
+    """add_item_to_project_v2: 権限エラー"""
+    mock_errors = [{"message": "User does not have permission to add items to the project", "type": "FORBIDDEN"}]
+    mock_resp = create_mock_graphql_response(data=None, errors=mock_errors)
+    github_client._mock_graphql.return_value = mock_resp
+    import pytest
+    with pytest.raises(GitHubAuthenticationError, match="GraphQL permission denied"):
+        github_client.add_item_to_project_v2(PROJECT_NODE_ID, MOCK_ISSUE_NODE_ID)
+
+def test_add_item_to_project_v2_missing_item_id_in_response(github_client: GitHubAppClient):
+    """add_item_to_project_v2: レスポンスにitem IDが含まれない異常ケース"""
+    mock_resp = create_mock_graphql_response(data={"addProjectV2ItemById": {"item": {}}})
+    github_client._mock_graphql.return_value = mock_resp
+    import pytest
+    # エラーメッセージの期待値を修正
+    with pytest.raises(GitHubClientError, match="Failed to add item to project V2: Invalid response format or missing item ID"):
+        github_client.add_item_to_project_v2(PROJECT_NODE_ID, MOCK_ISSUE_NODE_ID)
+
+def test_add_item_to_project_v2_empty_input(github_client: GitHubAppClient):
+    """add_item_to_project_v2: empty project_node_id or content_node_id should raise ValueError"""
+    import pytest
+    with pytest.raises(ValueError, match="Project Node ID cannot be empty"):
+        github_client.add_item_to_project_v2("", MOCK_ISSUE_NODE_ID)
+    with pytest.raises(ValueError, match="Content Node ID cannot be empty"):
+        github_client.add_item_to_project_v2(PROJECT_NODE_ID, "")
+    with pytest.raises(ValueError, match="Content Node ID cannot be empty"):
+        github_client.add_item_to_project_v2(PROJECT_NODE_ID, "  ")

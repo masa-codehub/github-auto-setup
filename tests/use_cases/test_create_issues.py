@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, call # call をインポート
 import logging # caplog を使うためにインポート
+import copy # deep copy用に追加
 
 # テスト対象 UseCase, データモデル, 依存 Client, 例外をインポート
 from github_automation_tool.use_cases.create_issues import CreateIssuesUseCase
@@ -33,12 +34,34 @@ ISSUE3_DATA = IssueData(title="New Issue 3", description="Body 3")
 ISSUE4_DATA = IssueData(title="Error Issue 4", description="Body 4")
 ISSUE_EMPTY_TITLE = IssueData(title="", description="Body for empty title")
 
+# 担当者付きのIssueデータ
+ISSUE_WITH_VALID_ASSIGNEES = IssueData(
+    title="Issue with Valid Assignees",
+    description="Issue with valid assignees",
+    assignees=["valid-user1", "valid-user2"]
+)
+
+ISSUE_WITH_INVALID_ASSIGNEES = IssueData(
+    title="Issue with Invalid Assignees",
+    description="Issue with invalid assignees",
+    assignees=["valid-user", "invalid-user"]
+)
+
+ISSUE_WITH_AT_ASSIGNEES = IssueData(
+    title="Issue with @ Assignees",
+    description="Issue with @ in assignees",
+    assignees=["@valid-user", "@invalid-user"]
+)
+
 PARSED_DATA_ALL_NEW = ParsedRequirementData(issues=[ISSUE1_DATA, ISSUE3_DATA])
 PARSED_DATA_ALL_EXISTING = ParsedRequirementData(issues=[ISSUE2_DATA])
 PARSED_DATA_MIXED = ParsedRequirementData(issues=[ISSUE1_DATA, ISSUE2_DATA, ISSUE3_DATA])
 PARSED_DATA_WITH_ERROR = ParsedRequirementData(issues=[ISSUE1_DATA, ISSUE4_DATA, ISSUE3_DATA])
 PARSED_DATA_EMPTY_ISSUES = ParsedRequirementData(issues=[])
 PARSED_DATA_WITH_EMPTY_TITLE = ParsedRequirementData(issues=[ISSUE1_DATA, ISSUE_EMPTY_TITLE])
+PARSED_DATA_WITH_ASSIGNEES = ParsedRequirementData(
+    issues=[ISSUE_WITH_VALID_ASSIGNEES, ISSUE_WITH_INVALID_ASSIGNEES, ISSUE_WITH_AT_ASSIGNEES]
+)
 
 # --- Test Cases ---
 
@@ -222,3 +245,82 @@ def test_execute_with_empty_title(create_issues_use_case: CreateIssuesUseCase, m
     assert f"Processing issue 2/2: '(Empty Title)'" in caplog.text
     assert "Skipping issue data with empty title." in caplog.text # WARNINGログ
     assert "CreateIssuesUseCase finished" in caplog.text
+
+def test_execute_with_assignees_validation(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
+    """担当者の検証機能が正しく動作するかテスト"""
+    # モック設定: find_issue_by_title は常に False を返す
+    mock_github_client.find_issue_by_title.return_value = False
+    
+    # validate_assignees のモック設定
+    def mock_validate_assignees(owner, repo, assignee_logins):
+        valid = []
+        invalid = []
+        for login in assignee_logins:
+            if login == "invalid-user" or login == "@invalid-user":
+                invalid.append(login)
+            else:
+                # @記号は削除して有効なユーザーとして返す
+                valid.append(login.lstrip('@'))
+        return valid, invalid
+    
+    mock_github_client.validate_assignees = MagicMock(side_effect=mock_validate_assignees)
+    
+    # create_issue の戻り値を設定
+    mock_github_client.create_issue.side_effect = [
+        ("url/valid", "node_valid"),
+        ("url/invalid", "node_invalid"),
+        ("url/at", "node_at")
+    ]
+    
+    with caplog.at_level(logging.INFO):
+        result = create_issues_use_case.execute(PARSED_DATA_WITH_ASSIGNEES, TEST_OWNER, TEST_REPO)
+    
+    # 結果の検証
+    assert len(result.created_issue_details) == 3
+    assert len(result.validation_failed_assignees) == 2
+    # 無効な担当者情報が記録されていることを確認
+    assert any(title == ISSUE_WITH_INVALID_ASSIGNEES.title for title, _ in result.validation_failed_assignees)
+    assert any(title == ISSUE_WITH_AT_ASSIGNEES.title for title, _ in result.validation_failed_assignees)
+    
+    # validate_assignees が正しく呼び出されたことを確認
+    assert mock_github_client.validate_assignees.call_count == 3
+    mock_github_client.validate_assignees.assert_any_call(
+        TEST_OWNER, TEST_REPO, ISSUE_WITH_VALID_ASSIGNEES.assignees
+    )
+    mock_github_client.validate_assignees.assert_any_call(
+        TEST_OWNER, TEST_REPO, ISSUE_WITH_INVALID_ASSIGNEES.assignees
+    )
+    mock_github_client.validate_assignees.assert_any_call(
+        TEST_OWNER, TEST_REPO, ISSUE_WITH_AT_ASSIGNEES.assignees
+    )
+    
+    # create_issue が有効な担当者リストで呼び出されたことを確認
+    assert mock_github_client.create_issue.call_count == 3
+    # 最初のIssueは全員有効
+    mock_github_client.create_issue.assert_any_call(
+        owner=TEST_OWNER, repo=TEST_REPO,
+        title=ISSUE_WITH_VALID_ASSIGNEES.title,
+        body=ISSUE_WITH_VALID_ASSIGNEES.description,
+        labels=None, milestone=None,
+        assignees=["valid-user1", "valid-user2"]  # 全員有効
+    )
+    # 2番目のIssueは一部無効
+    mock_github_client.create_issue.assert_any_call(
+        owner=TEST_OWNER, repo=TEST_REPO,
+        title=ISSUE_WITH_INVALID_ASSIGNEES.title,
+        body=ISSUE_WITH_INVALID_ASSIGNEES.description,
+        labels=None, milestone=None,
+        assignees=["valid-user"]  # 有効な担当者のみ
+    )
+    # 3番目のIssueは@が削除される
+    mock_github_client.create_issue.assert_any_call(
+        owner=TEST_OWNER, repo=TEST_REPO,
+        title=ISSUE_WITH_AT_ASSIGNEES.title,
+        body=ISSUE_WITH_AT_ASSIGNEES.description,
+        labels=None, milestone=None,
+        assignees=["valid-user"]  # @が削除され、無効な担当者は除外
+    )
+    
+    # ログにも検証失敗情報が含まれていることを確認
+    assert "Found 1 invalid assignee(s) for issue" in caplog.text
+    assert "Issues with invalid assignees: 2" in caplog.text

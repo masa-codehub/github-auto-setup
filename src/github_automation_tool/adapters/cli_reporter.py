@@ -29,12 +29,18 @@ class CliReporter:
         created_count = len(result.created_issue_details)
         skipped_count = len(result.skipped_issue_titles)
         failed_count = len(result.failed_issue_titles)
+        validation_failed_count = len(result.validation_failed_assignees)
+        
         summary = (
             f"Total processed: {created_count + skipped_count + failed_count}, "
             f"Created: {created_count}, "
             f"Skipped: {skipped_count}, "
             f"Failed: {failed_count}"
         )
+        
+        if validation_failed_count > 0:
+            summary += f", Issues with invalid assignees: {validation_failed_count}"
+            
         logger.info(summary)
 
         # --- 各詳細情報を適切なログレベルで表示 ---
@@ -54,6 +60,12 @@ class CliReporter:
                 # エラーメッセージの改行はスペースに置換して見やすくする
                 formatted_error = str(error_msg).replace('\n', ' ')
                 logger.error(f"- '{title}': {formatted_error}")
+                
+        # 検証に失敗した担当者情報の表示を追加
+        if result.validation_failed_assignees:
+            logger.warning("[Issues with Invalid Assignees]")
+            for title, invalid_assignees in result.validation_failed_assignees:
+                logger.warning(f"- '{title}': Invalid assignees: {', '.join(invalid_assignees)}")
 
         logger.info("-" * 40) # 区切り線
 

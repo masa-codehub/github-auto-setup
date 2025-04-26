@@ -64,6 +64,10 @@ class CreateIssuesResult(BaseModel):
         default_factory=list,
         description="発生したエラーの詳細メッセージ（failed_issue_titlesに対応）のリスト"
     )
+    validation_failed_assignees: list[tuple[str, list[str]]] = Field(
+        default_factory=list,
+        description="事前検証に失敗した担当者がいたIssue (Issueタイトル, 検証失敗担当者リスト) のタプルリスト"
+    )
 
 
 class CreateGitHubResourcesResult(BaseModel):
