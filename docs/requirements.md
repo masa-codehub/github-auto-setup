@@ -1,8 +1,8 @@
 # 要件定義書: GitHub Automation Tool
 
-**バージョン:** 1.3
-**最終更新日:** 2025-04-20 (JST)
-**ステータス:** 仕様確定
+**バージョン:** 1.4 (**変更**)
+**最終更新日:** 2025-04-26 (JST) (**変更**)
+**ステータス:** 仕様改定中 (**変更**)
 
 ## 1. 概要と背景
 
@@ -23,7 +23,7 @@
     * 開発チーム内での Issue 管理プロセス標準化を推進し、プロジェクト管理コストを削減する。
     * 開発者の定型作業負荷を軽減し、満足度を向上させる。
 * **システムが満たすべき主要な成功基準:**
-    * **機能:** 指定された Markdown ファイルと CLI 引数を基に、設定された生成 AI (OpenAI/Gemini) が情報を解析し、GitHub 上にリポジトリ、ラベル、マイルストーン、Issue (タイトル、本文、ラベル、マイルストーン、担当者) を冪等性を保ちつつ自動作成・設定できること。指定された場合は GitHub Projects (V2) に作成した Issue をアイテムとして追加できること。
+    * **機能:** 指定された Markdown ファイルと CLI 引数を基に、設定された生成 AI (OpenAI/Gemini) が情報を解析し、GitHub 上にリポジトリ、ラベル、**ファイル内で言及された全ての**マイルストーン、Issue (タイトル、本文、ラベル、**Issueごとに指定された**マイルストーン、担当者) を冪等性を保ちつつ自動作成・設定できること。指定された場合は GitHub Projects (V2) に作成した Issue をアイテムとして追加できること。 (**変更**)
     * **操作性:** 開発者が容易に利用できる CLI (`Typer`) を提供すること。
     * **フィードバック:** 処理結果 (成功、失敗、スキップ、エラー詳細) をログ (`logging`) および整形されたレポート (`CliReporter`) で明確にユーザーに提示すること。
     * **安全性:** Dry Run モード (`--dry-run`) で実際の変更前に実行結果をシミュレーションできること。
@@ -38,20 +38,20 @@
         * UTF-8 エンコードされた Markdown テキストファイル (`--file`)。AI が解析しやすい推奨フォーマットのテンプレートを提供する予定です **(具体的なルール定義は TBD)**。
         * CLI 引数: リポジトリ名 (`--repo`、`owner/repo` または `repo` 形式)、GitHub Project (V2) 名 (`--project`、任意)、Dry Run フラグ (`--dry-run`、任意)。
     * **処理:**
-        * **設定読み込み (`infrastructure/config.py`):** `.env` または環境変数から GitHub PAT, AI API キー (OpenAI/Gemini), ログレベル, AI モデル名を `Pydantic-settings` で読み込み、検証します。必須項目欠落時はエラー終了します。
+        * **設定読み込み (`infrastructure/config.py`):** `.env` または環境変数から GitHub PAT, AI API キー (OpenAI/Gemini), AI モデル名, **ログレベル** を `Pydantic-settings` で読み込み、検証します。必須項目欠落時はエラー終了します。(**変更**: log_level を追記)
         * **ファイル読み込み (`infrastructure/file_reader.py`):** 指定された Markdown ファイルの内容を読み込みます。
-        * **AI 解析 (`adapters/ai_parser.py`):** 設定された AI モデル (LangChain 経由) を使用し、Markdown テキストから Issue 情報 (タイトル, 説明, タスクリスト, 関連要件リスト, 関連 Issue リスト, 受け入れ基準リスト, ラベルリスト, マイルストーン名, 担当者リスト) を抽出し、`ParsedRequirementData` ドメインモデル (`domain/models.py`) にマッピングします。**AI の解析結果が Pydantic モデルの必須フィールドを満たさない場合、エラーとして処理します。**
+        * **AI 解析 (`adapters/ai_parser.py`):** 設定された AI モデル (LangChain 経由) を使用し、Markdown テキストから Issue 情報 (タイトル, 説明, タスクリスト, 関連要件リスト, 関連 Issue リスト, 受け入れ基準リスト, ラベルリスト, **Issueごとの**マイルストーン名, 担当者リスト) を抽出し、`ParsedRequirementData` ドメインモデル (`domain/models.py`) にマッピングします。**AI の解析結果が Pydantic モデルの必須フィールドを満たさない場合、エラーとして処理します。** (**変更**)
         * **GitHub 操作 (UseCase 経由、`adapters/github_client.py` を使用):**
             * **リポジトリ作成/確認 (`CreateRepositoryUseCase`):** プライベートリポジトリを `githubkit` で作成します (冪等)。Owner 省略時は認証ユーザー (`get_authenticated`) を Owner とします。
             * **ラベル作成/確認 (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.create_label`):** `ParsedRequirementData` 内の全ユニークラベルに対し、存在しなければ作成します (冪等)。色は GitHub デフォルトです。エラー発生時も処理継続し結果に記録します。
-            * **マイルストーン作成/確認 (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.create_milestone`):** `ParsedRequirementData` 内の**最初の**ユニークなマイルストーン名に対し、存在しなければ作成します (冪等)。エラー発生時も処理継続し結果に記録します。
-            * **Issue 作成/設定 (`CreateIssuesUseCase` -> `GitHubAppClient.create_issue`):** `ParsedRequirementData` 内の各 IssueData に基づき Issue を作成します。タイトル、本文 (抽出した各セクションを結合)、ラベル、マイルストーン ID (**ファイル内の最初のマイルストーン名を解決**)、担当者を設定します。同名タイトル (Open状態) の Issue が存在する場合はスキップします。エラー発生時も Issue 単位で処理継続し結果に記録します。成功時に Issue URL と Node ID を取得します。
+            * **マイルストーン作成/確認 (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.create_milestone`):** `ParsedRequirementData` 内で指定された**全ての**ユニークなマイルストーン名に対し、存在しなければ作成します (冪等)。エラー発生時も処理継続し結果に記録します。(**変更**)
+            * **Issue 作成/設定 (`CreateIssuesUseCase` -> `GitHubAppClient.create_issue`):** `ParsedRequirementData` 内の各 `IssueData` に基づき Issue を作成します。タイトル、本文 (抽出した各セクションを結合)、ラベル、**その Issue に指定された**マイルストーンの ID (事前に解決しておく)、担当者を設定します。同名タイトル (Open状態) の Issue が存在する場合はスキップします。エラー発生時も Issue 単位で処理継続し結果に記録します。成功時に Issue URL と Node ID を取得します。(**変更**)
             * **プロジェクト検索 (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.find_project_v2_node_id`):** `--project` 指定時、オーナー名とプロジェクト名で Project (V2) の Node ID を GraphQL で検索します。
             * **プロジェクトへの Issue 追加 (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.add_item_to_project_v2`):** プロジェクト Node ID と作成された Issue の Node ID を使用し、GraphQL でプロジェクトにアイテムを追加します。エラー発生時もアイテム単位で処理継続し結果に記録します。
-        * **ワークフロー制御 (`CreateGitHubResourcesUseCase`):** 上記 GitHub 操作の実行順序 (Repo -> Labels -> Milestone -> Project Search -> Issues -> Project Add) を制御します。リポジトリ作成などの致命的エラー発生時は処理を中断し例外を送出します。
+        * **ワークフロー制御 (`CreateGitHubResourcesUseCase`):** 上記 GitHub 操作の実行順序 (Repo -> Labels -> **Milestones (複数)** -> Project Search -> Issues -> Project Add) を制御します。リポジトリ作成などの致命的エラー発生時は処理を中断し例外を送出します。(**変更**)
     * **出力:**
         * 標準出力/標準エラー出力: ログレベルに応じた処理状況、エラーメッセージ (`logging`)。**エラーメッセージは、現時点では詳細な原因や対処法までは含めず、発生したエラーの種類と内容が分かるレベルとします。**
-        * 整形済み結果レポート: 全体の処理結果サマリー (`CreateGitHubResourcesResult`) を `CliReporter` がログに出力します。**部分的失敗もこのレポートに含まれます。**
+        * 整形済み結果レポート: 全体の処理結果サマリー (`CreateGitHubResourcesResult`) を `CliReporter` がログに出力します。**部分的失敗もこのレポートに含まれます。** (**変更**: マイルストーン結果が複数になる可能性を考慮**)
     * **実行形態:** Python CLI アプリケーション (`Typer`、`main.py` がエントリーポイント)。Docker コンテナでの実行を推奨します。
     * **認証:** GitHub PAT (`repo`, `project` スコープ)、選択された AI モデルの API キー。
 * **対象範囲外（Out of Scope）:**
@@ -67,7 +67,7 @@
     * GitHub Projects (V2) の**新規作成**、ビューやカスタムフィールドの設定。
     * リポジトリ設定 (コラボレーター、ブランチ保護、Issue/PR テンプレート、**デフォルトルールセット適用**)。
     * Markdown ファイル全体で共通のデフォルトラベル・マイルストーン等を定義・利用する機能。
-    * **Issue ごとに異なるマイルストーンを指定する機能（現在はファイル内の最初のマイルストーンのみ適用）。**
+    * ~~**Issue ごとに異なるマイルストーンを指定する機能（現在はファイル内の最初のマイルストーンのみ適用）。**~~ (**削除**)
     * ラベル作成時の色や説明文の指定機能。
     * プロジェクトへのアイテム追加時にステータス等のフィールド値を設定する機能。
     * **Organization リポジトリへの明示的な対応（現時点ではユーザーリポジトリ前提）。**
@@ -93,8 +93,8 @@
         4.  CLI で `--file` (Markdown パス) と `--repo` (リポジトリ名) が指定されている。
     * **事後条件:**
         1.  指定されたリポジトリが存在しない場合、プライベートリポジトリとして作成される。
-        2.  Markdown から抽出されたラベルとマイルストーン (最初の1つ) が、リポジトリに存在しない場合に作成される。
-        3.  Markdown から抽出された各 Issue が、リポジトリに同名の Open な Issue が存在しない場合に作成される (タイトル、本文、ラベル、マイルストーン、担当者含む)。
+        2.  Markdown から抽出された**全てのユニークな**ラベルと**全てのユニークな**マイルストーンが、リポジトリに存在しない場合に作成される。(**変更**)
+        3.  Markdown から抽出された各 Issue が、リポジトリに同名の Open な Issue が存在しない場合に作成される (タイトル、本文、ラベル、**該当 Issue に指定された**マイルストーン、担当者含む)。(**変更**)
         4.  `--project` が指定され、該当する Project (V2) が存在する場合、作成された Issue がそのプロジェクトにアイテムとして追加される。
         5.  処理結果 (作成/スキップ/失敗したリソースの情報、エラー詳細) がログおよび標準出力に表示される。
         6.  致命的エラーが発生した場合、処理は中断し、非ゼロの終了コードで終了する。
@@ -110,28 +110,27 @@
         9.  `CreateGitHubResourcesUseCase`: Dry Run モードでない場合、以下の処理を実行。
         10. `CreateGitHubResourcesUseCase`: `CreateRepositoryUseCase.execute()` を呼び出し、リポジトリを作成/確認。
         11. `CreateGitHubResourcesUseCase`: `ParsedRequirementData` からユニークなラベル名を収集し、ループ内で `GitHubAppClient.create_label()` を呼び出し、作成/確認 (エラーは記録)。
-        12. `CreateGitHubResourcesUseCase`: `ParsedRequirementData` から**最初の**ユニークなマイルストーン名を収集し、`GitHubAppClient.create_milestone()` を呼び出し、作成/確認 (エラーは記録)。
+        12. `CreateGitHubResourcesUseCase`: `ParsedRequirementData` 内の**全ての** Issue からユニークなマイルストーン名を収集し、ループ内で `GitHubAppClient.create_milestone()` を呼び出し、作成/確認 (エラーは記録)。**成功したマイルストーン名とその ID のマッピングを保持する。** (**変更**)
         13. `CreateGitHubResourcesUseCase`: `project_name` が指定されていれば、`GitHubAppClient.find_project_v2_node_id()` を呼び出し、プロジェクト Node ID を検索 (エラーは記録)。
-        14. `CreateGitHubResourcesUseCase`: `CreateIssuesUseCase.execute()` を呼び出し、Issue を作成/スキップ (エラーは `CreateIssuesResult` 内に記録)。**この際、Issue に紐付けるマイルストーンはステップ 12 で処理した最初のマイルストーンの ID を使用する。**
+        14. `CreateGitHubResourcesUseCase`: `CreateIssuesUseCase.execute()` を呼び出し、Issue を作成/スキップ (エラーは `CreateIssuesResult` 内に記録)。**この際、ステップ 12 で作成/確認したマイルストーン名とIDのマッピング情報を渡し、各 Issue Data に対応するマイルストーンIDを解決・設定できるようにする。** (**変更**)
         15. `CreateGitHubResourcesUseCase`: プロジェクト Node ID と作成された Issue の Node ID があれば、ループ内で `GitHubAppClient.add_item_to_project_v2()` を呼び出し、アイテムを追加 (エラーは記録)。
-        16. `CreateGitHubResourcesUseCase`: 全ての処理結果をまとめた `CreateGitHubResourcesResult` オブジェクトを構築して返却。
+        16. `CreateGitHubResourcesUseCase`: 全ての処理結果をまとめた `CreateGitHubResourcesResult` オブジェクトを構築して返却 (**変更**: 複数のマイルストーン結果を含む)。
         17. `main.py`: 受け取った `CreateGitHubResourcesResult` を `CliReporter.display_create_github_resources_result()` に渡し、結果を表示。
     * **代替フロー（例外フロー）:**
         * 設定読み込み、ファイル読み込み、**AI 解析 (必須項目不足含む)**、リポジトリ名解決、リポジトリ作成/確認のいずれかで致命的エラーが発生した場合、UseCase または `main.py` が例外を送出し、`main.py` が捕捉してエラーメッセージを表示し、非ゼロコードで終了する。
-        * ラベル作成、マイルストーン作成、プロジェクト検索、Issue 作成 (個別)、プロジェクトへのアイテム追加 (個別) で**APIエラー等が発生した場合、処理は可能な限り続行**され、エラー情報が最終結果に記録される。
-    * **(Clean Architecture観点):** ユースケースはアプリケーション固有のビジネスロジック（ワークフロー）を定義します。`main.py` はエントリーポイントとして依存関係の解決と UseCase の呼び出し、結果の表示を担当します。UseCase は Domain モデルを入力とし、Adapters (GitHubClient) を介して外部と対話します。
+        * ラベル作成、マイルストーン作成 (個別)、プロジェクト検索、Issue 作成 (個別)、プロジェクトへのアイテム追加 (個別) で**APIエラー等が発生した場合、処理は可能な限り続行**され、エラー情報が最終結果に記録される。
 
 ## 6. ドメインモデル（初期案）
 
 * **(DDD観点):** システムの中核概念をユビキタス言語で表現します。関心事をカプセル化し、ビジネスルールを明確にします。
 * **値オブジェクト (Value Object):**
-    * `IssueData`: AI によって解析された単一 Issue の情報の不変なスナップショットです。タイトル、説明、タスクリスト、関連要件リスト、関連 Issue リスト、受け入れ基準リスト、ラベルリスト、マイルストーン名、担当者リストを持ちます。`Pydantic BaseModel` で実装されます。
+    * `IssueData`: AI によって解析された単一 Issue の情報の不変なスナップショットです。タイトル、説明、タスクリスト、関連要件リスト、関連 Issue リスト、受け入れ基準リスト、ラベルリスト、**その Issue に対応する**マイルストーン名、担当者リストを持ちます。`Pydantic BaseModel` で実装されます。(**変更**)
 * **エンティティ (Entity):**
     * 現状、明確なドメインエンティティは少ないです。GitHub 上のリソース (リポジトリ、Issue、ラベル、マイルストーン) は外部システムのエンティティであり、本ツール内では主に ID や名前で参照されます。強いて言えば、ツールの一連の実行結果を表す `CreateGitHubResourcesResult` が、実行コンテキストにおける情報保持の役割を持ちます。
 * **集約 (Aggregate):**
     * `ParsedRequirementData`: Markdown ファイル全体から解析された `IssueData` のリストを保持する集約です。ファイル単位の解析結果全体を表すルートです。`Pydantic BaseModel` で実装されます。
     * `CreateIssuesResult`: Issue 作成処理の結果（成功、スキップ、失敗）を集約します。`Pydantic BaseModel` で実装されます。
-    * `CreateGitHubResourcesResult`: ツール実行全体のワークフロー結果（リポジトリ情報、ラベル結果、マイルストーン結果、Issue 結果、プロジェクト連携結果、致命的エラー）を集約するルートです。`Pydantic BaseModel` で実装されます。
+    * `CreateGitHubResourcesResult`: ツール実行全体のワークフロー結果（リポジトリ情報、ラベル結果、**複数の**マイルストーン結果、Issue 結果、プロジェクト連携結果、致命的エラー）を集約するルートです。`Pydantic BaseModel` で実装されます。(**変更**)
 * **ドメインイベント (Domain Event):**
     * 現状、明示的なドメインイベントは実装されていません。将来的に、処理の各段階（例: `IssueCreated`, `RepositoryCreationFailed`）をイベントとして発行し、Observer パターンなどで通知や追加処理を行うアーキテクチャも検討可能です。
 * **ドメイン例外 (Domain Exception):** (`domain/exceptions.py`)
@@ -166,15 +165,15 @@
         * 既に同名リポジトリが存在する場合 (API が 422 エラー、メッセージに "already exists" を含む場合) は `GitHubValidationError` を送出。
     * 出力: 作成/確認されたリポジトリの URL。
     * 例外: `ValueError` (リポジトリ名形式不正)、`GitHubAuthenticationError`, `GitHubRateLimitError`, `GitHubValidationError`, `GitHubClientError`。
-* **FR-004:** `ParsedRequirementData` 内の各 `IssueData` に基づき、GitHub Issue を作成すること (`CreateIssuesUseCase`)。同名 Open Issue のスキップ、ラベル、**ファイル内の最初の**マイルストーン、担当者の設定を含む。個別エラー発生時は処理継続。
-    * 入力: `ParsedRequirementData` オブジェクト、Owner 名、Repo 名。
+* **FR-004:** `ParsedRequirementData` 内の各 `IssueData` に基づき、GitHub Issue を作成すること (`CreateIssuesUseCase`)。同名 Open Issue のスキップ、ラベル、**各 Issue に指定された**マイルストーン、担当者の設定を含む。個別エラー発生時は処理継続。(**変更**)
+    * 入力: `ParsedRequirementData` オブジェクト、Owner 名、Repo 名、**マイルストーン名とIDのマッピング情報**。(**変更**)
     * 処理:
         * 各 `IssueData` について、`GitHubAppClient.find_issue_by_title()` で同名 Open Issue の存在を確認。
         * 存在しない場合、`GitHubAppClient.create_issue()` を呼び出す。
             * `title`: `IssueData.title`
             * `body`: `IssueData.description`, `tasks` 等を結合した本文。
             * `labels`: `IssueData.labels` (リスト)
-            * `milestone`: **ファイル内の最初のマイルストーン名**があれば、`find_milestone_by_title()` で ID を検索して設定。見つからない/エラーの場合は設定しない。
+            * `milestone`: **`IssueData.milestone` に指定されたマイルストーン名に対応する数値 ID をマッピング情報から取得して設定**。見つからない/エラーの場合は設定しない。(**変更**)
             * `assignees`: `IssueData.assignees` (リスト、`@` は除去されている想定)
         * 存在する場合はスキップ。
     * 出力: `CreateIssuesResult` オブジェクト (作成された Issue の URL/Node ID、スキップされたタイトル、失敗したタイトルとエラーリスト)。
@@ -184,10 +183,10 @@
     * 処理: `get_label()` で存在確認し、なければ `create_label()` を呼び出す (色は GitHub デフォルト)。
     * 出力: 作成された場合は True、既存の場合は False。
     * 例外: API エラー (`GitHubClientError` 等) を捕捉し、`CreateGitHubResourcesResult` に記録。
-* **FR-006:** `ParsedRequirementData` 内の**最初の**ユニークなマイルストーン名について、GitHub マイルストーンを作成または確認すること (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.create_milestone`)。冪等性考慮。個別エラー発生時は処理継続。
+* **FR-006:** `ParsedRequirementData` 内の**全ての**ユニークなマイルストーン名について、GitHub マイルストーンを作成または確認すること (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.create_milestone`)。冪等性考慮。個別エラー発生時は処理継続。(**変更**)
     * 入力: Owner 名、Repo 名、マイルストーン名。
     * 処理: `find_milestone_by_title()` で存在確認 (Open状態) し、なければ `create_milestone()` を呼び出す。
-    * 出力: 作成/確認されたマイルストーンの ID。
+    * 出力: 作成/確認されたマイルストーンの ID **と名前のペア**。(**変更**)
     * 例外: API エラー (`GitHubClientError` 等) を捕捉し、`CreateGitHubResourcesResult` に記録。
 * **FR-007:** Issue 作成時に、`IssueData.assignees` に含まれる GitHub ユーザー名を担当者として設定すること (`GitHubAppClient.create_issue`)。**ユーザー存在チェックは行わない。**
     * 入力: Owner 名、Repo 名、Issue ペイロード (assignees リスト含む)。
@@ -242,8 +241,8 @@
 
 * **(TDD観点):** 各基準は具体的なテストシナリオに対応し、自動テストで検証可能であること。
 * **AC-Core-Flow (UC-001 基本フロー):**
-    * `python -m github_automation_tool --file <valid_markdown> --repo owner/new-repo` を実行すると、GitHub 上に `owner/new-repo` (プライベート) が作成され、Markdown 内の Issue、ラベル、**最初の**マイルストーンが冪等に作成されること。成功を示すログが出力されること。
-    * 再度同じコマンドを実行した場合、リポジトリや Issue は重複作成されず、「スキップ」を示すログが出力されること。
+    * `python -m github_automation_tool --file <valid_markdown> --repo owner/new-repo` を実行すると、GitHub 上に `owner/new-repo` (プライベート) が作成され、Markdown 内の Issue、ラベル、**言及された全ての**マイルストーンが冪等に作成され、**各 Issue に正しいマイルストーンが設定される**こと。成功を示すログが出力されること。(**変更**)
+    * 再度同じコマンドを実行した場合、リポジトリや Issue、ラベル、マイルストーンは重複作成されず、「スキップ」を示すログが出力されること。(**変更**)
 * **AC-Project-Link (UC-001 プロジェクト連携):**
     * `--project "Existing Project"` を付けて実行し、"Existing Project" が存在する場合、作成された Issue がそのプロジェクトにアイテムとして追加され、成功ログが出力されること。
     * `--project "Non Existing Project"` を付けて実行した場合、プロジェクトが見つからない旨の警告ログが出力され、アイテム追加処理は行われず、他の処理は正常に完了すること。
@@ -254,9 +253,9 @@
 * **AC-Error-Handling (NFR-Err-01, NFR-Err-02):**
     * GitHub PAT が無効な状態で実行すると、認証エラーを示すメッセージが表示され、非ゼロコードで終了すること。
     * `--file` に存在しないファイルを指定すると、ファイルが見つからない旨のエラーメッセージが表示され、非ゼロコードで終了すること。
-    * ラベル作成 API が一時的に失敗しても、エラーがログに記録され、Issue 作成などの後続処理は実行されること。最終結果レポートにラベル作成失敗情報が含まれること。
+    * ラベル作成 API や**個別のマイルストーン作成 API** が一時的に失敗しても、エラーがログに記録され、Issue 作成などの後続処理は実行されること。最終結果レポートにラベル作成失敗**やマイルストーン作成失敗**情報が含まれること。(**変更**)
 * **AC-Tests-Pass (NFR-Test-01, NFR-Test-02):**
-    * 開発環境で `pytest` コマンドを実行すると、全てのユニットテスト (現時点で 118 件) が成功すること。
+    * 開発環境で `pytest` コマンドを実行すると、全てのユニットテスト (現時点で 138 件 **+ 新機能分**) が成功すること。(**変更**)
     * `pytest --cov` によるカバレッジ計測結果が 80% 以上であること。
 * **AC-AI-Switch (NFR-AI-01):**
     * 環境変数 `AI_MODEL=gemini` (かつ `GEMINI_API_KEY` が有効) を設定して実行すると、Gemini モデルが使用されて処理が正常に完了すること (ログ等で確認)。デフォルト (または `AI_MODEL=openai`) では OpenAI モデルが使用されること。
@@ -270,7 +269,7 @@
 * **登録 (Register / Create / Ensure):** AI 解析結果や CLI 引数を元に、GitHub API を通じて実際に GitHub 上にリソース (リポジトリ、ラベル、マイルストーン、Issue、プロジェクトアイテム) を作成・設定するプロセス。「Ensure」は冪等性を意識した表現。
 * **冪等性 (Idempotency):** ある操作を 1 回実行しても複数回実行しても、システムの状態が同じになるという性質。リポジトリ作成、ラベル作成、マイルストーン作成、Issue 作成 (タイトル重複回避) で考慮される。
 * **スキップ (Skip):** 冪等性担保のため、既に存在するリソース (例: 同名タイトル の Open Issue) の作成処理を実行しないこと。
-* **PAT (Personal Access Token):** GitHub API の認証に使用する個人アクセストークン。`repo` および `project` スコープが必要。
+* **PAT (Personal Access Token):** GitHub API の認証に使用する個人アクセストークン。Classic PAT の場合は `repo` および `project` スコープが必要。Fine-grained PAT の場合は、必要な権限を個別に設定する（詳細は README 等を参照）。(**変更**)
 * **APIキー (API Key):** 生成 AI (OpenAI, Gemini) の API 認証に使用するキー。
 * **CLI (Command Line Interface):** 本ツールが提供するコマンドラインベースのユーザーインターフェース (`Typer` で実装)。
 * **プロジェクトV2 (Project V2):** GitHub の提供する新しいプロジェクト管理機能。Issue や PR をアイテムとして追加できる。
@@ -287,7 +286,7 @@
     * GitHub API (REST v3, GraphQL v4): API の仕様変更、レート制限、障害発生の影響を受ける可能性がある。
     * OpenAI API または Google Generative AI API: API の仕様変更、利用料金、利用制限、障害発生の影響を受ける可能性がある。
 * **主要ライブラリ依存:** `typer`, `pydantic`, `pydantic-settings`, `githubkit`, `openai` (または `langchain-openai`), `google-generativeai` (または `langchain-google-genai`), `python-dotenv`, `pytest`, `pytest-cov`, `unittest.mock` など。これらのライブラリのバージョンアップや互換性の問題に注意が必要。
-* **認証:** 有効な GitHub PAT (`repo`, `project` スコープ) と、選択した AI モデルに対応する有効な API キーが、環境変数または `.env` ファイル経由で**実行環境に**正しく設定されていること。
-* **入力フォーマット:** 入力は UTF-8 エンコードされた Markdown ファイルであること。AI が情報を正確に抽出しやすいように、推奨される書式 (例: `**Title:**`, `**Labels:**` などのセクション構造) に従うことが望ましい。書式が大きく異なると、解析精度が低下する可能性がある。
+* **認証:** 有効な GitHub PAT (**必要なスコープまたは権限を持つ Classic PAT または Fine-grained PAT**) と、選択した AI モデルに対応する有効な API キーが、環境変数または `.env` ファイル経由で**実行環境に**正しく設定されていること。(変更)
+* **入力フォーマット:** 入力は UTF-8 エンコードされた Markdown ファイルであること。AI が情報を正確に抽出しやすいように、推奨される書式 (例: `**Title:**`, `**Labels:**`, `**Milestone:**` などのセクション構造) に従うことが望ましい。書式が大きく異なると、解析精度が低下する可能性がある。
 * **AI 解析の限界:** 生成 AI による解析結果は 100% の精度を保証するものではない。特に曖昧な記述や複雑な構造の Markdown に対しては、誤った抽出や情報の欠落が発生する可能性がある。ユーザーによる**最終確認と必要に応じた手動修正**が前提となる。
 * **利用者の前提:** 本ツールは、GitHub アカウントを所有し、自身のアカウントのリポジトリに対して操作を行う開発者または PM が利用することを前提とする。**他者のアカウントや Organization のリポジトリを操作することは想定していない。**

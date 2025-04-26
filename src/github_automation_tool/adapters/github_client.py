@@ -371,14 +371,12 @@ class GitHubAppClient:
     def create_issue(self, owner: str, repo: str, title: str,
                      body: str | None = None,
                      labels: list[str] | None = None,
-                     milestone: int | str | None = None,
+                     milestone: int | None = None,
                      assignees: list[str] | None = None
                      ) -> tuple[str | None, str | None]:
         """
         指定されたリポジトリに新しい Issue を作成し、関連情報を設定します。
-        Milestone は数値IDまたはタイトル文字列で指定可能です。
-        タイトルで指定された場合、対応する Open な Milestone の ID を検索して設定します。
-        見つからない場合や検索エラー時は、警告を出力しマイルストーンなしで作成します。
+        Milestone は数値IDで指定する必要があります。
         """
         if not title or not title.strip():
              # UseCase 層でバリデーションされるべきだが、念のためチェック
@@ -388,34 +386,6 @@ class GitHubAppClient:
         trimmed_title = title.strip()
         context = f"creating issue '{trimmed_title}' in {owner}/{repo}"
         logger.info(f"Attempting to {context} with labels: {labels}, milestone: {milestone}, assignees: {assignees}")
-
-        milestone_id_to_set: int | None = None # APIに渡す最終的なID
-
-        # --- Milestone 処理 ---
-        if isinstance(milestone, int):
-            # 整数IDが直接指定された場合
-            milestone_id_to_set = milestone
-            logger.debug(f"Using provided integer milestone ID: {milestone_id_to_set} for issue '{trimmed_title}'.")
-        elif isinstance(milestone, str) and milestone.strip():
-            # 文字列タイトルが指定された場合、IDを検索
-            milestone_title = milestone.strip()
-            logger.debug(f"Milestone title '{milestone_title}' provided for issue '{trimmed_title}'. Searching for its ID...")
-            try:
-                # Openなマイルストーンのみ検索
-                found_milestone = self.find_milestone_by_title(owner, repo, milestone_title, state="open")
-                if found_milestone and found_milestone.number is not None:
-                    milestone_id_to_set = found_milestone.number
-                    logger.info(f"Found milestone ID {milestone_id_to_set} for title '{milestone_title}'.")
-                else:
-                    # 見つからなかった場合: 警告ログを出し、milestoneは設定しない
-                    logger.warning(f"Open milestone with title '{milestone_title}' not found in {owner}/{repo}. Issue '{trimmed_title}' will be created without a milestone.")
-            except GitHubClientError as e:
-                # ID検索中にエラーが発生した場合: 警告ログを出し、milestoneは設定しない
-                logger.warning(f"Could not find milestone ID for title '{milestone_title}' due to an error: {e}. Issue '{trimmed_title}' will be created without a milestone.")
-        elif milestone is not None:
-            # None でも int でも str でもない、または空文字列の場合
-             logger.warning(f"Invalid milestone format provided: '{milestone}' for issue '{trimmed_title}'. Ignoring milestone setting.")
-        # --- Milestone 処理ここまで ---
 
         try:
             payload: dict[str, any] = {
@@ -428,8 +398,8 @@ class GitHubAppClient:
                 else:
                      logger.warning(f"Invalid format for labels: {labels}. Expected list[str]. Ignoring labels.")
 
-            if milestone_id_to_set is not None: # 検索または指定されたIDを使用
-                payload["milestone"] = milestone_id_to_set
+            if milestone is not None: # milestoneがNoneでない場合のみ設定
+                payload["milestone"] = milestone
 
             if assignees:
                  # 担当者名のリストであることを確認（空リストは許容）
