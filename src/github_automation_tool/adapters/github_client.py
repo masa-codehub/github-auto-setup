@@ -111,29 +111,38 @@ class GitHubAppClient:
         """GraphQL API 呼び出しのエラーを処理します。"""
         error_message = f"GraphQL error during {context}: {error}"
         errors_list = []
+        error_types = []
+        error_messages_list = []
         
-        if isinstance(error, GraphQLResponse) and getattr(error, 'errors', None):
+        if isinstance(error, GraphQLResponse) and hasattr(error, 'errors') and error.errors:
             errors_list = error.errors
             error_message = f"GraphQL response contained errors during {context}: {error.errors}"
             
-            # エラータイプの抽出を追加（テスト対応のため）
-            error_types = []
+            # エラータイプの抽出
             for err in errors_list:
                 if isinstance(err, dict):
                     err_type = err.get('type', '').upper()
+                    err_msg = err.get('message', '').lower()
                     if err_type:
                         error_types.append(err_type)
+                    if err_msg:
+                        error_messages_list.append(err_msg)
                     
-            # テストケースのエラータイプ対応
-            if 'FORBIDDEN' in error_types:
+            # エラータイプ・メッセージに基づく例外判定
+            if 'FORBIDDEN' in error_types or any('permission denied' in msg or 'forbidden' in msg for msg in error_messages_list):
+                logger.warning(error_message)
                 return GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}", 
                     original_exception=error if isinstance(error, Exception) else None)
-            if 'NOT_FOUND' in error_types:
+                    
+            if 'NOT_FOUND' in error_types or any('not found' in msg for msg in error_messages_list):
+                logger.warning(error_message)
                 return GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}", 
                     original_exception=error if isinstance(error, Exception) else None)
             
         logger.warning(error_message)
-        msg_lower = error_message.lower()
+        
+        # エラーメッセージの内容から例外タイプを推測（後方互換性のため）
+        msg_lower = ' '.join(error_messages_list).lower() if error_messages_list else error_message.lower()
         
         if "not found" in msg_lower:
             return GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}", 
@@ -464,72 +473,181 @@ class GitHubAppClient:
              raise self._handle_api_error(e, context)
 
     def find_project_v2_node_id(self, owner: str, project_name: str) -> str | None:
+        """
+        指定されたプロジェクト名のProject V2 Node IDをGraphQL APIで検索します。
+        プロジェクトリストを取得し、クライアント側でタイトルが完全一致するものを探します。
+
+        Args:
+            owner: プロジェクト所有者のログイン名
+            project_name: 検索するプロジェクト名（完全一致）
+
+        Returns:
+            見つかった場合はProject V2のノードID文字列、見つからない場合はNone
+
+        Raises:
+            GitHubClientError: API呼び出し中にエラーが発生した場合
+            GitHubAuthenticationError: 認証失敗やアクセス権限不足の場合
+            ValueError: 引数が空または無効な場合
+        """
+        # --- 確認用の重要ログ ---
+        logger.critical(">>> EXECUTING REVISED find_project_v2_node_id with client-side filter <<<")
+
         if not owner or not owner.strip():
             raise ValueError("Owner login cannot be empty.")
         if not project_name or not project_name.strip():
             raise ValueError("Project name cannot be empty.")
         trimmed_owner = owner.strip()
         trimmed_name = project_name.strip()
-        context = f"finding Project V2 Node ID for '{trimmed_name}' owned by '{trimmed_owner}'"
+        context = f"finding Project V2 Node ID for '{trimmed_name}' owned by '{trimmed_owner}' (client-side filter)"
         logger.info(f"Attempting to {context}...")
+
+        # ページネーション対応のGraphQLクエリ (query引数を削除)
         query = """
-        query GetProjectV2Id($ownerLogin: String!, $projectName: String!) {
+        query GetProjectsList($ownerLogin: String!, $first: Int!, $after: String) {
           repositoryOwner(login: $ownerLogin) {
             ... on ProjectV2Owner {
-              projectsV2(query: $projectName, first: 1) {
-                nodes { id title }
+              projectsV2(first: $first, after: $after) {
+                nodes {
+                  id
+                  title
+                }
+                pageInfo {
+                  endCursor
+                  hasNextPage
+                }
               }
             }
           }
         }
         """
-        variables = {"ownerLogin": trimmed_owner, "projectName": trimmed_name}
+
+        # ページネーション用の変数を初期化
+        after_cursor = None
+        has_next_page = True
+        page_count = 0
+        max_pages = 10  # 無限ループ防止のための安全策
+        found_project_id = None
+
         try:
-            response = self.gh.graphql(query, variables)
-            
-            # GraphQL レベルのエラー確認を改善
-            errors_list = getattr(response, 'errors', None)
-            if errors_list and isinstance(errors_list, list) and len(errors_list) > 0:
-                error_messages = [error.get('message', '') for error in errors_list if isinstance(error, dict)]
-                error_message = ' '.join(error_messages).lower() if error_messages else ''
+            # すべてのページを検索するループ
+            while has_next_page and page_count < max_pages:
+                page_count += 1
+                variables = {
+                    "ownerLogin": trimmed_owner,
+                    "first": 100  # 一度に取得する最大数
+                }
+                if after_cursor:
+                    variables["after"] = after_cursor
+
+                logger.debug(f"Querying page {page_count} of projects for '{trimmed_owner}', cursor: {after_cursor}")
+                response = self.gh.graphql(query, variables)
                 
-                # エラータイプの抽出
-                error_types = []
-                for err in errors_list:
-                    if isinstance(err, dict) and 'type' in err:
-                        err_type = err.get('type', '').upper()
-                        if err_type:
-                            error_types.append(err_type)
-                            
-                # エラータイプに基づく例外
-                if 'FORBIDDEN' in error_types or 'permission denied' in error_message or 'forbidden' in error_message:
-                    # 権限エラーは401/403に相当するエラー
-                    raise GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}")
-                elif 'NOT_FOUND' in error_types or 'not found' in error_message:
-                    # リソースが見つからないエラーは404に相当するエラー
-                    raise GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}")
+                # レスポンスオブジェクトの詳細調査のためのデバッグログを追加
+                logger.debug(f"Investigating response object:")
+                logger.debug(f"  Type: {type(response)}")
+                logger.debug(f"  Dir: {dir(response)}")  # 持っている属性やメソッドを表示
+                logger.debug(f"  Representation: {repr(response)}")  # オブジェクトの文字列表現
+                
+                # 様々な形式のレスポンスに対応するための処理
+                # GraphQL レベルのエラー確認 (応答が辞書で 'errors' キーを持つか)
+                if isinstance(response, dict) and response.get('errors'):
+                    errors_list = response.get('errors')
+                    logger.error(f"GraphQL errors on page {page_count}: {errors_list}")
+                    raise self._handle_graphql_error(response, context)
+                elif hasattr(response, 'errors') and response.errors:
+                    errors_list = response.errors
+                    logger.error(f"GraphQL errors on page {page_count}: {errors_list}")
+                    raise self._handle_graphql_error(response, context)
+
+                # データ処理 - responseオブジェクトが直接データである場合の対応
+                data = None
+                if isinstance(response, dict):
+                    # GraphQLの応答がトップレベルでデータを返す場合
+                    if "repositoryOwner" in response:
+                        data = response  # responseそのものがデータ
+                        logger.debug("Response itself contains top-level data")
+                    else:
+                        # 標準的なGraphQL応答構造（dataフィールド内にデータがある場合）
+                        data = response.get("data")
+                        logger.debug("Accessing standard GraphQL response structure with data field")
                 else:
-                    # その他のエラー
-                    raise GitHubClientError(f"GraphQL operation failed during {context}: {errors_list}")
-                    
-            # 正常なレスポンスを処理
-            if response and hasattr(response, 'data') and response.data:
-                owner_data = response.data.get("repositoryOwner")
-                if owner_data:
-                    projects_v2 = owner_data.get("projectsV2", {})
-                    if projects_v2:
-                        nodes = projects_v2.get("nodes", [])
-                        if nodes and len(nodes) > 0:
-                            proj = nodes[0]
-                            proj_id = proj.get("id")
-                            if proj_id:
-                                logger.info(f"Found project '{proj.get('title')}' Node ID: {proj_id}")
-                                return proj_id
+                    # オブジェクトの場合は属性としてdataにアクセス
+                    data = getattr(response, 'data', None)
+                    logger.debug("Accessing response as object with .data attribute")
+
+                # dataがどのような形かをログに出力
+                logger.debug(f"  Data type: {type(data)}")
+                logger.debug(f"  Data content: {data}")
+
+                if not data:
+                    logger.error(f"GraphQL response missing data on page {page_count}.")
+                    break # データがないならループ終了
+
+                # repositoryOwnerにアクセス
+                owner_data = None
+                if isinstance(data, dict):
+                    if "repositoryOwner" in data:
+                        owner_data = data.get("repositoryOwner")
+                    elif data.get("data") and isinstance(data.get("data"), dict):
+                        # 入れ子になっている可能性もチェック
+                        owner_data = data.get("data").get("repositoryOwner")
+                
+                if not owner_data:
+                    logger.warning(f"Repository owner '{trimmed_owner}' not found or has no projects (response on page {page_count}).")
+                    break
+
+                projects_v2 = owner_data.get("projectsV2")
+                if not projects_v2:
+                    logger.warning(f"No projectsV2 data found for owner '{trimmed_owner}' (page {page_count}).")
+                    break
+
+                nodes = projects_v2.get("nodes", [])
+                page_info = projects_v2.get("pageInfo", {})
+
+                if nodes is None or page_info is None:
+                    logger.error(f"GraphQL response missing 'nodes' or 'pageInfo' on page {page_count}.")
+                    break # 不正な形式ならループ終了
+
+                # クライアント側で完全一致するタイトルを検索
+                logger.debug(f"Checking {len(nodes)} nodes on page {page_count}...")
+                for node in nodes:
+                    if node and isinstance(node, dict):
+                        node_title = node.get("title")
+                        logger.debug(f" Checking node: title='{node_title}'") # 各タイトルをログ出力
+                        if node_title == trimmed_name:
+                            found_project_id = node.get("id")
+                            logger.info(f"FOUND project '{trimmed_name}' with Node ID: {found_project_id}")
+                            has_next_page = False # 見つかったのでループ終了
+                            break # inner loop break
+
+                if found_project_id:
+                    break # outer loop break
+
+                # ページネーション更新
+                if not has_next_page: # found_project_id が見つかってループを抜ける前に has_next_page が更新される
+                    break
+                     
+                has_next_page = page_info.get("hasNextPage", False)
+                if has_next_page:
+                    after_cursor = page_info.get("endCursor")
+                    if not after_cursor:
+                        logger.warning(f"hasNextPage is True but endCursor is missing on page {page_count}, stopping pagination.")
+                        has_next_page = False
+
+            # ループ終了後の処理
+            if found_project_id:
+                return found_project_id
             
-            logger.warning(f"Project V2 '{trimmed_name}' not found for owner '{trimmed_owner}'.")
-            return None
+            if page_count >= max_pages:
+                logger.warning(f"Reached maximum page limit ({max_pages}) while searching for project '{trimmed_name}'. Project might exist on later pages.")
+            else:
+                logger.warning(f"Project V2 '{trimmed_name}' not found for owner '{trimmed_owner}' after searching {page_count} page(s).")
+
+            return None # 全ページ検索しても見つからなかった場合
+
         except Exception as e:
-            # Wrap all exceptions, including GraphQLResponse, into appropriate GitHubClientError
+            # すべての例外を適切なGitHubClientErrorにラップ
+            # _handle_api_error 内で GraphQLResponse も処理される
             raise self._handle_api_error(e, context)
 
     def add_item_to_project_v2(self, project_node_id: str, content_node_id: str) -> str | None:
@@ -547,49 +665,37 @@ class GitHubAppClient:
         """
         variables = {"projectId": p_id, "contentId": c_id}
         try:
-            response = self.gh.graphql(mutation, variables)
+            response_dict = self.gh.graphql(mutation, variables)
             
-            # GraphQL レベルのエラー確認を改善
-            errors_list = getattr(response, 'errors', None)
-            if errors_list and isinstance(errors_list, list) and len(errors_list) > 0:
-                error_messages = [error.get('message', '') for error in errors_list if isinstance(error, dict)]
-                error_message = ' '.join(error_messages).lower() if error_messages else ''
+            # GraphQL レスポンスのエラーをチェック
+            if isinstance(response_dict, dict) and response_dict.get('errors'):
+                # _handle_graphql_error関数を使用して適切な例外を生成
+                raise self._handle_graphql_error(response_dict, context)
                 
-                # エラータイプの抽出
-                error_types = []
-                for err in errors_list:
-                    if isinstance(err, dict) and 'type' in err:
-                        err_type = err.get('type', '').upper()
-                        if err_type:
-                            error_types.append(err_type)
-                            
-                # エラータイプに基づく例外
-                if 'FORBIDDEN' in error_types or 'permission denied' in error_message or 'forbidden' in error_message:
-                    # 権限エラーは401/403に相当するエラー
-                    raise GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}")
-                elif 'NOT_FOUND' in error_types or 'not found' in error_message:
-                    # リソースが見つからないエラーは404に相当するエラー
-                    raise GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}")
-                else:
-                    # その他のエラー
-                    raise GitHubClientError(f"GraphQL operation failed during {context}: {errors_list}")
-                    
             # 正常なレスポンスを処理
-            if response and hasattr(response, 'data') and response.data:
-                add_item_response = response.data.get("addProjectV2ItemById")
-                if add_item_response:
-                    item = add_item_response.get("item")
-                    if item and "id" in item:
-                        item_id = item["id"]
-                        logger.info(f"Added item '{c_id}' to project '{p_id}', new item ID: {item_id}")
-                        return item_id
-                        
+            if not isinstance(response_dict, dict) or "data" not in response_dict:
+                logger.error(f"GraphQL response missing 'data' field or invalid format during {context}")
+                raise GitHubClientError(f"Invalid GraphQL response format during {context}")
+            
+            data = response_dict.get("data")
+            if not data:
+                logger.error(f"GraphQL response 'data' field is null or empty.")
+                raise GitHubClientError(f"Missing data in GraphQL response during {context}")
+                
+            add_item_response = data.get("addProjectV2ItemById")
+            if add_item_response:
+                item = add_item_response.get("item")
+                if item and "id" in item:
+                    item_id = item["id"]
+                    logger.info(f"Added item '{c_id}' to project '{p_id}', new item ID: {item_id}")
+                    return item_id
+                
             # 有効な項目IDが取得できない場合
             raise GitHubClientError(f"Failed to add item to project V2: Invalid response format or missing item ID during {context}")
         except Exception as e:
-            # Wrap all exceptions, including GraphQLResponse, into appropriate GitHubClientError
+            # すべての例外を適切なGitHubClientErrorにラップ
             raise self._handle_api_error(e, context)
-    
+
     def validate_assignees(self, owner: str, repo: str, assignee_logins: list[str]) -> tuple[list[str], list[str]]:
         """
         担当者のリストを検証し、有効なユーザー名のリストと無効なユーザー名のリストを返します。
@@ -601,6 +707,9 @@ class GitHubAppClient:
 
         Returns:
             (有効な担当者リスト, 無効な担当者リスト) のタプル。
+
+        Raises:
+            GitHubClientError: API呼び出し中にエラーが発生した場合。
         """
         if not assignee_logins:
             return [], []
