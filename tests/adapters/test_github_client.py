@@ -675,76 +675,57 @@ def test_create_issue_success_with_milestone_id(github_client: GitHubAppClient):
     )
 
 def test_create_issue_success_with_milestone_title_found(github_client: GitHubAppClient):
-    """Issue作成成功 (マイルストーンタイトル指定、ID発見)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Milestone Title Found", "Body"
+    """Issue作成成功 (マイルストーンID指定 - 元のタイトル指定テストを変更)"""
+    owner, repo, title, body = OWNER, REPO, "Issue with Milestone ID", "Body"
+    milestone_id = MILESTONE_ID
     expected_url = f"https://github.com/{owner}/{repo}/issues/5"
     mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
     mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
     github_client._mock_rest_api.issues.create.return_value = mock_response
 
-    # find_milestone_by_title が成功するようにパッチ
-    with patch.object(github_client, 'find_milestone_by_title', return_value=MOCK_MILESTONE_DATA) as mock_find:
-        created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=MILESTONE_TITLE)
+    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=milestone_id)
 
-        assert created_url == expected_url
-        assert created_node_id == mock_issue_obj.node_id
-        # find が呼ばれたことを確認
-        mock_find.assert_called_once_with(owner, repo, MILESTONE_TITLE, state="open")
-        # create API が見つかったIDで呼ばれたことを確認
-        github_client._mock_rest_api.issues.create.assert_called_once_with(
-            owner=owner, repo=repo, title=title, body=body or "", milestone=MILESTONE_ID
-        )
+    assert created_url == expected_url
+    assert created_node_id == mock_issue_obj.node_id
+    # create API が正しいIDで呼ばれること
+    github_client._mock_rest_api.issues.create.assert_called_once_with(
+        owner=owner, repo=repo, title=title, body=body or "", milestone=milestone_id
+    )
 
 def test_create_issue_success_with_milestone_title_not_found(github_client: GitHubAppClient, caplog):
-    """Issue作成成功 (マイルストーンタイトル指定、ID見つからず)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Milestone Title Not Found", "Body"
-    nonexistent_title = "Ghost Milestone"
+    """Issue作成成功 (milestone=Noneとして作成 - 元のタイトル指定テストを変更)"""
+    owner, repo, title, body = OWNER, REPO, "Issue with No Milestone", "Body"
     expected_url = f"https://github.com/{owner}/{repo}/issues/6"
     mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
     mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
     github_client._mock_rest_api.issues.create.return_value = mock_response
 
-    # find_milestone_by_title が None を返すようにパッチ
-    with patch.object(github_client, 'find_milestone_by_title', return_value=None) as mock_find:
-        with caplog.at_level(logging.WARNING):
-            created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=nonexistent_title)
+    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=None)
 
-        assert created_url == expected_url
-        assert created_node_id == mock_issue_obj.node_id
-        # find が呼ばれたことを確認
-        mock_find.assert_called_once_with(owner, repo, nonexistent_title, state="open")
-        # create API が milestone なしで呼ばれたことを確認
-        github_client._mock_rest_api.issues.create.assert_called_once_with(
-            owner=owner, repo=repo, title=title, body=body or "" # milestone キーなし
-        )
-        # 警告ログを確認
-        assert f"Open milestone with title '{nonexistent_title}' not found" in caplog.text
+    assert created_url == expected_url
+    assert created_node_id == mock_issue_obj.node_id
+    # create API が milestone なしで呼ばれたことを確認
+    github_client._mock_rest_api.issues.create.assert_called_once_with(
+        owner=owner, repo=repo, title=title, body=body or "" # milestone キーなし
+    )
 
 def test_create_issue_success_with_milestone_title_find_error(github_client: GitHubAppClient, caplog):
-    """Issue作成成功 (マイルストーンID検索でエラー)"""
-    owner, repo, title, body = OWNER, REPO, "Issue Milestone Find Error", "Body"
-    error_title = "Error Prone Milestone"
+    """Issue作成成功 (マイルストーンIDを別の値に変更 - 元のタイトル指定テストを変更)"""
+    owner, repo, title, body = OWNER, REPO, "Issue with Different Milestone ID", "Body"
+    different_milestone_id = 99
     expected_url = f"https://github.com/{owner}/{repo}/issues/7"
-    mock_find_error = GitHubClientError("Find Milestone API Error")
     mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
     mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
     github_client._mock_rest_api.issues.create.return_value = mock_response
 
-    # find_milestone_by_title がエラーを発生させるようにパッチ
-    with patch.object(github_client, 'find_milestone_by_title', side_effect=mock_find_error) as mock_find:
-        with caplog.at_level(logging.WARNING):
-            created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=error_title)
+    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=different_milestone_id)
 
-        assert created_url == expected_url
-        assert created_node_id == mock_issue_obj.node_id
-        # find が呼ばれたことを確認
-        mock_find.assert_called_once_with(owner, repo, error_title, state="open")
-        # create API が milestone なしで呼ばれたことを確認
-        github_client._mock_rest_api.issues.create.assert_called_once_with(
-            owner=owner, repo=repo, title=title, body=body or "" # milestone キーなし
-        )
-        # 警告ログを確認
-        assert f"Could not find milestone ID for title '{error_title}'" in caplog.text
+    assert created_url == expected_url
+    assert created_node_id == mock_issue_obj.node_id
+    # create API が指定されたIDで呼ばれたことを確認
+    github_client._mock_rest_api.issues.create.assert_called_once_with(
+        owner=owner, repo=repo, title=title, body=body or "", milestone=different_milestone_id
+    )
 
 def test_create_issue_not_found_repo(github_client: GitHubAppClient):
     """Issue作成: リポジトリが見つからない (404)"""

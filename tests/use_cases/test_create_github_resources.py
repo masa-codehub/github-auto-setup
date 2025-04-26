@@ -100,6 +100,20 @@ EXPECTED_OWNER = "test-owner"
 EXPECTED_REPO = "test-repo"
 EXPECTED_AUTH_USER = "test-auth-user"
 
+# 複数マイルストーンを含むテストデータを追加
+MULTI_MILESTONE_ISSUE_1 = IssueData(
+    title="Issue MS-A", body="Test body 1", labels=["bug"], milestone="MilestoneA", assignees=["userA"]
+)
+MULTI_MILESTONE_ISSUE_2 = IssueData(
+    title="Issue MS-B", body="Test body 2", labels=["feature"], milestone="MilestoneB", assignees=["userB"]
+)
+MULTI_MILESTONE_ISSUE_3 = IssueData(
+    title="Issue MS-A-2", body="Test body 3", labels=["documentation"], milestone="MilestoneA"  # 同じマイルストーン
+)
+PARSED_DATA_MULTI_MILESTONE = ParsedRequirementData(
+    issues=[MULTI_MILESTONE_ISSUE_1, MULTI_MILESTONE_ISSUE_2, MULTI_MILESTONE_ISSUE_3]
+)
+
 # --- Test Cases ---
 
 def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubResourcesUseCase, mock_create_repo_uc, mock_create_issues_uc, mock_github_client, caplog):
@@ -123,10 +137,11 @@ def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubR
     # ラベル (重複排除、順不同なのでsetで比較)
     assert set(result.created_labels) == {"bug", "feature", "urgent"}
     assert result.failed_labels == []
-    # マイルストーン
-    assert result.milestone_name == "Sprint 1"
-    assert result.milestone_id == 123
-    assert result.milestone_creation_error is None
+    # マイルストーン (複数構造対応)
+    assert len(result.processed_milestones) == 1
+    assert result.processed_milestones[0][0] == "Sprint 1"  # 名前
+    assert result.processed_milestones[0][1] == 123  # ID
+    assert result.failed_milestones == []
     # Issue結果
     assert result.issue_result == DUMMY_ISSUE_RESULT
     # プロジェクト連携結果
@@ -151,8 +166,8 @@ def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubR
     # プロジェクト検索呼び出し
     mock_github_client.find_project_v2_node_id.assert_called_once_with(EXPECTED_OWNER, DUMMY_PROJECT_NAME)
     
-    # Issue作成Use Case呼び出し
-    mock_create_issues_uc.execute.assert_called_once_with(DUMMY_PARSED_DATA_WITH_DETAILS, EXPECTED_OWNER, EXPECTED_REPO)
+    # Issue作成Use Case呼び出し - マイルストーンIDマップを渡すように変更
+    mock_create_issues_uc.execute.assert_called_once_with(DUMMY_PARSED_DATA_WITH_DETAILS, EXPECTED_OWNER, EXPECTED_REPO, {"Sprint 1": 123})
     
     # プロジェクト追加呼び出し
     mock_github_client.add_item_to_project_v2.assert_has_calls([
@@ -161,7 +176,7 @@ def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubR
     ])
     assert mock_github_client.add_item_to_project_v2.call_count == 2
 
-    # ログの検証 (主要ステップとループ内進捗) - 実際の出力に合わせて修正
+    # ログの検証 (主要ステップとループ内進捗)
     assert "Starting GitHub resource creation workflow..." in caplog.text
     assert "Step 1: Resolving repository owner and name..." in caplog.text
     assert f"Target repository: {DUMMY_REPO_NAME_FULL}" in caplog.text
@@ -172,9 +187,11 @@ def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubR
     assert "Processing label 2/3: 'feature'" in caplog.text
     assert "Processing label 3/3: 'urgent'" in caplog.text
     assert "Step 4 finished. New labels: 3" in caplog.text # create_label が常に True を返すモックのため
-    assert f"Step 5: Ensuring required milestone exists in {DUMMY_REPO_NAME_FULL}..." in caplog.text
-    assert "Processing milestone: 'Sprint 1'" in caplog.text
-    assert "Step 5 finished." in caplog.text
+    assert f"Step 5: Ensuring required milestones exist in {DUMMY_REPO_NAME_FULL}..." in caplog.text
+    assert "Found 1 unique milestones to process" in caplog.text
+    assert "Processing milestone 1/1: 'Sprint 1'" in caplog.text
+    assert "Successfully ensured milestone 'Sprint 1' exists with ID: 123" in caplog.text
+    assert "Step 5 finished. Processed milestones: 1/1" in caplog.text
     assert f"Step 6: Finding Project V2 '{DUMMY_PROJECT_NAME}' for owner '{EXPECTED_OWNER}'..." in caplog.text
     assert f"Found Project V2 '{DUMMY_PROJECT_NAME}' with Node ID: PROJECT_NODE_ID" in caplog.text
     assert f"Step 7: Creating issues in '{DUMMY_REPO_NAME_FULL}'..." in caplog.text
@@ -207,7 +224,13 @@ def test_execute_success_repo_name_only(create_resources_use_case: CreateGitHubR
     # 依存コンポーネントの検証
     mock_github_client.gh.rest.users.get_authenticated.assert_called_once()  # owner取得のために呼ばれる
     mock_create_repo_uc.execute.assert_called_once_with(DUMMY_REPO_NAME_ONLY)
-    mock_create_issues_uc.execute.assert_called_once_with(DUMMY_PARSED_DATA_WITH_DETAILS, EXPECTED_AUTH_USER, DUMMY_REPO_NAME_ONLY)
+    # マイルストーンIDマップを渡すように変更
+    mock_create_issues_uc.execute.assert_called_once_with(
+        DUMMY_PARSED_DATA_WITH_DETAILS, 
+        EXPECTED_AUTH_USER, 
+        DUMMY_REPO_NAME_ONLY,
+        {"Sprint 1": 123}  # マイルストーンIDマップを追加
+    )
     
     # ラベル作成呼び出し
     mock_github_client.create_label.assert_has_calls([
@@ -232,7 +255,9 @@ def test_execute_dry_run(create_resources_use_case: CreateGitHubResourcesUseCase
     assert result.project_name == DUMMY_PROJECT_NAME
     # Dry Run結果の検証
     assert set(result.created_labels) == {"bug", "feature", "urgent"}
-    assert result.milestone_name == "Sprint 1"
+    # 複数マイルストーン対応
+    assert len(result.processed_milestones) == 1
+    assert result.processed_milestones[0][0] == "Sprint 1"  # 名前
     assert result.issue_result is not None
     assert len(result.issue_result.created_issue_details) == 3  # すべてのIssueがDry Run表示用に作られている
     
@@ -250,7 +275,7 @@ def test_execute_dry_run(create_resources_use_case: CreateGitHubResourcesUseCase
     assert "Dry run mode enabled. Skipping GitHub operations." in caplog.text
     assert "[Dry Run] Would ensure repository:" in caplog.text
     assert "[Dry Run] Would ensure 3 labels exist:" in caplog.text
-    assert "[Dry Run] Would ensure milestone 'Sprint 1' exists" in caplog.text
+    assert "[Dry Run] Would ensure 1 milestones exist: ['Sprint 1']" in caplog.text  # 複数形に注意
     assert "[Dry Run] Would search for project 'Test Project'" in caplog.text
     assert "[Dry Run] Would process 3 issues" in caplog.text
     assert "[Dry Run] Would add 3 items to project 'Test Project'" in caplog.text # Dry Run 用のダミーIssue数
@@ -311,19 +336,23 @@ def test_execute_milestone_creation_fails(create_resources_use_case: CreateGitHu
 
     # 結果オブジェクトの検証
     assert result.fatal_error is None
-    assert result.milestone_name == "Sprint 1"
-    assert result.milestone_id is None
-    assert result.milestone_creation_error == str(mock_milestone_error)
+    # 複数マイルストーン対応の構造を検証
+    assert len(result.processed_milestones) == 0  # 成功したマイルストーンなし
+    assert len(result.failed_milestones) == 1  # 失敗したマイルストーンあり
+    assert result.failed_milestones[0][0] == "Sprint 1"  # 名前
+    assert result.failed_milestones[0][1] == str(mock_milestone_error)  # エラーメッセージ
     
     # 後続の処理が実行されていることを確認
-    mock_create_issues_uc.execute.assert_called()
-    mock_github_client.find_project_v2_node_id.assert_called()
+    mock_create_issues_uc.execute.assert_called_once()
+    mock_github_client.find_project_v2_node_id.assert_called_once()
 
-    # ログの検証 - 実際の出力に合わせて修正
-    assert f"Step 5: Ensuring required milestone exists in {DUMMY_REPO_NAME_FULL}..." in caplog.text
-    assert "Processing milestone: 'Sprint 1'" in caplog.text
+    # ログの検証
+    assert f"Step 5: Ensuring required milestones exist in {DUMMY_REPO_NAME_FULL}..." in caplog.text
+    assert "Found 1 unique milestones to process" in caplog.text
+    assert "Processing milestone 1/1: 'Sprint 1'" in caplog.text
     assert "Failed to create/ensure milestone 'Sprint 1': Milestone creation failed" in caplog.text # ERRORログ
-    assert "Step 5 finished." in caplog.text
+    assert "Step 5 finished. Processed milestones: 0/1, Failed: 1." in caplog.text
+    assert "Failed milestones: ['Sprint 1']" in caplog.text
 
 def test_execute_project_not_found(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """プロジェクトが見つからない場合、記録され、アイテム追加はスキップされる"""
@@ -357,7 +386,7 @@ def test_execute_project_not_found(create_resources_use_case: CreateGitHubResour
     # Issue作成後のステップ8のログを確認
     assert f"Step 7: Creating issues in '{DUMMY_REPO_NAME_FULL}'..." in caplog.text
     assert "Step 7 finished." in caplog.text
-    assert "Step 8: Project found, but no new issues were created or available to add." in caplog.text # テスト側を実際の出力に修正
+    assert f"Step 8: Project found, but no new issues were created or available to add." in caplog.text # テスト側を実際の出力に修正
 
 def test_execute_add_item_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """プロジェクトへのアイテム追加で一部失敗した場合、記録される"""
@@ -439,7 +468,9 @@ def test_execute_no_labels_in_issues(create_resources_use_case: CreateGitHubReso
     # 他の処理は実行される
     assert result.repository_url is not None
     assert result.created_labels == []
-    assert result.milestone_name is None
+    # 複数マイルストーン対応
+    assert len(result.processed_milestones) == 0
+    assert len(result.failed_milestones) == 0
     assert result.issue_result is not None
 
 def test_execute_repo_creation_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_create_repo_uc, mock_create_issues_uc, caplog):
@@ -503,3 +534,99 @@ def test_get_owner_repo_api_fails(create_resources_use_case: CreateGitHubResourc
              repo_name_input=DUMMY_REPO_NAME_ONLY, 
              project_name=DUMMY_PROJECT_NAME
          )
+
+def test_execute_multiple_milestones_success(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+    """複数マイルストーン: すべてのマイルストーンが正常に作成され、IDマップが正しく渡される"""
+    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
+    # マイルストーン作成の戻り値を設定（順番にIDを返す）
+    mock_github_client.create_milestone.side_effect = [101, 102]  # MilestoneA=101, MilestoneB=102
+    mock_create_issues_uc.execute.return_value = DUMMY_ISSUE_RESULT
+
+    with caplog.at_level(logging.INFO):
+        result = create_resources_use_case.execute(
+            parsed_data=PARSED_DATA_MULTI_MILESTONE,
+            repo_name_input=DUMMY_REPO_NAME_FULL,
+            project_name=DUMMY_PROJECT_NAME
+        )
+
+    # 結果オブジェクトの検証
+    assert isinstance(result, CreateGitHubResourcesResult)
+    assert result.repository_url == DUMMY_REPO_URL
+    assert result.fatal_error is None
+    
+    # マイルストーン処理結果の検証（複数マイルストーン）
+    assert len(result.processed_milestones) == 2
+    # タプルのリストを検証（順序は保証されないためソートして比較）
+    expected_milestones = [("MilestoneA", 101), ("MilestoneB", 102)]
+    # 名前でソート
+    sorted_processed = sorted(result.processed_milestones, key=lambda x: x[0])
+    sorted_expected = sorted(expected_milestones, key=lambda x: x[0])
+    assert sorted_processed == sorted_expected
+    assert result.failed_milestones == []
+
+    # マイルストーン作成の呼び出し検証
+    mock_github_client.create_milestone.assert_any_call(EXPECTED_OWNER, EXPECTED_REPO, "MilestoneA")
+    mock_github_client.create_milestone.assert_any_call(EXPECTED_OWNER, EXPECTED_REPO, "MilestoneB")
+    assert mock_github_client.create_milestone.call_count == 2  # 重複を除いた2回
+
+    # Issue作成UseCaseにマイルストーンIDマップが正しく渡されたことを検証
+    mock_create_issues_uc.execute.assert_called_once()
+    # 呼び出し時のmilestone_id_map引数を取得
+    call_args = mock_create_issues_uc.execute.call_args
+    milestone_id_map = call_args[0][3]  # 4番目の引数
+    assert isinstance(milestone_id_map, dict)
+    assert milestone_id_map == {"MilestoneA": 101, "MilestoneB": 102}
+
+    # ログの検証
+    assert f"Step 5: Ensuring required milestones exist in {DUMMY_REPO_NAME_FULL}..." in caplog.text
+    assert "Found 2 unique milestones to process" in caplog.text
+    # ログ出力の順序は保証されないため内容だけ確認
+    assert "Processing milestone 1/2: 'MilestoneA'" in caplog.text or "Processing milestone 1/2: 'MilestoneB'" in caplog.text
+    assert "Processing milestone 2/2: 'MilestoneA'" in caplog.text or "Processing milestone 2/2: 'MilestoneB'" in caplog.text
+    assert "Successfully ensured milestone 'MilestoneA' exists with ID: 101" in caplog.text
+    assert "Successfully ensured milestone 'MilestoneB' exists with ID: 102" in caplog.text
+    assert "Step 5 finished. Processed milestones: 2/2" in caplog.text
+
+def test_execute_multiple_milestones_partial_failure(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+    """複数マイルストーン: 一部のマイルストーン作成が失敗した場合、成功したものだけIDマップに含まれる"""
+    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
+    # 2つ目のマイルストーン作成だけ失敗させる
+    milestone_error = GitHubClientError("Failed to create milestone")
+    def create_milestone_side_effect(owner, repo, name):
+        if name == "MilestoneB":
+            raise milestone_error
+        return 101  # MilestoneAは成功
+    mock_github_client.create_milestone.side_effect = create_milestone_side_effect
+    mock_create_issues_uc.execute.return_value = DUMMY_ISSUE_RESULT
+
+    with caplog.at_level(logging.INFO):
+        result = create_resources_use_case.execute(
+            parsed_data=PARSED_DATA_MULTI_MILESTONE,
+            repo_name_input=DUMMY_REPO_NAME_FULL,
+            project_name=DUMMY_PROJECT_NAME
+        )
+
+    # 結果オブジェクトの検証
+    assert result.fatal_error is None
+    # マイルストーン処理結果（成功したものだけ）
+    assert len(result.processed_milestones) == 1
+    assert result.processed_milestones[0][0] == "MilestoneA"
+    assert result.processed_milestones[0][1] == 101
+    # 失敗したマイルストーン
+    assert len(result.failed_milestones) == 1
+    assert result.failed_milestones[0][0] == "MilestoneB"
+    assert str(milestone_error) in result.failed_milestones[0][1]  # エラーメッセージ
+
+    # Issue作成UseCaseにマイルストーンIDマップが正しく渡されたことを検証（失敗したものは含まれない）
+    mock_create_issues_uc.execute.assert_called_once()
+    call_args = mock_create_issues_uc.execute.call_args
+    milestone_id_map = call_args[0][3]  # 4番目の引数
+    assert milestone_id_map == {"MilestoneA": 101}  # 成功したものだけ
+
+    # ログの検証
+    assert "Found 2 unique milestones to process" in caplog.text
+    assert "Processing milestone 1/2: 'MilestoneA'" in caplog.text or "Processing milestone 1/2: 'MilestoneB'" in caplog.text
+    assert "Processing milestone 2/2: 'MilestoneA'" in caplog.text or "Processing milestone 2/2: 'MilestoneB'" in caplog.text
+    assert "Successfully ensured milestone 'MilestoneA' exists with ID: 101" in caplog.text
+    assert "Failed to create/ensure milestone 'MilestoneB': Failed to create milestone" in caplog.text
+    assert "Step 5 finished. Processed milestones: 1/2, Failed: 1." in caplog.text

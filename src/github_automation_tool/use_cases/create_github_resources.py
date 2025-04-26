@@ -95,7 +95,7 @@ class CreateGitHubResourcesUseCase:
 
             # --- ステップ 2: Dry Run モード ---
             if dry_run:
-                # (Dry Run 処理は変更なし)
+                # Dry Run モードの処理を複数マイルストーン対応に修正
                 logger.warning(
                     "Dry run mode enabled. Skipping GitHub operations.")
                 result.repository_url = f"https://github.com/{repo_full_name} (Dry Run)"
@@ -108,8 +108,16 @@ class CreateGitHubResourcesUseCase:
                         if issue.milestone:
                             unique_milestones.add(issue.milestone.strip())
                 result.created_labels = sorted(list(unique_labels))
-                if unique_milestones:
-                    result.milestone_name = next(iter(sorted(unique_milestones)))  # 最初のものを使用
+                
+                # 複数マイルストーン対応
+                milestone_id_map = {}
+                milestone_id_counter = 1000
+                for milestone_name in sorted(unique_milestones):
+                    milestone_id = milestone_id_counter
+                    milestone_id_counter += 1
+                    result.processed_milestones.append((milestone_name, milestone_id))
+                    milestone_id_map[milestone_name] = milestone_id
+                
                 dummy_issues_result = CreateIssuesResult()
                 dummy_issues_result.created_issue_details = [
                     (f"https://github.com/{repo_full_name}/issues/X{i} (Dry Run)", f"DUMMY_NODE_ID_{i}")
@@ -122,8 +130,8 @@ class CreateGitHubResourcesUseCase:
 
                 logger.info(f"[Dry Run] Would ensure repository: {repo_full_name}")
                 logger.info(f"[Dry Run] Would ensure {len(unique_labels)} labels exist: {result.created_labels}")
-                if result.milestone_name:
-                    logger.info(f"[Dry Run] Would ensure milestone '{result.milestone_name}' exists")
+                if unique_milestones:
+                    logger.info(f"[Dry Run] Would ensure {len(unique_milestones)} milestones exist: {sorted(unique_milestones)}")
                 if project_name:
                     logger.info(f"[Dry Run] Would search for project '{project_name}'")
                 logger.info(f"[Dry Run] Would process {len(parsed_data.issues)} issues")
@@ -192,33 +200,48 @@ class CreateGitHubResourcesUseCase:
             else:
                 logger.info(log_label_summary)
 
-            # --- ステップ 5: マイルストーン作成/確認 ---
-            logger.info(f"Step 5: Ensuring required milestone exists in {repo_full_name}...")
+            # --- ステップ 5: マイルストーン作成/確認 (複数対応) ---
+            logger.info(f"Step 5: Ensuring required milestones exist in {repo_full_name}...")
+            # 全ての一意なマイルストーン名を収集
             unique_milestones_in_file = set()
             if parsed_data.issues:
                 for issue in parsed_data.issues:
                     if issue.milestone and issue.milestone.strip():
                         unique_milestones_in_file.add(issue.milestone.strip())
 
-            if unique_milestones_in_file:
-                # 最初のマイルストーンのみ処理 (現状の仕様)
-                target_milestone = next(iter(sorted(unique_milestones_in_file)))
-                result.milestone_name = target_milestone
-                logger.info(f"Processing milestone: '{target_milestone}' (Only the first one found is processed)")
-                try:
-                    milestone_id = self.github_client.create_milestone(repo_owner, repo_name, target_milestone)
-                    result.milestone_id = milestone_id
-                    logger.info(f"Successfully ensured milestone '{target_milestone}' exists with ID: {milestone_id}")
-                except GitHubClientError as e:
-                    logger.error(f"Failed to create/ensure milestone '{target_milestone}': {e}")
-                    result.milestone_creation_error = str(e)
-                except Exception as e:
-                    logger.exception(f"Unexpected error creating milestone '{target_milestone}': {e}")
-                    result.milestone_creation_error = f"Unexpected error: {e}"
+            # マイルストーン名とIDのマップを作成 (Issue作成時に使用)
+            milestone_id_map = {}
+            total_milestones = len(unique_milestones_in_file)
+
+            if total_milestones > 0:
+                logger.info(f"Found {total_milestones} unique milestones to process")
+                # 各マイルストーンを処理
+                for i, milestone_name in enumerate(sorted(unique_milestones_in_file)):
+                    logger.info(f"Processing milestone {i+1}/{total_milestones}: '{milestone_name}'")
+                    try:
+                        milestone_id = self.github_client.create_milestone(repo_owner, repo_name, milestone_name)
+                        milestone_id_map[milestone_name] = milestone_id
+                        result.processed_milestones.append((milestone_name, milestone_id))
+                        logger.info(f"Successfully ensured milestone '{milestone_name}' exists with ID: {milestone_id}")
+                    except GitHubClientError as e:
+                        logger.error(f"Failed to create/ensure milestone '{milestone_name}': {e}")
+                        result.failed_milestones.append((milestone_name, str(e)))
+                    except Exception as e:
+                        logger.exception(f"Unexpected error creating milestone '{milestone_name}': {e}")
+                        result.failed_milestones.append((milestone_name, f"Unexpected error: {e}"))
             else:
                 logger.info("No milestones found in parsed data.")
-            logger.info("Step 5 finished.")
-
+            
+            # マイルストーン処理のサマリーをログ出力
+            log_milestone_summary = (
+                f"Step 5 finished. Processed milestones: {len(result.processed_milestones)}/{total_milestones}, "
+                f"Failed: {len(result.failed_milestones)}."
+            )
+            if result.failed_milestones:
+                logger.warning(log_milestone_summary + 
+                               f" Failed milestones: {[m[0] for m in result.failed_milestones]}")
+            else:
+                logger.info(log_milestone_summary)
 
             # --- ステップ 6: プロジェクト検索（指定されていれば） ---
             project_node_id = None
@@ -240,13 +263,12 @@ class CreateGitHubResourcesUseCase:
             else:
                 logger.info("Step 6: No project name specified, skipping project search and integration.")
 
-            # --- ステップ 7: Issue 作成 ---
+            # --- ステップ 7: Issue 作成 (マイルストーンマップを渡す) ---
             logger.info(f"Step 7: Creating issues in '{repo_full_name}'...")
-            # execute内でエラーが発生しても、ここでは捕捉せず上位に伝播させる (CreateIssuesUseCaseのテスト範囲)
+            # マイルストーンIDのマップを渡すように修正
             issue_result: CreateIssuesResult = self.create_issues_uc.execute(
-                parsed_data, repo_owner, repo_name)
+                parsed_data, repo_owner, repo_name, milestone_id_map)
             result.issue_result = issue_result
-            # CreateIssuesUseCase 内で詳細なログが出るので、ここでは完了のみログ
             logger.info("Step 7 finished.")
 
             # --- ステップ 8: Issueをプロジェクトに追加 ---

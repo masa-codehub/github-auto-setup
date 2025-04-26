@@ -141,18 +141,28 @@ class CliReporter:
         else:
             logger.info("[Labels] No labels processed")
             
-        # マイルストーン情報
-        if result.milestone_name:
+        # マイルストーン情報（複数対応）
+        if result.processed_milestones or result.failed_milestones:
             if is_dry_run:
-                logger.info(f"[Milestone]: Would create: {result.milestone_name}")
-            elif result.milestone_id is not None:
-                logger.info(f"[Milestone] '{result.milestone_name}' (ID: {result.milestone_id})")
-            elif result.milestone_creation_error:
-                logger.error(f"[Milestone] Failed to create '{result.milestone_name}': {result.milestone_creation_error}")
+                milestone_names = [name for name, _ in result.processed_milestones]
+                logger.info(f"[Milestones]: Would create: {', '.join(milestone_names)}")
             else:
-                logger.warning(f"[Milestone] '{result.milestone_name}' processing result unknown")
+                milestone_summary = (
+                    f"[Milestones] Successful: {len(result.processed_milestones)}, "
+                    f"Failed: {len(result.failed_milestones)}"
+                )
+                logger.info(milestone_summary)
+                
+                if result.processed_milestones:
+                    milestone_info = [f"'{name}' (ID: {id})" for name, id in result.processed_milestones]
+                    logger.info(f"  Created/Existing Milestones: {', '.join(milestone_info)}")
+                    
+                if result.failed_milestones:
+                    logger.warning("  Failed Milestones:")
+                    for milestone_name, error_msg in result.failed_milestones:
+                        logger.warning(f"  - '{milestone_name}': {error_msg}")
         else:
-            logger.info("[Milestone] No milestone processed")
+            logger.info("[Milestones] No milestones processed")
             
         # プロジェクト情報
         if result.project_name:

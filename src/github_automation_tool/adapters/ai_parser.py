@@ -156,7 +156,7 @@ class AIParser:
 - `relational_issues` (array of strings, 必須): 関連Issueのリスト。通常 `**関連Issue:**` の下のリスト項目。なければ空リスト `[]`。
 - `acceptance` (array of strings, 必須): 受け入れ基準のリスト。通常 `**受け入れ基準:**` の下のリスト項目。なければ空リスト `[]`。
 - `labels` (array of strings | null): ラベルのリスト。通常 `Labels:` の後にカンマ区切りで記述されています。ラベル名をトリムして文字列のリストにしてください。該当セクションがなければ `null`。
-- `milestone` (string | null): マイルストーン名。通常 `Milestone:` の後に記述されています。該当セクションがなければ `null`。
+- `milestone` (string | null): マイルストーン名。通常 `Milestone:` または `**Milestone:**` の後に記述されています。**各Issue候補内で**見つかった場合にその値を設定し、なければ `null`。各Issue候補は独自のマイルストーンを持つことができます。
 - `assignees` (array of strings | null): 担当者のGitHubユーザー名リスト。通常 `Assignee:` の後に `@` 付きでカンマ区切りで記述されています。`@` を除いたユーザー名のみを文字列のリストにしてください。該当セクションがなければ `null`。
 
 抽出した全てのIssueオブジェクトを `issues` というキーを持つJSON配列にまとめてください。
@@ -167,6 +167,7 @@ class AIParser:
 - 各フィールドが存在しない場合は、指示に従い空文字列、空リスト `[]`、または `null` を適切に設定してください。
 - Markdownの書式（太字やリスト）は、抽出後の本文関連フィールド（description, tasksなど）では維持せず、プレーンテキストまたはリストの要素として抽出してください。（※この指示はモデルや要件により調整）
 - タイトル行やラベル行などのキーワード行自体は、最終的な本文フィールド（descriptionなど）に含めないでください。
+- 各Issue候補は自身のマイルストーンを持ち、他のIssue候補のマイルストーンに影響されません。
 """
             prompt = PromptTemplate(
                 template=prompt_template_text,

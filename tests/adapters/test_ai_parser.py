@@ -213,6 +213,53 @@ EXPECTED_PARSED_DATA_BASIC = ParsedRequirementData(
     ]
 )
 
+# 異なるマイルストーンを持つIssueのテストデータを追加
+SAMPLE_MARKDOWN_DIFFERENT_MILESTONES = """
+---
+**Title:** Issue with Milestone A
+**Description:** This issue has milestone A.
+**Milestone:** Sprint 1
+
+---
+**Title:** Issue with Milestone B
+**Description:** This issue has milestone B.
+**Milestone:** Sprint 2
+
+---
+**Title:** Issue with No Milestone
+**Description:** This issue has no milestone.
+"""
+
+# 異なるマイルストーンを持つIssueの期待値
+EXPECTED_PARSED_DATA_DIFFERENT_MILESTONES = ParsedRequirementData(
+    issues=[
+        IssueData(
+            title="Issue with Milestone A",
+            description="This issue has milestone A.",
+            tasks=[], relational_definition=[], relational_issues=[], acceptance=[], 
+            labels=None,
+            milestone="Sprint 1",
+            assignees=None
+        ),
+        IssueData(
+            title="Issue with Milestone B",
+            description="This issue has milestone B.",
+            tasks=[], relational_definition=[], relational_issues=[], acceptance=[],
+            labels=None,
+            milestone="Sprint 2",
+            assignees=None
+        ),
+        IssueData(
+            title="Issue with No Milestone",
+            description="This issue has no milestone.",
+            tasks=[], relational_definition=[], relational_issues=[], acceptance=[],
+            labels=None,
+            milestone=None,
+            assignees=None
+        )
+    ]
+)
+
 SAMPLE_MARKDOWN_FULL = """
 ---
 **Title:** Full Feature Issue
@@ -403,3 +450,32 @@ def test_ai_parser_unexpected_error(ai_parser: AIParser):
     with pytest.raises(AiParserError, match="An unexpected error occurred during AI parsing.") as excinfo:
         ai_parser.parse("Some markdown text")
     assert excinfo.value.original_exception is mock_unexpected_error
+
+
+def test_ai_parser_parse_success_different_milestones(ai_parser: AIParser):
+    """異なるマイルストーンを持つ複数のIssueを正確にパースできるか"""
+    ai_parser.chain.invoke.return_value = EXPECTED_PARSED_DATA_DIFFERENT_MILESTONES
+    result = ai_parser.parse(SAMPLE_MARKDOWN_DIFFERENT_MILESTONES)
+    assert result == EXPECTED_PARSED_DATA_DIFFERENT_MILESTONES
+    assert len(result.issues) == 3
+
+    # Issue 1: マイルストーン「Sprint 1」があることを確認
+    issue1 = result.issues[0]
+    assert issue1.title == "Issue with Milestone A"
+    assert issue1.description == "This issue has milestone A."
+    assert issue1.milestone == "Sprint 1"
+
+    # Issue 2: マイルストーン「Sprint 2」があることを確認
+    issue2 = result.issues[1]
+    assert issue2.title == "Issue with Milestone B"
+    assert issue2.description == "This issue has milestone B."
+    assert issue2.milestone == "Sprint 2"
+
+    # Issue 3: マイルストーンがないことを確認
+    issue3 = result.issues[2]
+    assert issue3.title == "Issue with No Milestone"
+    assert issue3.description == "This issue has no milestone."
+    assert issue3.milestone is None
+
+    ai_parser.chain.invoke.assert_called_once_with(
+        {"markdown_text": SAMPLE_MARKDOWN_DIFFERENT_MILESTONES})

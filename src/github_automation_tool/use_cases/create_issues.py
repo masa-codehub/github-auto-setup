@@ -20,7 +20,8 @@ class CreateIssuesUseCase:
             raise TypeError("github_client must be an instance of GitHubAppClient")
         self.github_client = github_client
 
-    def execute(self, parsed_data: ParsedRequirementData, owner: str, repo: str) -> CreateIssuesResult:
+    def execute(self, parsed_data: ParsedRequirementData, owner: str, repo: str, 
+               milestone_id_map: dict[str, int] = None) -> CreateIssuesResult:
         """
         解析データ内の各Issueについて、存在確認を行い、存在しなければ作成します。
         エラーが発生しても、他のIssueの処理は続行します。
@@ -29,6 +30,7 @@ class CreateIssuesUseCase:
             parsed_data: AIによって解析された ParsedRequirementData オブジェクト。
             owner: 対象リポジトリのオーナー名。
             repo: 対象リポジトリ名。
+            milestone_id_map: マイルストーン名からIDへのマッピング辞書（オプション）。
 
         Returns:
             CreateIssuesResult オブジェクト（作成成功URL、スキップタイトル、失敗タイトル、エラーリスト）。
@@ -40,6 +42,10 @@ class CreateIssuesUseCase:
         if not parsed_data.issues:
             logger.info("No issues found in parsed data. Nothing to create.")
             return result
+
+        # マイルストーンIDマップが指定されていない場合は空の辞書を使用
+        if milestone_id_map is None:
+            milestone_id_map = {}
 
         # enumerate を使ってインデックスを取得し、進捗を表示
         for i, issue_data in enumerate(parsed_data.issues):
@@ -65,6 +71,17 @@ class CreateIssuesUseCase:
                 else:
                     # 2b. 存在しない場合: 作成
                     logger.info(f"Issue '{issue_title}' does not exist. Attempting creation...") # INFOレベルに変更
+                    
+                    # マイルストーン名からIDへの変換
+                    milestone_id = None
+                    if issue_data.milestone and issue_data.milestone.strip():
+                        milestone_name = issue_data.milestone.strip()
+                        milestone_id = milestone_id_map.get(milestone_name)
+                        if milestone_id:
+                            logger.debug(f"Using milestone ID {milestone_id} for milestone '{milestone_name}'")
+                        else:
+                            logger.warning(f"No milestone ID found for milestone '{milestone_name}', using name only")
+                    
                     # create_issue の戻り値として (URL, Node ID) を受け取る
                     created_url, created_node_id = self.github_client.create_issue(
                         owner=owner,
@@ -72,7 +89,7 @@ class CreateIssuesUseCase:
                         title=issue_title,
                         body=issue_data.body,
                         labels=issue_data.labels,
-                        milestone=issue_data.milestone,
+                        milestone=milestone_id,  # ID が見つからなかった場合は None を渡す
                         assignees=issue_data.assignees
                     )
                     # 正常に URL と Node ID が取得できた場合のみ result に追加

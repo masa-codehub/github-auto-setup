@@ -139,8 +139,7 @@ def test_display_create_github_resources_result_success(reporter: CliReporter, c
         project_node_id="proj_id",
         created_labels=["bug", "feature"],
         failed_labels=[("invalid", "Validation Error")],
-        milestone_name="Sprint 1",
-        milestone_id=1,
+        processed_milestones=[("Sprint 1", 1)],  # 新しい構造
         issue_result=issue_result,
         project_items_added_count=2,
         project_items_failed=[("failed_issue_id", "Permission Denied")]
@@ -163,7 +162,8 @@ def test_display_create_github_resources_result_success(reporter: CliReporter, c
     assert "'invalid': Validation Error" in caplog.text
     
     # マイルストーン情報の確認
-    assert "[Milestone]" in caplog.text
+    assert "[Milestones]" in caplog.text
+    assert "Successful: 1" in caplog.text
     assert "'Sprint 1' (ID: 1)" in caplog.text
     
     # プロジェクト情報の確認
@@ -204,7 +204,7 @@ def test_display_create_github_resources_result_dry_run(reporter: CliReporter, c
         repository_url="https://github.com/o/r (Dry Run)",
         project_name="My Project",
         created_labels=["bug", "feature"],
-        milestone_name="Sprint 1",
+        processed_milestones=[("Sprint 1", 1000)],  # 新しい構造
         issue_result=issue_result,
         project_node_id="DUMMY_PROJECT_ID (Dry Run)",
         project_items_added_count=2
@@ -219,5 +219,132 @@ def test_display_create_github_resources_result_dry_run(reporter: CliReporter, c
     # 各要素が表示されることを確認
     assert "[Repository]: https://github.com/o/r (Dry Run)" in caplog.text
     assert "[Labels]: Would create: bug, feature" in caplog.text
-    assert "[Milestone]: Would create: Sprint 1" in caplog.text
+    assert "[Milestones]: Would create: Sprint 1" in caplog.text
     assert "[Project]: Would add 2 issues to My Project" in caplog.text
+
+def test_display_create_github_resources_result_multiple_milestones_success(reporter: CliReporter, caplog):
+    """複数のマイルストーンが成功した場合の表示テスト"""
+    issue_result = CreateIssuesResult(created_issue_details=[("https://github.com/o/r/issues/1", "id1")])
+    overall_result = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        project_name="My Project",
+        project_node_id="proj_id",
+        created_labels=["bug"],
+        # 複数のマイルストーンが成功
+        processed_milestones=[
+            ("Sprint 1", 101),
+            ("Sprint 2", 102),
+            ("Feature Release", 103)
+        ],
+        issue_result=issue_result,
+        project_items_added_count=1
+    )
+
+    with caplog.at_level(logging.INFO):
+        reporter.display_create_github_resources_result(overall_result)
+
+    # マイルストーン情報の確認
+    assert "[Milestones]" in caplog.text
+    assert "Successful: 3" in caplog.text
+    assert "Failed: 0" in caplog.text
+    # 各マイルストーンがログに含まれることを確認
+    assert "'Sprint 1' (ID: 101)" in caplog.text
+    assert "'Sprint 2' (ID: 102)" in caplog.text
+    assert "'Feature Release' (ID: 103)" in caplog.text
+
+def test_display_create_github_resources_result_with_failed_milestones(reporter: CliReporter, caplog):
+    """マイルストーン作成が失敗した場合の表示テスト"""
+    issue_result = CreateIssuesResult(created_issue_details=[("https://github.com/o/r/issues/1", "id1")])
+    overall_result = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        project_name="My Project",
+        project_node_id="proj_id",
+        created_labels=["bug"],
+        # 失敗したマイルストーンのみ
+        processed_milestones=[],
+        failed_milestones=[
+            ("Sprint 1", "GitHubClientError - API rate limit exceeded"),
+            ("Sprint 2", "GitHubValidationError - Invalid milestone name")
+        ],
+        issue_result=issue_result,
+        project_items_added_count=1
+    )
+
+    with caplog.at_level(logging.INFO):
+        reporter.display_create_github_resources_result(overall_result)
+
+    # マイルストーン情報の確認
+    assert "[Milestones]" in caplog.text
+    assert "Successful: 0" in caplog.text
+    assert "Failed: 2" in caplog.text
+    # 失敗したマイルストーンの情報
+    assert "Failed Milestones:" in caplog.text
+    assert "'Sprint 1': GitHubClientError - API rate limit exceeded" in caplog.text
+    assert "'Sprint 2': GitHubValidationError - Invalid milestone name" in caplog.text
+
+def test_display_create_github_resources_result_mixed_milestones(reporter: CliReporter, caplog):
+    """成功と失敗が混在するマイルストーンの表示テスト"""
+    issue_result = CreateIssuesResult(created_issue_details=[("https://github.com/o/r/issues/1", "id1")])
+    overall_result = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        project_name="My Project",
+        project_node_id="proj_id",
+        created_labels=["bug"],
+        # 成功したマイルストーン
+        processed_milestones=[
+            ("Sprint 1", 101),
+            ("Feature Release", 103)
+        ],
+        # 失敗したマイルストーン
+        failed_milestones=[
+            ("Sprint 2", "GitHubClientError - Milestone already exists with different parameters")
+        ],
+        issue_result=issue_result,
+        project_items_added_count=1
+    )
+
+    with caplog.at_level(logging.INFO):
+        reporter.display_create_github_resources_result(overall_result)
+
+    # マイルストーン情報の確認
+    assert "[Milestones]" in caplog.text
+    assert "Successful: 2" in caplog.text
+    assert "Failed: 1" in caplog.text
+    # 成功したマイルストーンの情報
+    assert "'Sprint 1' (ID: 101)" in caplog.text
+    assert "'Feature Release' (ID: 103)" in caplog.text
+    # 失敗したマイルストーンの情報
+    assert "Failed Milestones:" in caplog.text
+    assert "'Sprint 2': GitHubClientError - Milestone already exists with different parameters" in caplog.text
+
+def test_display_create_github_resources_result_no_milestones(reporter: CliReporter, caplog):
+    """マイルストーンが一つもないケースの表示テスト"""
+    issue_result = CreateIssuesResult(created_issue_details=[("https://github.com/o/r/issues/1", "id1")])
+    overall_result = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        project_name="My Project",
+        project_node_id="proj_id",
+        created_labels=["bug"],
+        processed_milestones=[],  # 空のリスト
+        failed_milestones=[],     # 空のリスト
+        issue_result=issue_result,
+        project_items_added_count=1
+    )
+
+    with caplog.at_level(logging.INFO):
+        reporter.display_create_github_resources_result(overall_result)
+
+    # マイルストーン情報の確認
+    assert "[Milestones]" in caplog.text
+    assert "No milestones processed" in caplog.text
+    
+    # マイルストーンセクションには成功/失敗のカウントメッセージがないことを確認
+    # ログの中からマイルストーンのセクションだけを抽出して検証
+    milestone_line = ""
+    for line in caplog.text.splitlines():
+        if "[Milestones]" in line:
+            milestone_line = line
+            break
+    
+    assert "Successful:" not in milestone_line
+    assert "Failed:" not in milestone_line

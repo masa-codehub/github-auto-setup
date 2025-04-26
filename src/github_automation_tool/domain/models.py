@@ -78,10 +78,15 @@ class CreateGitHubResourcesResult(BaseModel):
     created_labels: list[str] = Field(default_factory=list, description="正常に作成された(または既存だった)ラベル名のリスト")
     failed_labels: list[tuple[str, str]] = Field(default_factory=list, description="作成に失敗したラベルとそのエラーメッセージのタプルのリスト")
 
-    # マイルストーン名は一つと仮定（仕様に応じて変更）
-    milestone_name: str | None = Field(default=None, description="処理対象のマイルストーン名")
-    milestone_id: int | None = Field(default=None, description="作成/確認されたマイルストーンのID")
-    milestone_creation_error: str | None = Field(default=None, description="マイルストーン作成/確認時のエラー")
+    # マイルストーン処理の結果を複数保持するように変更
+    processed_milestones: list[tuple[str, int]] = Field(
+        default_factory=list,
+        description="正常に作成/確認されたマイルストーン (名前, ID) のタプルのリスト"
+    )
+    failed_milestones: list[tuple[str, str]] = Field(
+        default_factory=list,
+        description="作成/確認に失敗したマイルストーンの (名前, エラーメッセージ) のタプルのリスト"
+    )
 
     # Issue作成の結果は既存のモデルで保持
     issue_result: CreateIssuesResult | None = Field(default=None, description="Issue作成処理の結果")
