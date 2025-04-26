@@ -23,7 +23,13 @@ def test_display_issue_creation_success_only(reporter: CliReporter, caplog):
 
     # caplog.text にキャプチャされた全ログが含まれる
     assert "Issue Creation Summary for repository 'owner/repo'" in caplog.text
-    assert "Created: 2" in caplog.text # サマリー部分
+    # ---- 修正箇所 ----
+    # 新しいサマリー形式を検証
+    assert "Total processed: 2" in caplog.text
+    assert "Created: 2" in caplog.text
+    assert "Skipped: 0" in caplog.text
+    assert "Failed: 0" in caplog.text
+    # -----------------
     assert "[Created Issues]" in caplog.text
     assert "- https://github.com/test/repo/issues/1" in caplog.text
     assert "- https://github.com/test/repo/issues/2" in caplog.text
@@ -37,11 +43,18 @@ def test_display_issue_creation_skipped_only(reporter: CliReporter, caplog):
         reporter.display_issue_creation_result(result) # リポジトリ名なし
 
     assert "Issue Creation Summary" in caplog.text
+    # ---- 修正箇所 ----
+    # 新しいサマリー形式を検証
+    assert "Total processed: 2" in caplog.text # created + skipped + failed = 0 + 2 + 0
+    assert "Created: 0" in caplog.text
     assert "Skipped: 2" in caplog.text
+    assert "Failed: 0" in caplog.text
+    # -----------------
     assert "[Skipped Issues (Already Exist)]" in caplog.text
     assert "- 'Existing Issue 1'" in caplog.text
     assert "- 'Existing Issue 2'" in caplog.text
     assert "[Failed Issues]" not in caplog.text
+    assert "[Created Issues]" not in caplog.text
 
 def test_display_issue_creation_failed_only(reporter: CliReporter, caplog):
     """Issue作成がすべて失敗した場合のログ出力テスト"""
@@ -53,7 +66,13 @@ def test_display_issue_creation_failed_only(reporter: CliReporter, caplog):
         reporter.display_issue_creation_result(result, "o/r")
 
     assert "Issue Creation Summary for repository 'o/r'" in caplog.text # INFOだがERRORも出すので見えるはず
+    # ---- 修正箇所 ----
+    # 新しいサマリー形式を検証
+    assert "Total processed: 2" in caplog.text # 0 + 0 + 2
+    assert "Created: 0" in caplog.text
+    assert "Skipped: 0" in caplog.text
     assert "Failed: 2" in caplog.text
+    # -----------------
     assert "[Failed Issues]" in caplog.text
     assert "- 'Failed Issue 1': GitHubClientError - Network error" in caplog.text
     # 改行がスペースに置換されているか確認
@@ -67,19 +86,29 @@ def test_display_issue_creation_mixed(reporter: CliReporter, caplog):
         created_issue_details=[("https://good.url/1", "node_good")],
         skipped_issue_titles=["Already There"],
         failed_issue_titles=["Bad One"],
-        errors=["API Error 500"]
+        errors=["API Error 500"],
+        validation_failed_assignees=[("Bad One", ["invalid-user"])] # 検証失敗も追加
     )
     with caplog.at_level(logging.INFO): # INFO以上をキャプチャ
         reporter.display_issue_creation_result(result, "mix/repo")
 
     assert "Issue Creation Summary for repository 'mix/repo'" in caplog.text
-    assert "Created: 1, Skipped: 1, Failed: 1" in caplog.text
+    # ---- 修正箇所 ----
+    # 新しいサマリー形式を検証
+    assert "Total processed: 3" in caplog.text # 1 + 1 + 1
+    assert "Created: 1" in caplog.text
+    assert "Skipped: 1" in caplog.text
+    assert "Failed: 1" in caplog.text
+    assert "Issues with invalid assignees: 1" in caplog.text # 検証失敗情報もサマリーに追加
+    # -----------------
     assert "[Created Issues]" in caplog.text
     assert "- https://good.url/1" in caplog.text
     assert "[Skipped Issues (Already Exist)]" in caplog.text
     assert "- 'Already There'" in caplog.text
     assert "[Failed Issues]" in caplog.text
     assert "- 'Bad One': API Error 500" in caplog.text
+    assert "[Issues with Invalid Assignees]" in caplog.text
+    assert "- 'Bad One': Invalid assignees: invalid-user" in caplog.text
 
 def test_display_repository_creation_success(reporter: CliReporter, caplog):
     """リポジトリ作成成功時のログテスト"""
