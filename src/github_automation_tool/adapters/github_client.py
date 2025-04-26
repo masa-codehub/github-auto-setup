@@ -589,3 +589,71 @@ class GitHubAppClient:
         except Exception as e:
             # Wrap all exceptions, including GraphQLResponse, into appropriate GitHubClientError
             raise self._handle_api_error(e, context)
+    
+    def validate_assignees(self, owner: str, repo: str, assignee_logins: list[str]) -> tuple[list[str], list[str]]:
+        """
+        担当者のリストを検証し、有効なユーザー名のリストと無効なユーザー名のリストを返します。
+
+        Args:
+            owner: リポジトリのオーナー名。
+            repo: リポジトリ名。
+            assignee_logins: 検証する担当者名のリスト。
+
+        Returns:
+            (有効な担当者リスト, 無効な担当者リスト) のタプル。
+        """
+        if not assignee_logins:
+            return [], []
+
+        valid_assignees = []
+        invalid_assignees = []
+        
+        for login in assignee_logins:
+            if not login or not login.strip():
+                logger.warning(f"Skipping empty assignee login in validation")
+                continue
+
+            trimmed_login = login.strip()
+            # '@'で始まる場合は削除
+            if trimmed_login.startswith('@'):
+                trimmed_login = trimmed_login[1:]
+                
+            context = f"validating assignee '{trimmed_login}' for {owner}/{repo}"
+            logger.debug(f"Validating assignee: {trimmed_login}")
+            
+            try:
+                # コラボレーターの確認 API を呼び出し
+                response = self.gh.rest.repos.check_collaborator(
+                    owner=owner, repo=repo, username=trimmed_login
+                )
+                
+                # ステータスコード 204 は成功（コラボレーターである）
+                if response and response.status_code == 204:
+                    logger.debug(f"Assignee '{trimmed_login}' is a valid collaborator for {owner}/{repo}.")
+                    valid_assignees.append(trimmed_login)
+                else:
+                    # その他の成功レスポンスは異常（通常発生しないはず）
+                    logger.warning(f"Unexpected success response for collaborator check: {getattr(response, 'status_code', 'N/A')}")
+                    invalid_assignees.append(trimmed_login)
+            
+            except Exception as e:
+                # コラボレーターではない場合は通常 404 エラーになる
+                if isinstance(e, RequestFailed):
+                    response = getattr(e, 'response', None)
+                    status_code = getattr(response, 'status_code', None)
+                    if status_code == 404:
+                        logger.warning(f"Assignee '{trimmed_login}' is not a collaborator for {owner}/{repo} (404 Not Found).")
+                    elif status_code == 403:
+                        logger.warning(f"Permission denied (403) checking collaborator status for '{trimmed_login}'. PAT may lack permissions.")
+                    else:
+                        logger.warning(f"Error validating assignee '{trimmed_login}': {type(e).__name__} - {e}")
+                else:
+                    logger.warning(f"Unexpected error validating assignee '{trimmed_login}': {type(e).__name__} - {e}")
+                
+                # いずれのエラー時も、この担当者は無効とみなす
+                invalid_assignees.append(trimmed_login)
+        
+        if invalid_assignees:
+            logger.info(f"Found {len(invalid_assignees)} invalid assignee(s) out of {len(assignee_logins)} total.")
+        
+        return valid_assignees, invalid_assignees
