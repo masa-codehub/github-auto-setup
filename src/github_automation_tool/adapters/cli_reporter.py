@@ -31,17 +31,19 @@ class CliReporter:
         failed_count = len(result.failed_issue_titles)
         validation_failed_count = len(result.validation_failed_assignees)
         
-        summary = (
-            f"Total processed: {created_count + skipped_count + failed_count}, "
-            f"Created: {created_count}, "
-            f"Skipped: {skipped_count}, "
+        # ---- 修正箇所 ----
+        # サマリー表示を修正し、各項目を明確に区切って表示
+        summary_parts = [
+            f"Total processed: {created_count + skipped_count + failed_count}",
+            f"Created: {created_count}",
+            f"Skipped: {skipped_count}", # スキップ数を明示的に表示
             f"Failed: {failed_count}"
-        )
-        
+        ]
         if validation_failed_count > 0:
-            summary += f", Issues with invalid assignees: {validation_failed_count}"
-            
-        logger.info(summary)
+            summary_parts.append(f"Issues with invalid assignees: {validation_failed_count}")
+
+        logger.info(", ".join(summary_parts)) # カンマ区切りで結合して表示
+        # -----------------
 
         # --- 各詳細情報を適切なログレベルで表示 ---
         if result.created_issue_details:
@@ -50,7 +52,7 @@ class CliReporter:
                 logger.info(f"- {url}")
 
         if result.skipped_issue_titles:
-            logger.warning("[Skipped Issues (Already Exist)]") # スキップは警告レベルが適切かも
+            logger.warning("[Skipped Issues (Already Exist)]") # スキップは警告レベルが適切
             for title in result.skipped_issue_titles:
                 logger.warning(f"- '{title}'")
 
