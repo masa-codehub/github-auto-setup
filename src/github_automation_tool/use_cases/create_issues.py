@@ -82,12 +82,47 @@ class CreateIssuesUseCase:
                         else:
                             logger.warning(f"No milestone ID found for milestone '{milestone_name}', using name only")
                     
+                    # Issue本文の構築（description、tasks、relational_definition、relational_issues、acceptanceを結合）
+                    body_parts = []
+                    
+                    # 説明文を追加
+                    if issue_data.description:
+                        body_parts.append(issue_data.description)
+                    
+                    # タスクリストを追加
+                    if issue_data.tasks:
+                        body_parts.append("\n## タスク\n")
+                        for task in issue_data.tasks:
+                            body_parts.append(f"- [ ] {task}")
+                    
+                    # 関連要件を追加
+                    if issue_data.relational_definition:
+                        body_parts.append("\n## 関連要件\n")
+                        for req in issue_data.relational_definition:
+                            body_parts.append(f"- {req}")
+                    
+                    # 関連Issueを追加
+                    if issue_data.relational_issues:
+                        body_parts.append("\n## 関連Issue\n")
+                        for issue_ref in issue_data.relational_issues:
+                            body_parts.append(f"- {issue_ref}")
+                    
+                    # 受け入れ基準を追加
+                    if issue_data.acceptance:
+                        body_parts.append("\n## 受け入れ基準\n")
+                        for criteria in issue_data.acceptance:
+                            body_parts.append(f"- [ ] {criteria}")
+                    
+                    # 全体をNewlineで結合
+                    constructed_body = "\n".join(body_parts)
+                    logger.debug(f"Constructed issue body with {len(body_parts)} sections")
+                    
                     # create_issue の戻り値として (URL, Node ID) を受け取る
                     created_url, created_node_id = self.github_client.create_issue(
                         owner=owner,
                         repo=repo,
                         title=issue_title,
-                        body=issue_data.body,
+                        body=constructed_body,  # 構築した本文を使用
                         labels=issue_data.labels,
                         milestone=milestone_id,  # ID が見つからなかった場合は None を渡す
                         assignees=issue_data.assignees
