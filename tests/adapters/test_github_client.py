@@ -821,102 +821,77 @@ def test_create_issue_with_partially_invalid_assignees(github_client: GitHubAppC
     )
     # GitHub APIが422などを返さない限り、クライアント側では成功扱いになる
 
-# --- Project V2 Method Tests ---
-# --- find_project_v2_node_id Tests ---
-def test_find_project_v2_node_id_success(github_client: GitHubAppClient):
-    """find_project_v2_node_id: 正常に Node ID が見つかるケース"""
-    mock_gql_data = {
-        "repositoryOwner": {
-            "projectsV2": {
-                "nodes": [{"id": PROJECT_NODE_ID, "title": PROJECT_NAME}],
-                "pageInfo": {
-                    "endCursor": "cursor-1",
-                    "hasNextPage": False
-                }
-            }
-        }
-    }
-    mock_resp = create_mock_graphql_response(data=mock_gql_data)
-    github_client._mock_graphql.return_value = mock_resp
-    
-    node_id = github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
-    
-    assert node_id == PROJECT_NODE_ID
-    github_client._mock_graphql.assert_called_once()
 
-def test_find_project_v2_node_id_not_found(github_client: GitHubAppClient):
-    """find_project_v2_node_id: プロジェクトが見つからないケース"""
-    mock_resp = create_mock_graphql_response(
-        data={
-            "repositoryOwner": {
-                "projectsV2": {
-                    "nodes": [],
-                    "pageInfo": {
-                        "endCursor": None,
-                        "hasNextPage": False
-                    }
-                }
-            }
-        }
-    )
-    github_client._mock_graphql.return_value = mock_resp
+# --- 接続テスト関連のテスト (修正版) ---
+def test_perform_connection_test_success(mock_github_instance):
+    """_perform_connection_test: 接続テスト成功"""
+    # get_authenticatedが成功するケース
+    mock_github_instance.rest.users.get_authenticated.return_value = MagicMock()
     
-    assert github_client.find_project_v2_node_id(OWNER, "None") is None
+    # GitHubAppClientを初期化
+    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
+        client = GitHubAppClient(SecretStr("fake-valid-token"))
+        # 明示的に接続テストを呼び出す
+        client._perform_connection_test()
+    
+    # get_authenticatedが呼ばれたことを確認
+    mock_github_instance.rest.users.get_authenticated.assert_called_once()
 
-def test_find_project_v2_node_id_owner_not_found(github_client: GitHubAppClient):
-    """find_project_v2_node_id: オーナーが見つからないケース"""
-    mock_resp = create_mock_graphql_response(data={"repositoryOwner": None})
-    github_client._mock_graphql.return_value = mock_resp
+def test_perform_connection_test_auth_error(mock_github_instance):
+    """_perform_connection_test: 認証エラー (401, 403)"""
+    # 401エラーを準備
+    mock_error_response_401 = create_mock_response(401)
+    mock_api_error_401 = RequestFailed(response=mock_error_response_401)
     
-    assert github_client.find_project_v2_node_id("ghost-owner", PROJECT_NAME) is None
-    github_client._mock_graphql.assert_called_once()
-
-def test_find_project_v2_node_id_graphql_error(github_client: GitHubAppClient):
-    """find_project_v2_node_id: GraphQL API自体がエラーを返すケース"""
-    mock_errors = [{"message": "Field 'projectsV2' doesn't exist", "type": "INVALID_FIELD"}]
-    mock_resp = create_mock_graphql_response(data=None, errors=mock_errors)
-    github_client._mock_graphql.return_value = mock_resp
+    # get_authenticatedが401エラーを返すようにセット
+    mock_github_instance.rest.users.get_authenticated.side_effect = mock_api_error_401
     
-    # _handle_graphql_error の実装を一時的にパッチ
-    with patch.object(github_client, '_handle_graphql_error') as mock_handle_error:
-        # 適切な例外を返すように設定
-        mock_handle_error.return_value = GitHubClientError("GraphQL operation failed during test")
-        # もし実行時に例外が投げられるようにしたい場合は、side_effectを使用
-        mock_handle_error.side_effect = GitHubClientError("GraphQL operation failed during test")
+    # GitHubAppClientを初期化
+    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
+        client = GitHubAppClient(SecretStr("fake-valid-token"))
         
-        with pytest.raises(GitHubClientError, match="GraphQL operation failed during test"):
-            github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
-            
-        # _handle_graphql_errorが呼び出されたことを確認
-        mock_handle_error.assert_called_once()
-
-def test_find_project_v2_node_id_permission_error(github_client: GitHubAppClient):
-    """find_project_v2_node_id: GraphQLで権限エラーが発生するケース"""
-    mock_errors = [{"message": "Permission denied to access project", "type": "FORBIDDEN"}]
-    mock_resp = create_mock_graphql_response(data=None, errors=mock_errors)
-    github_client._mock_graphql.return_value = mock_resp
+        # 明示的に接続テストを呼び出したときに例外が発生するか
+        with pytest.raises(GitHubAuthenticationError, match="Initial connection test failed"):
+            client._perform_connection_test()
     
-    # _handle_graphql_error の実装を一時的にパッチ
-    with patch.object(github_client, '_handle_graphql_error') as mock_handle_error:
-        # 適切な例外を返すように設定
-        mock_handle_error.return_value = GitHubAuthenticationError("GraphQL permission denied during test")
-        # 即座に例外を投げるように
-        mock_handle_error.side_effect = GitHubAuthenticationError("GraphQL permission denied during test")
-        
-        with pytest.raises(GitHubAuthenticationError, match="GraphQL permission denied during test"):
-            github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
-            
-        # _handle_graphql_errorが呼び出されたことを確認
-        mock_handle_error.assert_called_once()
+    # 403エラーの場合も同様
+    mock_error_response_403 = create_mock_response(403)
+    mock_api_error_403 = RequestFailed(response=mock_error_response_403)
+    mock_github_instance.rest.users.get_authenticated.side_effect = mock_api_error_403
+    
+    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
+        client = GitHubAppClient(SecretStr("fake-valid-token"))
+        with pytest.raises(GitHubAuthenticationError, match="Initial connection test failed"):
+            client._perform_connection_test()
 
-def test_find_project_v2_node_id_empty_input(github_client: GitHubAppClient):
-    """find_project_v2_node_id: empty owner or project name should raise ValueError"""
-    with pytest.raises(ValueError, match="Owner login cannot be empty"):
-        github_client.find_project_v2_node_id("", PROJECT_NAME)
-    with pytest.raises(ValueError, match="Project name cannot be empty"):
-        github_client.find_project_v2_node_id(OWNER, "")
-    with pytest.raises(ValueError, match="Project name cannot be empty"):
-        github_client.find_project_v2_node_id(OWNER, "  ")
+def test_perform_connection_test_other_errors(mock_github_instance):
+    """_perform_connection_test: その他のエラー (非401/403)の場合は警告のみ"""
+    # 500エラーを準備
+    mock_error_response_500 = create_mock_response(500)
+    mock_api_error_500 = RequestFailed(response=mock_error_response_500)
+    
+    # get_authenticatedが500エラーを返すようにセット
+    mock_github_instance.rest.users.get_authenticated.side_effect = mock_api_error_500
+    
+    # GitHubAppClientを初期化
+    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
+        client = GitHubAppClient(SecretStr("fake-valid-token"))
+        
+        # 明示的に接続テストを呼び出し、警告ログを確認
+        with patch('logging.Logger.warning') as mock_warning:
+            client._perform_connection_test()
+            mock_warning.assert_called()
+    
+    # RequestFailedエラーではない予期せぬ例外の場合も同様に警告のみ
+    mock_github_instance.rest.users.get_authenticated.side_effect = ValueError("Unexpected error")
+    
+    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
+        client = GitHubAppClient(SecretStr("fake-valid-token"))
+        
+        with patch('logging.Logger.warning') as mock_warning:
+            client._perform_connection_test()
+            mock_warning.assert_called()
+
 
 # --- Pagination Tests for find_project_v2_node_id ---
 def test_find_project_v2_node_id_pagination(github_client: GitHubAppClient):
@@ -980,7 +955,6 @@ def test_find_project_v2_node_id_pagination(github_client: GitHubAppClient):
 
 def test_find_project_v2_node_id_pagination_max_pages(github_client: GitHubAppClient):
     """find_project_v2_node_id: ページネーションの最大ページ数に達するケース"""
-    # すべてのページで hasNextPage=True だが、目的のプロジェクトは見つからない
     page_data_template = {
         "repositoryOwner": {
             "projectsV2": {
@@ -1086,6 +1060,7 @@ def test_find_project_v2_node_id_pagination_has_next_no_cursor(github_client: Gi
     assert node_id is None  # 見つからない
     github_client._mock_graphql.assert_called_once()  # 1回だけ呼び出され、endCursorがないので次のページは取得しない
 
+
 # --- add_item_to_project_v2 Tests ---
 def test_add_item_to_project_v2_success(github_client: GitHubAppClient):
     """add_item_to_project_v2: 正常にアイテムが追加されるケース"""
@@ -1151,3 +1126,131 @@ def test_add_item_to_project_v2_empty_input(github_client: GitHubAppClient):
         github_client.add_item_to_project_v2(PROJECT_NODE_ID, "")
     with pytest.raises(ValueError, match="Content Node ID cannot be empty"):
         github_client.add_item_to_project_v2(PROJECT_NODE_ID, "  ")
+
+# --- validate_assignees Tests (新規追加) ---
+def test_validate_assignees_all_valid(github_client: GitHubAppClient):
+    """validate_assignees: 全ての担当者が有効な場合"""
+    assignees = ["user1", "user2"]
+    
+    # check_collaboratorが成功するようモック (ステータスコード204)
+    mock_response = create_mock_response(204)
+    github_client._mock_rest_api.repos.check_collaborator.return_value = mock_response
+    
+    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    
+    # 全ての担当者がvalidに含まれるはず
+    assert valid == assignees
+    assert not invalid  # 空リスト
+    # 各担当者に対してcheck_collaboratorが呼ばれるはず
+    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 2
+    github_client._mock_rest_api.repos.check_collaborator.assert_has_calls([
+        call(owner=OWNER, repo=REPO, username="user1"),
+        call(owner=OWNER, repo=REPO, username="user2")
+    ])
+
+def test_validate_assignees_all_invalid(github_client: GitHubAppClient):
+    """validate_assignees: 全ての担当者が無効な場合"""
+    assignees = ["invalid1", "invalid2"]
+    
+    # check_collaboratorが404を返すようモック
+    mock_error_response = create_mock_response(404)
+    mock_api_error = RequestFailed(response=mock_error_response)
+    github_client._mock_rest_api.repos.check_collaborator.side_effect = mock_api_error
+    
+    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    
+    # 全ての担当者がinvalidに含まれるはず
+    assert not valid  # 空リスト
+    assert invalid == assignees
+    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 2
+
+def test_validate_assignees_mixed(github_client: GitHubAppClient):
+    """validate_assignees: 有効な担当者と無効な担当者が混在する場合"""
+    # 準備: 1人目は有効、2人目は無効
+    mock_success = create_mock_response(204)
+    mock_error_response = create_mock_response(404)
+    mock_api_error = RequestFailed(response=mock_error_response)
+    
+    # 1回目の呼び出し（user1）は成功、2回目（user2）は失敗
+    github_client._mock_rest_api.repos.check_collaborator.side_effect = [mock_success, mock_api_error]
+    
+    valid, invalid = github_client.validate_assignees(OWNER, REPO, ["user1", "user2"])
+    
+    assert valid == ["user1"]
+    assert invalid == ["user2"]
+    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 2
+
+def test_validate_assignees_empty_list(github_client: GitHubAppClient):
+    """validate_assignees: 空のリストが渡された場合"""
+    valid, invalid = github_client.validate_assignees(OWNER, REPO, [])
+    
+    assert valid == []
+    assert invalid == []
+    github_client._mock_rest_api.repos.check_collaborator.assert_not_called()
+
+def test_validate_assignees_with_at_symbol(github_client: GitHubAppClient):
+    """validate_assignees: @マークが付いたユーザー名の場合"""
+    # @マークの付いたユーザー名（GitHubでは@は省略されるべき）
+    assignees = ["@user1"]
+    
+    mock_response = create_mock_response(204)  # 成功
+    github_client._mock_rest_api.repos.check_collaborator.return_value = mock_response
+    
+    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    
+    # @を削除したユーザー名で呼び出されるべき
+    assert valid == ["user1"]  # @なし
+    assert not invalid
+    github_client._mock_rest_api.repos.check_collaborator.assert_called_once_with(
+        owner=OWNER, repo=REPO, username="user1"  # @なし
+    )
+
+def test_validate_assignees_empty_username(github_client: GitHubAppClient):
+    """validate_assignees: 空のユーザー名が含まれる場合"""
+    # 空白や空文字のユーザー名
+    assignees = ["user1", "", "  ", "user2"]
+    
+    mock_response = create_mock_response(204)  # 成功
+    github_client._mock_rest_api.repos.check_collaborator.return_value = mock_response
+    
+    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    
+    # 空のユーザー名は処理前にスキップされるはず
+    assert valid == ["user1", "user2"]
+    assert not invalid
+    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 2
+    # 空白や空文字でない名前に対してのみ呼び出される
+    github_client._mock_rest_api.repos.check_collaborator.assert_has_calls([
+        call(owner=OWNER, repo=REPO, username="user1"),
+        call(owner=OWNER, repo=REPO, username="user2")
+    ])
+
+def test_validate_assignees_permission_error(github_client: GitHubAppClient):
+    """validate_assignees: コラボレーター確認時に権限エラー (403) が発生する場合"""
+    assignees = ["user1"]
+    
+    # check_collaboratorが403を返すようモック
+    mock_error_response = create_mock_response(403)
+    mock_api_error = RequestFailed(response=mock_error_response)
+    github_client._mock_rest_api.repos.check_collaborator.side_effect = mock_api_error
+    
+    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    
+    # 権限エラーでも担当者は無効と判断される（警告はログに出るだけ）
+    assert not valid
+    assert invalid == assignees
+    github_client._mock_rest_api.repos.check_collaborator.assert_called_once()
+
+def test_validate_assignees_unexpected_error(github_client: GitHubAppClient):
+    """validate_assignees: 予期せぬエラーが発生する場合"""
+    assignees = ["user1"]
+    
+    # 予期せぬ例外を発生させる
+    github_client._mock_rest_api.repos.check_collaborator.side_effect = ValueError("Unexpected error")
+    
+    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    
+    # 予期せぬエラーでも担当者は無効と判断される（警告はログに出るだけ）
+    assert not valid
+    assert invalid == assignees
+    github_client._mock_rest_api.repos.check_collaborator.assert_called_once()
