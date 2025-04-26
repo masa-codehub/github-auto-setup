@@ -6,6 +6,10 @@ from github_automation_tool.infrastructure.config import Settings
 from github_automation_tool.domain.models import ParsedRequirementData, IssueData
 from github_automation_tool.domain.exceptions import AiParserError
 
+# --- モデル名のデフォルト値を定数として定義 ---
+DEFAULT_OPENAI_MODEL = "gpt-4o"          # OpenAI のフォールバックモデル名
+DEFAULT_GEMINI_MODEL = "gemini-2.0-flash" # Gemini のフォールバックモデル名
+
 # --- LangChain のコアコンポーネント ---
 from langchain_core.prompts import PromptTemplate
 # ★ これは output_parsers のまま
@@ -32,12 +36,13 @@ except ImportError:
 _OPENAI_ERRORS = tuple()
 _GOOGLE_ERRORS = tuple()
 try:
+    # openai >= 1.0.0
     from openai import AuthenticationError as OpenAIAuthenticationError
     from openai import RateLimitError as OpenAIRateLimitError
-    # APITimeoutError は NameError 回避のためインポートしない (TimeoutErrorで捕捉)
     from openai import APIError as OpenAIAPIError
+    from openai import APITimeoutError as OpenAITimeoutError
     _OPENAI_ERRORS = (OpenAIAuthenticationError,
-                      OpenAIRateLimitError, OpenAIAPIError)
+                      OpenAIRateLimitError, OpenAIAPIError, OpenAITimeoutError) # TimeoutErrorも追加
 except ImportError:
     logging.debug(
         "openai library not fully available for specific error handling.")
@@ -75,37 +80,45 @@ class AIParser:
         """設定に基づいて適切な LangChain LLM クライアントを初期化します。"""
         model_type = self.settings.ai_model.lower()
         logger.debug(f"Initializing LLM for model type: {model_type}")
+
         try:
             if model_type == "openai":
                 if ChatOpenAI is None:
-                    raise ImportError("langchain-openai not installed.")
+                    raise ImportError("langchain-openai is not installed.")
                 api_key = self.settings.openai_api_key
-                # Check if the required API key is present
                 if not api_key or not api_key.get_secret_value():
                     raise ValueError("OpenAI API Key is required but missing in settings.")
-                # Use model name from settings or fallback
-                model_name = self.settings.openai_model_name or "gpt-4o" # Fallback model updated
-                logger.info(f"Using OpenAI model: {model_name}")
+
+                # ---- 修正箇所 ----
+                # 設定からモデル名を取得、なければフォールバック
+                model_name = self.settings.openai_model_name or DEFAULT_OPENAI_MODEL
+                logger.info(f"Using OpenAI model: {model_name} (Source: {'Settings' if self.settings.openai_model_name else 'Fallback'})")
+                # --------------
+
                 llm = ChatOpenAI(
                     openai_api_key=api_key.get_secret_value(),
                     temperature=0,
-                    model_name=model_name # Use potentially fallback model name
+                    model_name=model_name # 設定またはフォールバック値を使用
                 )
                 logger.info(f"ChatOpenAI client initialized with model: {model_name}")
                 return llm
+
             elif model_type == "gemini":
                 if ChatGoogleGenerativeAI is None:
-                    raise ImportError("langchain-google-genai not installed.")
+                    raise ImportError("langchain-google-genai is not installed.")
                 api_key = self.settings.gemini_api_key
-                 # Check if the required API key is present
                 if not api_key or not api_key.get_secret_value():
                     raise ValueError("Gemini API Key is required but missing in settings.")
-                # Use model name from settings or fallback
-                model_name = self.settings.gemini_model_name or "gemini-2.0-flash" # Fallback model updated
-                logger.info(f"Using Gemini model: {model_name}")
+
+                # ---- 修正箇所 ----
+                # 設定からモデル名を取得、なければフォールバック
+                model_name = self.settings.gemini_model_name or DEFAULT_GEMINI_MODEL
+                logger.info(f"Using Gemini model: {model_name} (Source: {'Settings' if self.settings.gemini_model_name else 'Fallback'})")
+                # --------------
+
                 llm = ChatGoogleGenerativeAI(
                     google_api_key=api_key.get_secret_value(),
-                    model=model_name, # Use potentially fallback model name
+                    model=model_name, # 設定またはフォールバック値を使用
                     temperature=0,
                     convert_system_message_to_human=True
                 )
@@ -120,25 +133,23 @@ class AIParser:
         except ValueError as e:
             raise AiParserError(
                 f"Configuration error for '{model_type}': {e}", e) from e
-        except Exception as e:
+        except (*_OPENAI_ERRORS, *_GOOGLE_ERRORS) as e: # APIエラーも初期化時に発生しうる
+             error_type = type(e).__name__
+             logger.error(f"API Error during LLM initialization ({model_type}, model: {model_name if 'model_name' in locals() else 'N/A'}): {error_type} - {e}", exc_info=False)
+             # 無効なモデル名もここで API エラーとして捕捉される可能性がある
+             raise AiParserError(f"AI API Error during initialization ({error_type}): {e}", e) from e
+        except Exception as e: # その他の予期せぬエラー
             logger.error(
                 f"Failed to initialize LLM client for model '{model_type}': {e}", exc_info=True)
-            if _OPENAI_ERRORS and isinstance(e, _OPENAI_ERRORS):
-                raise AiParserError(f"OpenAI init failed: {e}", e) from e
-            elif _GOOGLE_ERRORS and isinstance(e, _GOOGLE_ERRORS):
-                raise AiParserError(f"Google AI init failed: {e}", e) from e
-            else:
-                raise AiParserError(
-                    f"Could not initialize LLM client ({model_type}): {e}", e) from e
+            raise AiParserError(
+                f"Could not initialize LLM client ({model_type}): {e}", e) from e
 
     def _build_chain(self) -> RunnableSerializable:
-        """プロンプト、LLM、出力パーサーを繋いだ LangChain Chain を構築します。"""
+        """プロンプト、LLM、出力パーサーを繋いだ LangChain Chain を構築します。(修正なし)"""
         try:
-            # ★ 出力パーサーは更新された ParsedRequirementData モデルを使用
             output_parser = PydanticOutputParser(
                 pydantic_object=ParsedRequirementData)
 
-            # ★ プロンプトテンプレートを拡張 ★
             prompt_template_text = """
 以下のMarkdownテキストから、GitHub Issueとして登録すべき情報を抽出し、指定されたJSON形式で出力してください。
 テキストは '---' で区切られた複数のIssue候補で構成されている場合があります。
@@ -226,11 +237,12 @@ class AIParser:
                 f"Failed to parse AI output structure: {e}", exc_info=True)
             raise AiParserError("Failed to parse AI output.",
                                 original_exception=e) from e
-        except (*_OPENAI_ERRORS, *_GOOGLE_ERRORS) as e:
-            logger.error(f"AI API call failed: {type(e).__name__} - {e}")
+        except (*_OPENAI_ERRORS, *_GOOGLE_ERRORS) as e: # APIコール時のエラー
+            error_type = type(e).__name__
+            logger.error(f"AI API call failed during parse: {error_type} - {e}")
             raise AiParserError(
-                f"AI API call failed: {e}", original_exception=e) from e
-        except Exception as e:
+                f"AI API call failed during parse ({error_type}): {e}", original_exception=e) from e
+        except Exception as e: # その他の予期せぬエラー
             logger.exception(
                 f"An unexpected error occurred during AI parsing: {e}")
             raise AiParserError(

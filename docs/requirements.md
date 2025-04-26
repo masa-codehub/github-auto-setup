@@ -176,7 +176,7 @@
                 * `assignees`: **上記で作成した有効な担当者リスト**を設定。
         * **API エラーが発生した場合:** Issue 作成失敗としてエラーを記録する。
         * 存在する場合はスキップ。
-    * 出力: `CreateIssuesResult` オブジェクト (作成された Issue の URL/Node ID、スキップされたタイトル、失敗したタイトルとエラーリスト、**検証失敗担当者情報リスト**)。**(注: CreateIssuesResult モデルの更新が必要)**
+    * 出力: `CreateIssuesResult` オブジェクト (作成された Issue の URL/Node ID、スキップされたタイトル、失敗したタイトルとエラーリスト、**検証失敗担当者情報リスト**)。**(注: CreateIssuesResult モデルに検証失敗担当者情報リストのフィールド追加が必要)**
     * 例外: Issue 単位のエラーは `CreateIssuesResult` に記録し、可能な限り処理を継続。
 * **FR-005:** `ParsedRequirementData` 内の全ユニークラベルについて、GitHub ラベルを作成または確認すること (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.create_label`)。冪等性考慮。個別エラー発生時は処理継続。
     * 入力: Owner 名、Repo 名、ラベル名。
