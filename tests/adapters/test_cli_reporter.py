@@ -255,9 +255,11 @@ def test_display_create_github_resources_result_dry_run(reporter: CliReporter, c
     assert "No actual GitHub operations were performed" in caplog.text
     # 各要素が表示されることを確認
     assert "[Repository]: https://github.com/o/r (Dry Run)" in caplog.text
-    assert "[Labels]: Would create: bug, feature" in caplog.text
-    assert "[Milestones]: Would create: Sprint 1" in caplog.text
-    assert "[Project]: Would add 2 issues to My Project" in caplog.text
+    assert "[Labels]: Would ensure 2 labels exist: bug, feature" in caplog.text
+    assert "[Milestones]: Would ensure 1 milestones exist: Sprint 1" in caplog.text
+    assert "[Project]: Would add 2 items to project 'My Project'" in caplog.text
+    assert "Would process 2 issues" in caplog.text
+    assert "- Would create issue: https://github.com/o/r/issues/X (Dry Run)" in caplog.text
 
 def test_display_create_github_resources_result_multiple_milestones_success(reporter: CliReporter, caplog):
     """複数のマイルストーンが成功した場合の表示テスト"""

@@ -12,6 +12,19 @@ class FileReaderError(Exception):
     pass
 
 
+def file_exists(file_path: Path) -> bool:
+    """
+    指定されたパスにファイルが存在するかを確認します
+
+    Args:
+        file_path: 確認対象のファイルパス
+
+    Returns:
+        bool: ファイルが存在する場合はTrue、それ以外はFalse
+    """
+    return file_path.is_file()
+
+
 def read_markdown_file(file_path: Path) -> str:
     """
     Reads the content of a Markdown file specified by the path.
@@ -93,52 +106,35 @@ def read_yaml_file(file_path: Path) -> dict:
         raise FileReaderError("Unexpected error reading YAML file") from e
 
 
-class FileReader:
+# FileReaderクラスを削除し、直接関数を使用するように変更
+# エイリアスとしての関数を追加（後方互換性のため）
+def read_file(file_path: Path) -> str:
     """
-    ファイル読み込み操作のためのユーティリティクラス
+    テキストファイルを読み込みます（read_markdown_fileと同じ動作）
+
+    Args:
+        file_path: 読み込むファイルのパス
+
+    Returns:
+        str: ファイルの内容
+
+    Raises:
+        FileReaderError: 読み込みエラー発生時
     """
-    
-    @staticmethod
-    def file_exists(file_path: Path) -> bool:
-        """
-        指定されたパスにファイルが存在するかを確認します
+    return read_markdown_file(file_path)
 
-        Args:
-            file_path: 確認対象のファイルパス
 
-        Returns:
-            bool: ファイルが存在する場合はTrue、それ以外はFalse
-        """
-        return file_path.is_file()
-    
-    @staticmethod
-    def read_file(file_path: Path) -> str:
-        """
-        テキストファイルを読み込みます（read_markdown_fileと同じ動作）
+def read_yaml(file_path: Path) -> dict:
+    """
+    YAMLファイルを読み込みます（read_yaml_fileと同じ動作）
 
-        Args:
-            file_path: 読み込むファイルのパス
+    Args:
+        file_path: 読み込むYAMLファイルのパス
 
-        Returns:
-            str: ファイルの内容
+    Returns:
+        dict: YAMLの内容を辞書として
 
-        Raises:
-            FileReaderError: 読み込みエラー発生時
-        """
-        return read_markdown_file(file_path)
-    
-    @staticmethod
-    def read_yaml(file_path: Path) -> dict:
-        """
-        YAMLファイルを読み込みます（read_yaml_fileと同じ動作）
-
-        Args:
-            file_path: 読み込むYAMLファイルのパス
-
-        Returns:
-            dict: YAMLの内容を辞書として
-
-        Raises:
-            FileReaderError: 読み込みエラー発生時
-        """
-        return read_yaml_file(file_path)
+    Raises:
+        FileReaderError: 読み込みエラー発生時
+    """
+    return read_yaml_file(file_path)

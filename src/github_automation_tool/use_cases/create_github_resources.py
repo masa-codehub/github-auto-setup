@@ -108,7 +108,7 @@ class CreateGitHubResourcesUseCase:
                         if issue.milestone:
                             unique_milestones.add(issue.milestone.strip())
                 result.created_labels = sorted(list(unique_labels))
-                
+
                 # 複数マイルストーン対応
                 milestone_id_map = {}
                 milestone_id_counter = 1000
@@ -117,7 +117,7 @@ class CreateGitHubResourcesUseCase:
                     milestone_id_counter += 1
                     result.processed_milestones.append((milestone_name, milestone_id))
                     milestone_id_map[milestone_name] = milestone_id
-                
+
                 dummy_issues_result = CreateIssuesResult()
                 dummy_issues_result.created_issue_details = [
                     (f"https://github.com/{repo_full_name}/issues/X{i} (Dry Run)", f"DUMMY_NODE_ID_{i}")
@@ -139,7 +139,7 @@ class CreateGitHubResourcesUseCase:
                     logger.info(f"[Dry Run] Would add {result.project_items_added_count} items to project '{project_name}'")
 
                 logger.warning("Dry run finished.")
-                return result
+                return result # Dry Run モードの場合はここで処理を終了
 
             # --- ステップ 3: リポジトリ作成 ---
             logger.info(f"Step 3: Ensuring repository '{repo_full_name}' exists...")

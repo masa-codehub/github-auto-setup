@@ -6,7 +6,7 @@ from unittest import mock
 import yaml
 import logging
 from github_automation_tool.infrastructure.file_reader import (
-    read_markdown_file, read_yaml_file, FileReader, FileReaderError
+    read_markdown_file, read_yaml_file, read_file, read_yaml, file_exists, FileReaderError
 )
 
 
@@ -65,13 +65,13 @@ def test_read_yaml_file_invalid_format(mock_file_path):
 
 def test_file_exists_true(mock_file_path):
     """ファイルが存在する場合のテスト"""
-    assert FileReader.file_exists(mock_file_path) is True
+    assert file_exists(mock_file_path) is True
 
 
 def test_file_exists_false():
     """ファイルが存在しない場合のテスト"""
     non_existent_path = Path("/non/existent/file.txt")
-    assert FileReader.file_exists(non_existent_path) is False
+    assert file_exists(non_existent_path) is False
 
 
 def test_read_file_io_error(mock_file_path, caplog):
@@ -145,3 +145,27 @@ def test_read_yaml_file_unexpected_error(mock_yaml_file_path, caplog):
         assert "Unexpected error reading YAML file" in caplog.text
         assert "ValueError" in caplog.text
         assert "Unexpected error" in caplog.text
+
+
+# エイリアス関数のテスト
+def test_read_file_alias(mock_file_path):
+    """read_file関数がread_markdown_fileと同じ動作をするかテスト"""
+    result = read_file(mock_file_path)
+    assert result == "test content"
+    
+    # read_markdown_fileと同じ例外を発生させるか確認
+    with mock.patch.object(Path, 'open', side_effect=IOError("Permission denied")):
+        with pytest.raises(FileReaderError, match="Failed to read file"):
+            read_file(mock_file_path)
+
+
+def test_read_yaml_alias(mock_yaml_file_path):
+    """read_yaml関数がread_yaml_fileと同じ動作をするかテスト"""
+    result = read_yaml(mock_yaml_file_path)
+    assert result["key"] == "value"
+    assert result["nested"]["subkey"] == "subvalue"
+    
+    # read_yaml_fileと同じ例外を発生させるか確認
+    with mock.patch.object(Path, 'open', side_effect=IOError("Permission denied")):
+        with pytest.raises(FileReaderError, match="Failed to read YAML file"):
+            read_yaml(mock_yaml_file_path)

@@ -117,15 +117,21 @@ class CliReporter:
             logger.info("-" * 60)
             return
 
+        # --- Dry Run モードの判定と表示 --- # 修正
         is_dry_run = result.repository_url and "(Dry Run)" in result.repository_url
-        if is_dry_run: logger.info("[DRY RUN MODE] No actual GitHub operations were performed")
+        if is_dry_run:
+            logger.info("[DRY RUN MODE] No actual GitHub operations were performed")
+        # -----------------------------------
+
         if result.repository_url: logger.info(f"[Repository]: {result.repository_url}")
         else: logger.warning("[Repository] No repository URL available")
 
         # --- ラベル情報 ---
         if result.created_labels or result.failed_labels:
+            # --- Dry Run モードの表示 --- # 修正
             if is_dry_run:
-                logger.info(f"[Labels]: Would create: {', '.join(result.created_labels)}")
+                logger.info(f"[Labels]: Would ensure {len(result.created_labels)} labels exist: {', '.join(result.created_labels)}")
+            # ---------------------------
             else:
                 logger.info(f"[Labels] Successful: {len(result.created_labels)}, Failed: {len(result.failed_labels)}")
                 if result.created_labels: logger.info(f"  Created/Existing Labels: {', '.join(result.created_labels)}")
@@ -140,9 +146,11 @@ class CliReporter:
 
         # --- マイルストーン情報 ---
         if result.processed_milestones or result.failed_milestones:
+            # --- Dry Run モードの表示 --- # 修正
             if is_dry_run:
                 milestone_names = [name for name, _ in result.processed_milestones]
-                logger.info(f"[Milestones]: Would create: {', '.join(milestone_names)}")
+                logger.info(f"[Milestones]: Would ensure {len(milestone_names)} milestones exist: {', '.join(milestone_names)}")
+            # ---------------------------
             else:
                 logger.info(f"[Milestones] Successful: {len(result.processed_milestones)}, Failed: {len(result.failed_milestones)}")
                 if result.processed_milestones:
@@ -159,8 +167,10 @@ class CliReporter:
 
         # --- プロジェクト情報 ---
         if result.project_name:
+            # --- Dry Run モードの表示 --- # 修正
             if is_dry_run:
-                 logger.info(f"[Project]: Would add {result.project_items_added_count} issues to {result.project_name}")
+                 logger.info(f"[Project]: Would add {result.project_items_added_count} items to project '{result.project_name}'")
+            # ---------------------------
             elif result.project_node_id:
                 logger.info(f"[Project] Found '{result.project_name}' (Node ID: {result.project_node_id})")
                 if result.issue_result and result.issue_result.created_issue_details:
@@ -188,7 +198,15 @@ class CliReporter:
         # --- Issue作成結果 ---
         if result.issue_result:
             logger.info("-" * 60)
-            self.display_issue_creation_result(result.issue_result)
+            # --- Dry Run モードの表示 --- # 修正
+            if is_dry_run:
+                logger.info("--- Issue Creation Summary (Dry Run) ---")
+                logger.info(f"Would process {len(result.issue_result.created_issue_details)} issues.")
+                for url, _ in result.issue_result.created_issue_details:
+                    logger.info(f"- Would create issue: {url}")
+            # ---------------------------
+            else:
+                self.display_issue_creation_result(result.issue_result)
         else: logger.info("[Issues] No issue results available")
 
         logger.info("=" * 60)

@@ -68,8 +68,8 @@ def run(
     # ---- 修正箇所: 設定ファイルパスを追加 ----
     config_file: Annotated[Optional[Path], typer.Option("--config-file", help="Path to the YAML configuration file.", file_okay=True, dir_okay=False, readable=True, resolve_path=True)] = Path("config.yaml"), # デフォルトを ./config.yaml に
     # ------------------------------------
-    project_name: Annotated[Optional[str], typer.Option("--project", help="Name of the GitHub project (V2) to add issues to.")] = None, 
-    dry_run: Annotated[bool, typer.Option("--dry-run", help="Simulate the process without making actual changes on GitHub.")] = False,
+    project_name: Annotated[Optional[str], typer.Option("--project", help="Name of the GitHub project (V2) to add issues to.")] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run", help="Simulate the process without making actual changes on GitHub.")] = False, # 追加
     version: Annotated[Optional[bool], typer.Option("--version", help="Show the application version and exit.", callback=version_callback, is_eager=True)] = None,
 ):
     """
@@ -157,14 +157,14 @@ def run(
         logger.info(f"Config File Path: {config_file.resolve()}") # 設定ファイルパスも表示
         logger.info(f"Repository Input: {repo_name_input}")
         logger.info(f"Project Name    : {project_name if project_name else 'None'}")
-        logger.info(f"Dry Run Mode    : {dry_run}")
+        logger.info(f"Dry Run Mode    : {dry_run}") # Dry Run モード表示を追加
         logger.info("------------------------------------")
 
         result: CreateGitHubResourcesResult = main_use_case.execute(
             parsed_data=parsed_data,
             repo_name_input=repo_name_input,
             project_name=project_name,
-            dry_run=dry_run
+            dry_run=dry_run # dry_run フラグを渡す
         )
 
         reporter.display_create_github_resources_result(result)
