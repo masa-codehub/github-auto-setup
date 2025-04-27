@@ -239,7 +239,7 @@ def test_cli_dry_run_mode(mock_dependencies, dummy_md_file: Path):
     result = runner.invoke(app, [
         "--file", str(dummy_md_file),
         "--repo", "owner/repo",
-        "--dry-run",
+        "--dry-run", # 追加
     ])
 
     assert result.exit_code == 0, f"Stderr: {result.stderr}"
@@ -247,7 +247,7 @@ def test_cli_dry_run_mode(mock_dependencies, dummy_md_file: Path):
         parsed_data=mock_parsed_data,
         repo_name_input="owner/repo",
         project_name=None,
-        dry_run=True # dry_runフラグがTrue
+        dry_run=True # dry_runフラグがTrueであることを確認
     )
 
 def test_cli_owner_inference(mock_dependencies, dummy_md_file: Path):

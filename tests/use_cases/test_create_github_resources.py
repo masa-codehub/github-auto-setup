@@ -247,24 +247,26 @@ def test_execute_dry_run(create_resources_use_case: CreateGitHubResourcesUseCase
             parsed_data=DUMMY_PARSED_DATA_WITH_DETAILS,
             repo_name_input=DUMMY_REPO_NAME_FULL,
             project_name=DUMMY_PROJECT_NAME,
-            dry_run=True
+            dry_run=True # dry_run=True で呼び出す
         )
 
     # 結果オブジェクトの検証
     assert isinstance(result, CreateGitHubResourcesResult)
-    assert "Dry Run" in result.repository_url
+    assert "(Dry Run)" in result.repository_url # URLに "(Dry Run)" が含まれる
     assert result.project_name == DUMMY_PROJECT_NAME
-    # Dry Run結果の検証
+    # Dry Run結果の検証 (ラベル、マイルストーン、Issue、プロジェクトアイテム)
     assert set(result.created_labels) == {"bug", "feature", "urgent"}
-    # 複数マイルストーン対応
     assert len(result.processed_milestones) == 1
-    assert result.processed_milestones[0][0] == "Sprint 1"  # 名前
+    assert result.processed_milestones[0][0] == "Sprint 1"
     assert result.issue_result is not None
-    assert len(result.issue_result.created_issue_details) == 3  # すべてのIssueがDry Run表示用に作られている
-    
-    # 依存コンポーネントの検証
-    mock_github_client.gh.rest.users.get_authenticated.assert_not_called()  # owner指定あり
-    # GitHub操作は行われない
+    assert len(result.issue_result.created_issue_details) == 3 # Issue数
+    assert "(Dry Run)" in result.issue_result.created_issue_details[0][0] # Issue URL
+    assert "DUMMY_NODE_ID" in result.issue_result.created_issue_details[0][1] # Issue Node ID
+    assert "(Dry Run)" in result.project_node_id # Project Node ID
+    assert result.project_items_added_count == 3 # Project Item数
+
+    # 依存コンポーネントの検証: GitHub操作は行われない
+    mock_github_client.gh.rest.users.get_authenticated.assert_not_called()
     mock_create_repo_uc.execute.assert_not_called()
     mock_create_issues_uc.execute.assert_not_called()
     mock_github_client.create_label.assert_not_called()
@@ -276,10 +278,10 @@ def test_execute_dry_run(create_resources_use_case: CreateGitHubResourcesUseCase
     assert "Dry run mode enabled. Skipping GitHub operations." in caplog.text
     assert "[Dry Run] Would ensure repository:" in caplog.text
     assert "[Dry Run] Would ensure 3 labels exist:" in caplog.text
-    assert "[Dry Run] Would ensure 1 milestones exist: ['Sprint 1']" in caplog.text  # 複数形に注意
+    assert "[Dry Run] Would ensure 1 milestones exist: ['Sprint 1']" in caplog.text
     assert "[Dry Run] Would search for project 'Test Project'" in caplog.text
     assert "[Dry Run] Would process 3 issues" in caplog.text
-    assert "[Dry Run] Would add 3 items to project 'Test Project'" in caplog.text # Dry Run 用のダミーIssue数
+    assert "[Dry Run] Would add 3 items to project 'Test Project'" in caplog.text
     assert "Dry run finished." in caplog.text
 
 def test_execute_label_creation_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
