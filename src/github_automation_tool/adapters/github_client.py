@@ -68,91 +68,91 @@ class GitHubAppClient:
         except Exception:
             error_content_str = "[Could not decode error content]"
 
+        # ---- 修正: ログメッセージにコンテキストを追加 ----
         message = f"GitHub API RequestFailed during {context} (Status: {status_code}): {error} - Response: {error_content_str}"
+        # --------------------------------------------
         logger.warning(message) # 失敗時は Warning レベル
 
         if status_code == 401:
-            return GitHubAuthenticationError("Authentication failed (401). Check your GitHub PAT.", status_code=status_code, original_exception=error)
+            return GitHubAuthenticationError(f"Authentication failed (401) during {context}. Check your GitHub PAT.", status_code=status_code, original_exception=error)
         elif status_code == 403:
             remaining = headers.get("X-RateLimit-Remaining")
             if remaining == "0":
-                return GitHubRateLimitError("GitHub API rate limit exceeded.", status_code=status_code, original_exception=error)
+                return GitHubRateLimitError(f"GitHub API rate limit exceeded during {context}.", status_code=status_code, original_exception=error)
             else:
                 # 権限不足の可能性が高い
-                return GitHubAuthenticationError("Permission denied (403). Check PAT scope.", status_code=status_code, original_exception=error)
+                return GitHubAuthenticationError(f"Permission denied (403) during {context}. Check PAT scope.", status_code=status_code, original_exception=error)
         elif status_code == 404:
             return GitHubResourceNotFoundError(f"GitHub resource not found during {context}.", status_code=status_code, original_exception=error)
         elif status_code == 422:
              # repo 作成時の重複エラーを特別に扱う
             if "repository" in context and "name already exists" in error_content_str.lower():
-                 logger.warning(f"Repository validation failed (422): Name already exists. {context}")
+                 logger.warning(f"Repository validation failed (422): Name already exists during {context}")
                  # この場合、エラーメッセージをより具体的にして返す
-                 return GitHubValidationError(f"Repository name already exists: {error_content_str}", status_code=status_code, original_exception=error)
+                 return GitHubValidationError(f"Repository name already exists during {context}: {error_content_str}", status_code=status_code, original_exception=error)
             else:
-                 logger.warning(f"Validation failed (422): {error_content_str}. {context}")
-                 return GitHubValidationError(f"Validation failed (422): {error_content_str}", status_code=status_code, original_exception=error)
+                 logger.warning(f"Validation failed (422) during {context}: {error_content_str}")
+                 return GitHubValidationError(f"Validation failed (422) during {context}: {error_content_str}", status_code=status_code, original_exception=error)
         else:
             # その他のHTTPエラー
             logger.error(f"Unhandled GitHub API HTTP error (Status: {status_code}) during {context}: {error}")
-            return GitHubClientError(f"Unhandled GitHub API HTTP error (Status: {status_code}): {error}", status_code=status_code, original_exception=error)
+            return GitHubClientError(f"Unhandled GitHub API HTTP error (Status: {status_code}) during {context}: {error}", status_code=status_code, original_exception=error)
 
     def _handle_other_error(self, error: Exception, context: str) -> GitHubClientError:
         """RequestFailed 以外の例外 (ネットワークエラー等) を処理します。"""
         if isinstance(error, (RequestError, RequestTimeout)):
-            logger.warning(
-                f"GitHub API request/network error during {context}: {error}")
+            # ---- 修正: ログメッセージにコンテキストを追加 ----
+            logger.warning(f"GitHub API request/network error during {context}: {error}")
+            # --------------------------------------------
             return GitHubClientError(f"Network/Request error during {context}: {error}", original_exception=error)
         else:
-            logger.error(
-                f"Unexpected non-API error during {context}: {error}", exc_info=True)
+            # ---- 修正: ログメッセージにコンテキストを追加 ----
+            logger.error(f"Unexpected non-API error during {context}: {error}", exc_info=True)
+            # --------------------------------------------
             return GitHubClientError(f"Unexpected error during {context}: {error}", original_exception=error)
 
     def _handle_graphql_error(self, error: GraphQLResponse | Exception, context: str) -> GitHubClientError:
         """GraphQL API 呼び出しのエラーを処理します。"""
-        error_message = f"GraphQL error during {context}: {error}"
+        # ---- 修正: ログメッセージにコンテキストを追加 ----
+        base_error_message = f"GraphQL error during {context}"
+        # --------------------------------------------
         errors_list = []
         error_types = []
         error_messages_list = []
-        
-        if isinstance(error, GraphQLResponse) and hasattr(error, 'errors') and error.errors:
+
+        if isinstance(error, dict) and error.get('errors'): # 辞書型レスポンスを考慮
+            errors_list = error.get('errors', [])
+            detailed_error_message = f"{base_error_message}: {errors_list}"
+        elif hasattr(error, 'errors') and error.errors:
             errors_list = error.errors
-            error_message = f"GraphQL response contained errors during {context}: {error.errors}"
-            
-            # エラータイプの抽出
-            for err in errors_list:
-                if isinstance(err, dict):
-                    err_type = err.get('type', '').upper()
-                    err_msg = err.get('message', '').lower()
-                    if err_type:
-                        error_types.append(err_type)
-                    if err_msg:
-                        error_messages_list.append(err_msg)
-                    
-            # エラータイプ・メッセージに基づく例外判定
-            if 'FORBIDDEN' in error_types or any('permission denied' in msg or 'forbidden' in msg for msg in error_messages_list):
-                logger.warning(error_message)
-                return GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}", 
-                    original_exception=error if isinstance(error, Exception) else None)
-                    
-            if 'NOT_FOUND' in error_types or any('not found' in msg for msg in error_messages_list):
-                logger.warning(error_message)
-                return GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}", 
-                    original_exception=error if isinstance(error, Exception) else None)
-            
-        logger.warning(error_message)
-        
-        # エラーメッセージの内容から例外タイプを推測（後方互換性のため）
-        msg_lower = ' '.join(error_messages_list).lower() if error_messages_list else error_message.lower()
-        
-        if "not found" in msg_lower:
-            return GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}", 
-                original_exception=error if isinstance(error, Exception) else None)
-        elif "permission denied" in msg_lower or "forbidden" in msg_lower:
-            return GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}", 
-                original_exception=error if isinstance(error, Exception) else None)
+            detailed_error_message = f"{base_error_message}: {errors_list}"
         else:
-            return GitHubClientError(f"GraphQL operation failed during {context}: {errors_list}", 
-                original_exception=error if isinstance(error, Exception) else None)
+             detailed_error_message = f"{base_error_message}: {error}"
+
+        # エラータイプの抽出 (改善)
+        for err in errors_list:
+            if isinstance(err, dict):
+                err_type = err.get('type', '').upper()
+                err_msg = err.get('message', '').lower()
+                if err_type: error_types.append(err_type)
+                if err_msg: error_messages_list.append(err_msg)
+
+        logger.warning(detailed_error_message) # エラー詳細をログ出力
+
+        # エラータイプ・メッセージに基づく例外判定 (変更なし)
+        if 'FORBIDDEN' in error_types or any('permission denied' in msg or 'forbidden' in msg for msg in error_messages_list):
+            return GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}", original_exception=error if isinstance(error, Exception) else None)
+        if 'NOT_FOUND' in error_types or any('not found' in msg for msg in error_messages_list):
+            return GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}", original_exception=error if isinstance(error, Exception) else None)
+
+        # メッセージ内容からの推測 (後方互換性)
+        msg_lower = ' '.join(error_messages_list).lower() if error_messages_list else detailed_error_message.lower()
+        if "not found" in msg_lower:
+            return GitHubResourceNotFoundError(f"GraphQL resource not found during {context}: {errors_list}", original_exception=error if isinstance(error, Exception) else None)
+        elif "permission denied" in msg_lower or "forbidden" in msg_lower:
+            return GitHubAuthenticationError(f"GraphQL permission denied during {context}: {errors_list}", original_exception=error if isinstance(error, Exception) else None)
+        else:
+            return GitHubClientError(f"GraphQL operation failed during {context}: {errors_list}", original_exception=error if isinstance(error, Exception) else None)
 
     def _handle_api_error(self, error: Exception, context: str) -> GitHubClientError:
         """API呼び出し中のエラーを処理し、適切な例外にラップします。すでに適切なカスタム例外の場合はそのまま返します。"""
@@ -176,7 +176,7 @@ class GitHubAppClient:
             response = self.gh.rest.repos.create_for_authenticated_user(
                 name=repo_name, private=True, auto_init=True
             )
-            if response and response.parsed_data and hasattr(response.parsed_data, 'html_url'):
+            if response and response.parsed_data and hasattr(response.parsed_data, 'html_url') and response.parsed_data.html_url:
                 repo_url = response.parsed_data.html_url
                 logger.info(f"Successfully created repository: {repo_url}")
                 return repo_url

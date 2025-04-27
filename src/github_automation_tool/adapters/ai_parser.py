@@ -1,5 +1,6 @@
 import logging
 from typing import Type
+from pydantic import ValidationError
 
 # 設定、データモデル、カスタム例外をインポート
 from github_automation_tool.infrastructure.config import Settings
@@ -160,8 +161,7 @@ class AIParser:
             raise AiParserError(f"Failed to build LangChain chain: {e}", original_exception=e) from e
 
     def parse(self, markdown_text: str) -> ParsedRequirementData:
-        """Markdownテキストを解析し、構造化されたIssueデータを抽出します。(修正なし)"""
-        # (既存の parse メソッド実装は変更不要)
+        """Markdownテキストを解析し、構造化されたIssueデータを抽出します。"""
         logger.info(f"Starting AI parsing for Markdown text (length: {len(markdown_text)})...")
         if not markdown_text or not markdown_text.strip():
             logger.warning("Input markdown text is empty or whitespace only, returning empty data.")
@@ -172,11 +172,24 @@ class AIParser:
         try:
             logger.debug("Invoking AI processing chain...")
             result = self.chain.invoke({"markdown_text": markdown_text})
+
             if not isinstance(result, ParsedRequirementData):
                 logger.error(f"AI output parsing resulted in unexpected type: {type(result)}")
                 raise AiParserError(f"AI parsing resulted in unexpected data type: {type(result)}")
-            logger.info(f"Successfully parsed {len(result.issues)} issue(s).")
+
+            # --- 追加: 解析結果が0件の場合の警告 ---
+            if not result.issues:
+                 logger.warning("AI parsing finished, but no issues were extracted from the provided Markdown.")
+            # ------------------------------------
+            else:
+                 logger.info(f"Successfully parsed {len(result.issues)} issue(s).")
+
             return result
+
+        except ValidationError as e: # Pydanticのバリデーションエラーを捕捉
+             logger.error(f"AI output validation failed for field '{e.errors()[0]['loc'][0]}': {e.errors()[0]['msg']}", exc_info=False)
+             # models.py で追加したバリデーターのエラーをここで捕捉する
+             raise AiParserError(f"AI output validation failed: {e}", original_exception=e) from e
         except OutputParserException as e:
             logger.error(f"Failed to parse AI output structure: {e}", exc_info=True)
             raise AiParserError("Failed to parse AI output.", original_exception=e) from e

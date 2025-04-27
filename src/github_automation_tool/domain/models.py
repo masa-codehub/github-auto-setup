@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 # Removed typing imports; using built-in generics for Python 3.13
 
 
@@ -33,6 +33,15 @@ class IssueData(BaseModel):
     def body(self) -> str:
         """Alias for description to support code referencing issue_data.body"""
         return self.description
+        
+    # --- 追加: title のバリデーター ---
+    @field_validator('title')
+    @classmethod
+    def title_must_not_be_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('Issue title cannot be empty or whitespace only.')
+        return v
+    # ----------------------------------
 
 
 class ParsedRequirementData(BaseModel):

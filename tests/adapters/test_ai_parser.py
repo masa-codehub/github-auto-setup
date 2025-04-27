@@ -1,13 +1,17 @@
 import pytest
-from unittest.mock import patch, MagicMock, call
-import json
+from unittest.mock import MagicMock, patch
+import os
 import logging
-from pathlib import Path
-from pydantic import SecretStr
+# Pydanticのバージョンに合わせてインポート
+from pydantic_core import ValidationError, PydanticCustomError
+from pydantic import SecretStr  # SecretStrをインポート
+from typing import Any, Dict, List, Optional, cast
+# 正しいケースでインポート（AiParserError）
+from github_automation_tool.domain.exceptions import AiParserError
 
 from github_automation_tool.adapters.ai_parser import AIParser
 from github_automation_tool.domain.models import ParsedRequirementData, IssueData
-from github_automation_tool.domain.exceptions import AiParserError
+
 from github_automation_tool.infrastructure.config import Settings, AiSettings, LoggingSettings
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -271,6 +275,59 @@ def test_build_chain_raises_error_if_template_missing(mock_settings):
 
 # (その他の parse テストケースは変更なし、ai_parser フィクスチャが更新されたsettingsを使う)
 # ...
+
+# --- 追加: 空の結果に対する警告ログと ValidationError のテスト ---
+def test_parse_with_empty_result(ai_parser: AIParser, caplog):
+    """LLM が空の結果を返した場合、適切な警告ログが出力されるか"""
+    # 空のissuesリストを返すようにモック設定
+    empty_result = ParsedRequirementData(issues=[])
+    ai_parser.chain.invoke.return_value = empty_result
+    
+    with caplog.at_level(logging.WARNING):
+        result = ai_parser.parse("Some markdown text")
+    
+    # 警告ログが出力されたか検証
+    assert "AI parsing finished, but no issues were extracted from the provided Markdown" in caplog.text
+    # 空の結果が正しく返されたか検証
+    assert result == empty_result
+    assert len(result.issues) == 0
+
+def test_parse_with_validation_error(ai_parser: AIParser):
+    """LLM 出力が ValidationError を発生させた場合、AiParserError が発生するか"""
+    # コンテンツからValidationErrorを発生させる
+    # chain.invokeが例外を発生させるようにモックする
+    validation_error = ValidationError.from_exception_data(
+        title="ValidationError",
+        line_errors=[{
+            "type": "missing",
+            "loc": ["title"],
+            "msg": "Field required",
+            "input": {}
+        }]
+    )
+    ai_parser.chain.invoke.side_effect = validation_error
+    
+    # テスト - パースでエラーが発生すること
+    with pytest.raises(AiParserError) as excinfo:
+        ai_parser.parse("dummy content")
+    
+    # エラーメッセージが適切かチェック
+    error_message = str(excinfo.value)
+    assert "validation" in error_message.lower() or "AI output" in error_message
+
+def test_parse_with_empty_markdown(ai_parser: AIParser, caplog):
+    """空のマークダウン入力に対して、空の結果を返すか"""
+    with caplog.at_level(logging.WARNING):
+        result = ai_parser.parse("")
+    
+    # 警告ログが出力されたか検証
+    assert "Input markdown text is empty or whitespace only" in caplog.text
+    # 空のリストが返されたか検証
+    assert isinstance(result, ParsedRequirementData)
+    assert len(result.issues) == 0
+    # 実際に LLM が呼び出されなかったことを検証
+    ai_parser.chain.invoke.assert_not_called()
+
 
 SAMPLE_MARKDOWN_BASIC = """
 ---

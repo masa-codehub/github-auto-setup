@@ -107,105 +107,90 @@ class CliReporter:
         logger.info("-" * 40)
     
     def display_create_github_resources_result(self, result: CreateGitHubResourcesResult):
-        """
-        CreateGitHubResourcesUseCase の実行結果を総合的に表示します。
-
-        Args:
-            result: UseCaseから返された総合的な結果オブジェクト。
-        """
+        """CreateGitHubResourcesUseCase の実行結果を総合的に表示します。"""
         logger.info("=" * 60)
         logger.info("     GITHUB RESOURCE CREATION SUMMARY     ")
         logger.info("=" * 60)
-        
-        # 致命的エラーがあれば最初に表示
+
         if result.fatal_error:
             logger.critical(f"[FATAL ERROR] {result.fatal_error}")
             logger.info("-" * 60)
             return
-        
-        # Dry Runモードかどうかを確認（リポジトリURLに "Dry Run" が含まれているかで判断）
+
         is_dry_run = result.repository_url and "(Dry Run)" in result.repository_url
-        if is_dry_run:
-            logger.info("[DRY RUN MODE] No actual GitHub operations were performed")
-            
-        # リポジトリ情報
-        if result.repository_url:
-            logger.info(f"[Repository]: {result.repository_url}")
-        else:
-            logger.warning("[Repository] No repository URL available")
-            
-        # ラベル情報
+        if is_dry_run: logger.info("[DRY RUN MODE] No actual GitHub operations were performed")
+        if result.repository_url: logger.info(f"[Repository]: {result.repository_url}")
+        else: logger.warning("[Repository] No repository URL available")
+
+        # --- ラベル情報 ---
         if result.created_labels or result.failed_labels:
             if is_dry_run:
                 logger.info(f"[Labels]: Would create: {', '.join(result.created_labels)}")
             else:
-                label_summary = (
-                    f"[Labels] Successful: {len(result.created_labels)}, "
-                    f"Failed: {len(result.failed_labels)}"
-                )
-                logger.info(label_summary)
-                
-                if result.created_labels:
-                    logger.info(f"  Created/Existing Labels: {', '.join(result.created_labels)}")
-                    
+                logger.info(f"[Labels] Successful: {len(result.created_labels)}, Failed: {len(result.failed_labels)}")
+                if result.created_labels: logger.info(f"  Created/Existing Labels: {', '.join(result.created_labels)}")
                 if result.failed_labels:
                     logger.warning("  Failed Labels:")
+                    # ---- 修正: エラーメッセージを整形して表示 ----
                     for label_name, error_msg in result.failed_labels:
-                        logger.warning(f"  - '{label_name}': {error_msg}")
-        else:
-            logger.info("[Labels] No labels processed")
-            
-        # マイルストーン情報（複数対応）
+                        formatted_error = str(error_msg).replace('\n', ' ') # 改行をスペースに
+                        logger.warning(f"  - '{label_name}': {formatted_error}")
+                    # --------------------------------------------
+        else: logger.info("[Labels] No labels processed")
+
+        # --- マイルストーン情報 ---
         if result.processed_milestones or result.failed_milestones:
             if is_dry_run:
                 milestone_names = [name for name, _ in result.processed_milestones]
                 logger.info(f"[Milestones]: Would create: {', '.join(milestone_names)}")
             else:
-                milestone_summary = (
-                    f"[Milestones] Successful: {len(result.processed_milestones)}, "
-                    f"Failed: {len(result.failed_milestones)}"
-                )
-                logger.info(milestone_summary)
-                
+                logger.info(f"[Milestones] Successful: {len(result.processed_milestones)}, Failed: {len(result.failed_milestones)}")
                 if result.processed_milestones:
                     milestone_info = [f"'{name}' (ID: {id})" for name, id in result.processed_milestones]
                     logger.info(f"  Created/Existing Milestones: {', '.join(milestone_info)}")
-                    
                 if result.failed_milestones:
                     logger.warning("  Failed Milestones:")
+                    # ---- 修正: エラーメッセージを整形して表示 ----
                     for milestone_name, error_msg in result.failed_milestones:
-                        logger.warning(f"  - '{milestone_name}': {error_msg}")
-        else:
-            logger.info("[Milestones] No milestones processed")
-            
-        # プロジェクト情報
+                        formatted_error = str(error_msg).replace('\n', ' ')
+                        logger.warning(f"  - '{milestone_name}': {formatted_error}")
+                    # --------------------------------------------
+        else: logger.info("[Milestones] No milestones processed")
+
+        # --- プロジェクト情報 ---
         if result.project_name:
             if is_dry_run:
-                logger.info(f"[Project]: Would add {result.project_items_added_count} issues to {result.project_name}")
+                 logger.info(f"[Project]: Would add {result.project_items_added_count} issues to {result.project_name}")
             elif result.project_node_id:
                 logger.info(f"[Project] Found '{result.project_name}' (Node ID: {result.project_node_id})")
-                
-                # プロジェクト連携の結果
                 if result.issue_result and result.issue_result.created_issue_details:
-                    total_issues = len(result.issue_result.created_issue_details)
-                    logger.info(f"  Project Integration: Added {result.project_items_added_count}/{total_issues} issues")
-                    
+                    total_issues = len(result.issue_result.created_issue_details) # 作成されたIssue数
+                    added_count = result.project_items_added_count
+                    failed_count = len(result.project_items_failed)
+                    # ---- 修正: サマリー表示改善 ----
+                    logger.info(f"  Project Integration: Added: {added_count}/{total_issues}, Failed: {failed_count}/{total_issues}")
+                    # -----------------------------
                     if result.project_items_failed:
-                        logger.warning(f"  Failed to add {len(result.project_items_failed)} issues to project:")
-                        for node_id, error in result.project_items_failed:
-                            logger.warning(f"  - Issue (Node ID: {node_id}): {error}")
-            else:
-                logger.warning(f"[Project] Project '{result.project_name}' not found or failed to retrieve its ID")
-        else:
-            logger.info("[Project] No project integration specified")
-            
-        # Issue作成結果
+                        logger.warning(f"  Failed to add items to project:")
+                        # ---- 修正: エラーメッセージを整形して表示 ----
+                        for node_id, error_msg in result.project_items_failed:
+                             formatted_error = str(error_msg).replace('\n', ' ')
+                             logger.warning(f"  - Issue (Node ID: {node_id}): {formatted_error}")
+                        # --------------------------------------------
+                # ---- 修正: Issueがない場合などの表示 ----
+                elif result.issue_result is None or not result.issue_result.created_issue_details:
+                     logger.info("  Project Integration: No issues were created to add.")
+                # -----------------------------------
+            else: # project_node_id がない場合
+                logger.warning(f"[Project] Project '{result.project_name}' not found or failed to retrieve its ID.")
+        else: logger.info("[Project] No project integration specified.")
+
+        # --- Issue作成結果 ---
         if result.issue_result:
             logger.info("-" * 60)
             self.display_issue_creation_result(result.issue_result)
-        else:
-            logger.info("[Issues] No issue results available")
-            
+        else: logger.info("[Issues] No issue results available")
+
         logger.info("=" * 60)
 
     # --- 今後実装する他のリソースに関する表示メソッド ---
