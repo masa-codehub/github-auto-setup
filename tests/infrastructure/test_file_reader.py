@@ -1,63 +1,147 @@
 import pytest
-from pathlib import Path
-import sys
+import tempfile
 import os
-import subprocess
+from pathlib import Path
 from unittest import mock
-
-# モジュールをインポート (パスは環境に合わせて調整)
-from github_automation_tool.infrastructure.file_reader import read_markdown_file
-
-# --- Test Cases ---
-
-
-def test_read_markdown_file_success(tmp_path: Path):
-    """正常にUTF-8のMarkdownファイルの内容を読み込めるか"""
-    content = "# テスト Title\n\nこれはテスト内容です。\n- item1\n- item2"
-    file_path = tmp_path / "test_success.md"
-    file_path.write_text(content, encoding='utf-8')
-
-    read_content = read_markdown_file(file_path)
-    assert read_content == content
+import yaml
+import logging
+from github_automation_tool.infrastructure.file_reader import (
+    read_markdown_file, read_yaml_file, FileReader, FileReaderError
+)
 
 
-def test_read_file_not_found():
-    """存在しないファイルを指定した場合に FileNotFoundError が発生するか"""
-    non_existent_path = Path("./non_existent_file.md")  # 相対パスでもOK
-    with pytest.raises(FileNotFoundError, match="File not found"):
+@pytest.fixture
+def mock_file_path(tmp_path):
+    """一時的なテストファイルを作成して返すフィクスチャ"""
+    file_path = tmp_path / "test_file.txt"
+    file_path.write_text("test content")
+    return file_path
+
+
+@pytest.fixture
+def mock_yaml_file_path(tmp_path):
+    """一時的なYAMLファイルを作成して返すフィクスチャ"""
+    content = {"key": "value", "nested": {"subkey": "subvalue"}}
+    file_path = tmp_path / "test_file.yaml"
+    with open(file_path, "w") as f:
+        yaml.dump(content, f)
+    return file_path
+
+
+def test_read_file_success(mock_file_path):
+    """ファイル読み取りが成功するケース"""
+    result = read_markdown_file(mock_file_path)
+    assert result == "test content"
+
+
+def test_read_file_not_exists():
+    """存在しないファイルを読み取ろうとして失敗するケース"""
+    non_existent_path = Path("/non/existent/file.txt")
+    
+    with pytest.raises(FileReaderError, match="File not found"):
         read_markdown_file(non_existent_path)
 
-# Windows では chmod の挙動が異なるため、Linux/macOS 環境でのみ実行するマーク
+
+def test_read_yaml_file_success(mock_yaml_file_path):
+    """YAMLファイル読み取りが成功するケース"""
+    result = read_yaml_file(mock_yaml_file_path)
+    assert result["key"] == "value"
+    assert result["nested"]["subkey"] == "subvalue"
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="chmod tests often fail on Windows")
-def test_read_permission_error(tmp_path: Path):
-    """読み取り権限のないファイルを指定した場合に PermissionError が発生するか"""
-    file_path = tmp_path / "no_read_access.md"
-    file_path.write_text("secret content", encoding='utf-8')
-
-    # os.accessをモックして、アクセス権限がないように見せかける
-    with mock.patch('os.access', return_value=False):
-        with pytest.raises(PermissionError, match="Permission denied"):
-            read_markdown_file(file_path)
+def test_read_yaml_file_not_exists():
+    """存在しないYAMLファイルを読み取ろうとして失敗するケース"""
+    non_existent_path = Path("/non/existent/file.yaml")
+    
+    with pytest.raises(FileReaderError, match="YAML file not found"):
+        read_yaml_file(non_existent_path)
 
 
-def test_read_encoding_error(tmp_path: Path):
-    """UTF-8として不正なファイル (例: Shift-JIS) を読み込もうとした場合に UnicodeDecodeError が発生するか"""
-    file_path = tmp_path / "shift_jis_encoded.md"
-    try:
-        # Shift_JIS でエンコードされたバイト列
-        content_bytes = "テスト文字列".encode('shift_jis')
-        file_path.write_bytes(content_bytes)
-    except LookupError:
-        # 環境によってはスキップ
-        pytest.skip("Shift_JIS codec not available on this system.")
-
-    with pytest.raises(UnicodeDecodeError):
-        read_markdown_file(file_path)
+def test_read_yaml_file_invalid_format(mock_file_path):
+    """無効なYAML形式のファイルを読み取ろうとして失敗するケース"""
+    with pytest.raises(FileReaderError, match="Failed to parse YAML file"):
+        read_yaml_file(mock_file_path)
 
 
-def test_read_directory_error(tmp_path: Path):
-    """ファイルではなくディレクトリを指定した場合に FileNotFoundError が発生するか"""
-    with pytest.raises(FileNotFoundError, match="is not a file"):  # is_file()がFalseになる
-        read_markdown_file(tmp_path)
+def test_file_exists_true(mock_file_path):
+    """ファイルが存在する場合のテスト"""
+    assert FileReader.file_exists(mock_file_path) is True
+
+
+def test_file_exists_false():
+    """ファイルが存在しない場合のテスト"""
+    non_existent_path = Path("/non/existent/file.txt")
+    assert FileReader.file_exists(non_existent_path) is False
+
+
+def test_read_file_io_error(mock_file_path, caplog):
+    """ファイル読み取り中にIOErrorが発生するケース"""
+    # mockでPathオブジェクトのopen()が例外を発生させるようにする
+    with mock.patch.object(Path, 'open', side_effect=IOError("Permission denied")):
+        with pytest.raises(FileReaderError, match="Failed to read file"), caplog.at_level(logging.ERROR):
+            read_markdown_file(mock_file_path)
+        
+        # エラーログが適切に記録されていることを確認
+        assert "Failed to read file" in caplog.text
+        assert "Permission denied" in caplog.text
+
+
+def test_read_file_os_error(mock_file_path, caplog):
+    """ファイル読み取り中にOSErrorが発生するケース"""
+    # mockでPathオブジェクトのopen()が例外を発生させるようにする
+    with mock.patch.object(Path, 'open', side_effect=OSError("Too many open files")):
+        with pytest.raises(FileReaderError, match="Failed to read file"), caplog.at_level(logging.ERROR):
+            read_markdown_file(mock_file_path)
+        
+        # エラーログが適切に記録されていることを確認
+        assert "Failed to read file" in caplog.text
+        assert "Too many open files" in caplog.text
+
+
+def test_read_yaml_file_io_error(mock_yaml_file_path, caplog):
+    """YAMLファイル読み取り中にIOErrorが発生するケース"""
+    # mockでPathオブジェクトのopen()が例外を発生させるようにする
+    with mock.patch.object(Path, 'open', side_effect=IOError("Permission denied")):
+        with pytest.raises(FileReaderError, match="Failed to read YAML file"), caplog.at_level(logging.ERROR):
+            read_yaml_file(mock_yaml_file_path)
+        
+        # エラーログが適切に記録されていることを確認
+        assert "Failed to read YAML file" in caplog.text
+        assert "Permission denied" in caplog.text
+
+
+def test_read_yaml_file_os_error(mock_yaml_file_path, caplog):
+    """YAMLファイル読み取り中にOSErrorが発生するケース"""
+    # mockでPathオブジェクトのopen()が例外を発生させるようにする
+    with mock.patch.object(Path, 'open', side_effect=OSError("Too many open files")):
+        with pytest.raises(FileReaderError, match="Failed to read YAML file"), caplog.at_level(logging.ERROR):
+            read_yaml_file(mock_yaml_file_path)
+        
+        # エラーログが適切に記録されていることを確認
+        assert "Failed to read YAML file" in caplog.text
+        assert "Too many open files" in caplog.text
+
+
+def test_read_yaml_file_yaml_error(mock_yaml_file_path, caplog):
+    """YAMLパース中にYAMLError発生するケース"""
+    # open()は成功するが、yaml.safe_load()で例外が発生するように設定
+    with mock.patch('yaml.safe_load', side_effect=yaml.YAMLError("Mapping values are not allowed here")):
+        with pytest.raises(FileReaderError, match="Failed to parse YAML file"), caplog.at_level(logging.ERROR):
+            read_yaml_file(mock_yaml_file_path)
+        
+        # エラーログが適切に記録されていることを確認
+        assert "Failed to parse YAML file" in caplog.text
+        assert "Mapping values are not allowed here" in caplog.text
+
+
+def test_read_yaml_file_unexpected_error(mock_yaml_file_path, caplog):
+    """YAMLファイル読み取り中に予期せぬ例外が発生するケース"""
+    # open()は成功するが、yaml.safe_load()で予期せぬ例外が発生
+    with mock.patch('yaml.safe_load', side_effect=ValueError("Unexpected error")):
+        with pytest.raises(FileReaderError, match="Unexpected error reading YAML file"), caplog.at_level(logging.ERROR):
+            read_yaml_file(mock_yaml_file_path)
+        
+        # エラーログが適切に記録されていることを確認
+        assert "Unexpected error reading YAML file" in caplog.text
+        assert "ValueError" in caplog.text
+        assert "Unexpected error" in caplog.text

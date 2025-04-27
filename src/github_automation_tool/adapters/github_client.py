@@ -351,8 +351,8 @@ class GitHubAppClient:
                 payload["state"] = "open" # 不正な値なら open にフォールバック
                 logger.warning(f"Invalid state '{state}' provided for milestone '{trimmed_title}', defaulting to 'open'.")
 
-            if description:
-                payload["description"] = description
+            # description パラメータは常に含める（空文字列の場合も含む）
+            payload["description"] = description
 
             # response: Response[Milestone]
             response = self.gh.rest.issues.create_milestone(owner=owner, repo=repo, **payload)

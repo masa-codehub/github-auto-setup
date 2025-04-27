@@ -541,102 +541,206 @@ def test_get_owner_repo_api_fails(create_resources_use_case: CreateGitHubResourc
              project_name=DUMMY_PROJECT_NAME
          )
 
-def test_execute_multiple_milestones_success(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
-    """複数マイルストーン: すべてのマイルストーンが正常に作成され、IDマップが正しく渡される"""
-    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
-    # マイルストーン作成の戻り値を設定（順番にIDを返す）
-    mock_github_client.create_milestone.side_effect = [101, 102]  # MilestoneA=101, MilestoneB=102
-    mock_create_issues_uc.execute.return_value = DUMMY_ISSUE_RESULT
+def test_get_owner_repo_api_error_other_exception(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, caplog):
+    """認証ユーザー取得APIで予期せぬ例外が発生した場合も適切にハンドリングされる"""
+    # モックが予期せぬ例外を送出するように設定
+    mock_github_client.gh.rest.users.get_authenticated.side_effect = RuntimeError("Unexpected API error")
 
-    with caplog.at_level(logging.INFO):
-        result = create_resources_use_case.execute(
-            parsed_data=PARSED_DATA_MULTI_MILESTONE,
-            repo_name_input=DUMMY_REPO_NAME_FULL,
+    with pytest.raises(GitHubAuthenticationError) as excinfo, caplog.at_level(logging.ERROR):
+        # repo名のみを指定して _get_owner_repo が内部で呼ばれる execute を実行
+        create_resources_use_case.execute(
+            parsed_data=DUMMY_PARSED_DATA_WITH_DETAILS,
+            repo_name_input=DUMMY_REPO_NAME_ONLY,
             project_name=DUMMY_PROJECT_NAME
         )
 
-    # 結果オブジェクトの検証
-    assert isinstance(result, CreateGitHubResourcesResult)
-    assert result.repository_url == DUMMY_REPO_URL
-    assert result.fatal_error is None
+    # 例外が適切にラップされていることを検証
+    assert "Failed to get authenticated user due to API error" in str(excinfo.value)
+    # エラーログに元の例外情報が含まれることを確認
+    assert "RuntimeError" in caplog.text
+
+def test_execute_unexpected_exception_in_add_item(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+    """プロジェクトアイテム追加時に予期せぬ例外が発生した場合も処理が継続される"""
+    # 基本設定
+    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
+    mock_issue_result = CreateIssuesResult(
+        created_issue_details=[("url/1", "NODE_ID_1"), ("url/2", "NODE_ID_2")]
+    )
+    mock_create_issues_uc.execute.return_value = mock_issue_result
     
-    # マイルストーン処理結果の検証（複数マイルストーン）
-    assert len(result.processed_milestones) == 2
-    # タプルのリストを検証（順序は保証されないためソートして比較）
-    expected_milestones = [("MilestoneA", 101), ("MilestoneB", 102)]
-    # 名前でソート
-    sorted_processed = sorted(result.processed_milestones, key=lambda x: x[0])
-    sorted_expected = sorted(expected_milestones, key=lambda x: x[0])
-    assert sorted_processed == sorted_expected
-    assert result.failed_milestones == []
+    # 2番目のアイテム追加で予期せぬ例外が発生する
+    unexpected_error = TypeError("Invalid Node ID type")
+    mock_github_client.add_item_to_project_v2.side_effect = ["ITEM_ID_1", unexpected_error]
 
-    # マイルストーン作成の呼び出し検証
-    mock_github_client.create_milestone.assert_any_call(EXPECTED_OWNER, EXPECTED_REPO, "MilestoneA")
-    mock_github_client.create_milestone.assert_any_call(EXPECTED_OWNER, EXPECTED_REPO, "MilestoneB")
-    assert mock_github_client.create_milestone.call_count == 2  # 重複を除いた2回
-
-    # Issue作成UseCaseにマイルストーンIDマップが正しく渡されたことを検証
-    mock_create_issues_uc.execute.assert_called_once()
-    # 呼び出し時のmilestone_id_map引数を取得
-    call_args = mock_create_issues_uc.execute.call_args
-    milestone_id_map = call_args[0][3]  # 4番目の引数
-    assert isinstance(milestone_id_map, dict)
-    assert milestone_id_map == {"MilestoneA": 101, "MilestoneB": 102}
-
-    # ログの検証
-    assert f"Step 5: Ensuring required milestones exist in {DUMMY_REPO_NAME_FULL}..." in caplog.text
-    assert "Found 2 unique milestones to process" in caplog.text
-    # ログ出力の順序は保証されないため内容だけ確認
-    assert "Processing milestone 1/2: 'MilestoneA'" in caplog.text or "Processing milestone 1/2: 'MilestoneB'" in caplog.text
-    assert "Processing milestone 2/2: 'MilestoneA'" in caplog.text or "Processing milestone 2/2: 'MilestoneB'" in caplog.text
-    # 具体的な成功メッセージは出力されなくなった
-    assert "Step 5 finished. Processed milestones: 2/2, Failed: 0." in caplog.text
-
-def test_execute_multiple_milestones_partial_failure(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
-    """複数マイルストーン: 一部のマイルストーン作成が失敗した場合、成功したものだけIDマップに含まれる"""
-    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
-    # 2つ目のマイルストーン作成だけ失敗させる
-    milestone_error = GitHubClientError("Failed to create milestone")
-    def create_milestone_side_effect(owner, repo, name):
-        if name == "MilestoneB":
-            raise milestone_error
-        return 101  # MilestoneAは成功
-    mock_github_client.create_milestone.side_effect = create_milestone_side_effect
-    mock_create_issues_uc.execute.return_value = DUMMY_ISSUE_RESULT
-
-    with caplog.at_level(logging.INFO):
+    with caplog.at_level(logging.ERROR):
         result = create_resources_use_case.execute(
-            parsed_data=PARSED_DATA_MULTI_MILESTONE,
+            parsed_data=DUMMY_PARSED_DATA_WITH_DETAILS,
             repo_name_input=DUMMY_REPO_NAME_FULL,
             project_name=DUMMY_PROJECT_NAME
         )
 
     # 結果オブジェクトの検証
     assert result.fatal_error is None
-    # マイルストーン処理結果（成功したものだけ）
-    assert len(result.processed_milestones) == 1
-    assert result.processed_milestones[0][0] == "MilestoneA"
-    assert result.processed_milestones[0][1] == 101
-    # 失敗したマイルストーン
+    assert result.project_items_added_count == 1
+    assert len(result.project_items_failed) == 1
+    assert result.project_items_failed[0][0] == "NODE_ID_2"
+    assert "Unexpected error" in result.project_items_failed[0][1]
+    assert "Invalid Node ID type" in result.project_items_failed[0][1]  # 元の例外メッセージが含まれていることを確認
+    
+    # ログの検証
+    assert "Unexpected error during adding item" in caplog.text
+    assert "Invalid Node ID type" in caplog.text
+
+def test_execute_unexpected_exception_in_create_label(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+    """ラベル作成時に予期せぬ例外が発生した場合も処理が継続される"""
+    # 基本設定
+    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
+    # ラベル作成の副作用を設定: 予期せぬ例外
+    def create_label_side_effect(owner, repo, name):
+        if name == "feature":
+            raise TypeError("Unexpected label name type")
+        return True  # 他は成功
+    mock_github_client.create_label.side_effect = create_label_side_effect
+
+    with caplog.at_level(logging.ERROR):
+        result = create_resources_use_case.execute(
+            parsed_data=DUMMY_PARSED_DATA_WITH_DETAILS,
+            repo_name_input=DUMMY_REPO_NAME_FULL,
+            project_name=DUMMY_PROJECT_NAME
+        )
+
+    # 結果オブジェクトの検証
+    assert result.fatal_error is None
+    assert set(result.created_labels) == {"bug", "urgent"}  # 成功したものだけ
+    assert len(result.failed_labels) == 1
+    assert result.failed_labels[0][0] == "feature"
+    assert "Unexpected error" in result.failed_labels[0][1]
+    assert "Unexpected label name type" in result.failed_labels[0][1]  # 具体的なエラーメッセージを検証
+    
+    # ログの検証
+    assert "Unexpected error during ensuring label" in caplog.text
+    assert "Unexpected label name type" in caplog.text  # 具体的なエラーメッセージがログに含まれているか
+    
+    # 後続の処理が実行されていることを確認
+    mock_github_client.create_milestone.assert_called()
+    mock_create_issues_uc.execute.assert_called()
+
+def test_execute_unexpected_exception_in_create_milestone(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+    """マイルストーン作成時に予期せぬ例外が発生した場合も処理が継続される"""
+    # 基本設定
+    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
+    
+    # マイルストーン作成で予期せぬ例外
+    unexpected_error = ValueError("Invalid milestone name")
+    mock_github_client.create_milestone.side_effect = unexpected_error
+
+    with caplog.at_level(logging.ERROR):
+        result = create_resources_use_case.execute(
+            parsed_data=DUMMY_PARSED_DATA_WITH_DETAILS,
+            repo_name_input=DUMMY_REPO_NAME_FULL,
+            project_name=DUMMY_PROJECT_NAME
+        )
+
+    # 結果オブジェクトの検証
+    assert result.fatal_error is None
+    assert len(result.processed_milestones) == 0  # 成功したものがない
     assert len(result.failed_milestones) == 1
-    assert result.failed_milestones[0][0] == "MilestoneB"
-    assert str(milestone_error) in result.failed_milestones[0][1]  # エラーメッセージ
+    assert result.failed_milestones[0][0] == "Sprint 1"
+    assert "Unexpected error" in result.failed_milestones[0][1]
+    assert "Invalid milestone name" in result.failed_milestones[0][1]
+    
+    # ログの検証
+    assert "Unexpected error during ensuring milestone" in caplog.text
+    assert "Invalid milestone name" in caplog.text
+    
+    # トレースバックが記録されていることを確認
+    assert "Traceback" in caplog.text
+    
+    # 後続の処理が実行されていることを確認
+    mock_create_issues_uc.execute.assert_called()
 
-    # Issue作成UseCaseにマイルストーンIDマップが正しく渡されたことを検証（失敗したものは含まれない）
+def test_execute_unexpected_critical_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_create_repo_uc, caplog):
+    """想定外の重大なエラーが発生した場合、処理が中断され適切にエラーが記録される"""
+    # モックが予期せぬ例外を送出するように設定
+    critical_error = MemoryError("Out of memory")
+    mock_create_repo_uc.execute.side_effect = critical_error
+
+    with pytest.raises(GitHubClientError) as excinfo, caplog.at_level(logging.ERROR):
+        result = create_resources_use_case.execute(
+            parsed_data=DUMMY_PARSED_DATA_WITH_DETAILS,
+            repo_name_input=DUMMY_REPO_NAME_FULL,
+            project_name=DUMMY_PROJECT_NAME
+        )
+
+    # 例外が適切にラップされていることを検証
+    assert "An unexpected critical error occurred" in str(excinfo.value)
+    assert "Out of memory" in str(excinfo.value)
+    
+    # ログにエラーとトレースバックが記録されていることを確認
+    assert "An unexpected critical error occurred" in caplog.text
+    assert "Out of memory" in caplog.text
+    assert "Traceback" in caplog.text
+
+def test_execute_find_project_unexpected_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+    """プロジェクト検索時に予期せぬ例外が発生した場合も処理が継続される"""
+    # 基本設定
+    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
+    
+    # プロジェクト検索で予期せぬ例外
+    unexpected_error = TypeError("Invalid project name type")
+    mock_github_client.find_project_v2_node_id.side_effect = unexpected_error
+
+    with caplog.at_level(logging.ERROR):
+        result = create_resources_use_case.execute(
+            parsed_data=DUMMY_PARSED_DATA_WITH_DETAILS,
+            repo_name_input=DUMMY_REPO_NAME_FULL,
+            project_name=DUMMY_PROJECT_NAME
+        )
+
+    # 結果オブジェクトの検証
+    assert result.fatal_error is None
+    assert result.project_node_id is None
+    assert result.project_items_added_count == 0
+    
+    # ログの検証
+    assert "Unexpected error during finding Project V2" in caplog.text
+    assert "TypeError" in caplog.text
+    assert "Invalid project name type" in caplog.text
+    assert "Traceback" in caplog.text
+    
+    # 後続の処理が実行されていることを確認
+    mock_create_issues_uc.execute.assert_called()
+    # プロジェクトが見つからないのでアイテム追加は呼ばれない
+    mock_github_client.add_item_to_project_v2.assert_not_called()
+
+def test_execute_create_issues_unexpected_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc):
+    """Issue作成時に予期せぬ例外が発生した場合、GitHubClientErrorにラップされる""" # テストの説明を修正
+    # 基本設定
+    mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
+    # Issue作成で予期せぬ例外
+    unexpected_error = TypeError("Issue data validation failed")
+    mock_create_issues_uc.execute.side_effect = unexpected_error
+
+    # 期待する例外を GitHubClientError に変更
+    with pytest.raises(GitHubClientError) as excinfo:
+        result = create_resources_use_case.execute(
+            parsed_data=DUMMY_PARSED_DATA_WITH_DETAILS,
+            repo_name_input=DUMMY_REPO_NAME_FULL,
+            project_name=DUMMY_PROJECT_NAME
+        )
+    # ラップされた例外のメッセージや元の例外タイプを確認するアサーションを追加
+    assert "An unexpected critical error occurred" in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, TypeError) # 元の例外がTypeErrorであること
+
+    # 依存メソッドの呼び出しを検証
+    mock_create_repo_uc.execute.assert_called_once()
+    # プロジェクト検索はIssue作成前に呼ばれる
+    mock_github_client.find_project_v2_node_id.assert_called_once()
+    # Issue作成UseCaseも呼ばれる (ここでエラー発生)
     mock_create_issues_uc.execute.assert_called_once()
-    call_args = mock_create_issues_uc.execute.call_args
-    milestone_id_map = call_args[0][3]  # 4番目の引数
-    assert milestone_id_map == {"MilestoneA": 101}  # 成功したものだけ
+    # Issue作成でエラーとなったためプロジェクトへのアイテム追加は呼ばれない
+    mock_github_client.add_item_to_project_v2.assert_not_called()
 
-    # ログの検証 - 実際の出力に合わせて修正
-    assert "Found 2 unique milestones to process" in caplog.text
-    assert "Processing milestone 1/2: 'MilestoneA'" in caplog.text or "Processing milestone 1/2: 'MilestoneB'" in caplog.text
-    assert "Processing milestone 2/2: 'MilestoneA'" in caplog.text or "Processing milestone 2/2: 'MilestoneB'" in caplog.text
-    # 成功メッセージは現在出力されていないので削除
-    # エラーメッセージの形式を修正
-    assert "Failed to ensuring milestone 'MilestoneB' in test-owner/test-repo: Failed to create milestone" in caplog.text
-    assert "Step 5 finished. Processed milestones: 1/2, Failed: 1." in caplog.text
-    assert "Failed milestones: ['MilestoneB']" in caplog.text
 
 # --- 追加のテストケース ---
 
