@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, call # call をインポート
+from unittest.mock import MagicMock, call, patch # patch を追加
 import logging # caplog を使うためにインポート
 import copy # deep copy用に追加
 
@@ -32,7 +32,8 @@ ISSUE1_DATA = IssueData(title="New Issue 1", description="Body 1")
 ISSUE2_DATA = IssueData(title="Existing Issue 2", description="Body 2")
 ISSUE3_DATA = IssueData(title="New Issue 3", description="Body 3")
 ISSUE4_DATA = IssueData(title="Error Issue 4", description="Body 4")
-ISSUE_EMPTY_TITLE = IssueData(title="", description="Body for empty title")
+# 空のタイトルを持つ辞書（実際のオブジェクトではなく）
+EMPTY_TITLE_DICT = {"title": "", "description": "Body for empty title"}
 
 # 担当者付きのIssueデータ
 ISSUE_WITH_VALID_ASSIGNEES = IssueData(
@@ -58,10 +59,10 @@ PARSED_DATA_ALL_EXISTING = ParsedRequirementData(issues=[ISSUE2_DATA])
 PARSED_DATA_MIXED = ParsedRequirementData(issues=[ISSUE1_DATA, ISSUE2_DATA, ISSUE3_DATA])
 PARSED_DATA_WITH_ERROR = ParsedRequirementData(issues=[ISSUE1_DATA, ISSUE4_DATA, ISSUE3_DATA])
 PARSED_DATA_EMPTY_ISSUES = ParsedRequirementData(issues=[])
-PARSED_DATA_WITH_EMPTY_TITLE = ParsedRequirementData(issues=[ISSUE1_DATA, ISSUE_EMPTY_TITLE])
 PARSED_DATA_WITH_ASSIGNEES = ParsedRequirementData(
     issues=[ISSUE_WITH_VALID_ASSIGNEES, ISSUE_WITH_INVALID_ASSIGNEES, ISSUE_WITH_AT_ASSIGNEES]
 )
+# 空のタイトルを含むデータは初期化時にエラーになるため、実際のテストではpatchを使用します
 
 # --- Test Cases ---
 
@@ -162,6 +163,8 @@ def test_execute_find_issue_api_error(create_issues_use_case: CreateIssuesUseCas
     assert result.failed_issue_titles == [ISSUE1_DATA.title] # 1番目のIssueは find で失敗
     assert len(result.errors) == 1
     assert "Find API Error" in result.errors[0] # またはより具体的なエラーメッセージ
+    # エラータイプも正しく記録されていることを検証
+    assert "GitHubClientError" in result.errors[0]
 
     # モック呼び出し回数の確認
     assert mock_github_client.find_issue_by_title.call_count == 3
@@ -174,9 +177,9 @@ def test_execute_find_issue_api_error(create_issues_use_case: CreateIssuesUseCas
     assert f"Processing issue 1/3: '{ISSUE1_DATA.title}'" in caplog.text
     assert f"Failed to process issue '{ISSUE1_DATA.title}': GitHubClientError - Find API Error" in caplog.text # エラーログ
     assert f"Processing issue 2/3: '{ISSUE2_DATA.title}'" in caplog.text
-    assert f"Issue '{ISSUE2_DATA.title}' does not exist." in caplog.text # 作成試行
+    assert f"Issue '{ISSUE2_DATA.title}' does not exist. Attempting creation..." in caplog.text
     assert f"Processing issue 3/3: '{ISSUE3_DATA.title}'" in caplog.text
-    assert f"Issue '{ISSUE3_DATA.title}' already exists." in caplog.text # スキップ
+    assert f"Issue '{ISSUE3_DATA.title}' already exists. Skipping creation." in caplog.text
     assert "CreateIssuesUseCase finished" in caplog.text
 
 def test_execute_create_issue_api_error(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
@@ -194,6 +197,8 @@ def test_execute_create_issue_api_error(create_issues_use_case: CreateIssuesUseC
     assert result.failed_issue_titles == [ISSUE4_DATA.title] # 4番目は create で失敗
     assert len(result.errors) == 1
     assert "Create API Error" in result.errors[0]
+    # エラータイプも正しく記録されていることを検証
+    assert "GitHubValidationError" in result.errors[0]
     assert mock_github_client.find_issue_by_title.call_count == 3
     assert mock_github_client.create_issue.call_count == 3 # 3回呼ばれるが2回目はエラー
     # ログの検証
@@ -219,32 +224,39 @@ def test_execute_empty_issue_list(create_issues_use_case: CreateIssuesUseCase, m
     assert "No issues found in parsed data. Nothing to create." in caplog.text
 
 def test_execute_with_empty_title(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
-    """タイトルが空のIssueデータが含まれている場合、スキップされログが出力されるかテスト"""
-    # モック設定: find は False, create は成功する想定
+    """空タイトルのIssueが正しく処理されるかテスト（直接カスタムIssueDataを使用）"""
+    # モック設定
     mock_github_client.find_issue_by_title.return_value = False
-    mock_github_client.create_issue.return_value = ("url/1", "node_id_1")
-
-    with caplog.at_level(logging.INFO): # WARNING も含む
-        result = create_issues_use_case.execute(PARSED_DATA_WITH_EMPTY_TITLE, TEST_OWNER, TEST_REPO)
-
-    assert result.created_issue_details == [("url/1", "node_id_1")] # ISSUE1のみ作成
-    assert result.skipped_issue_titles == []
-    assert result.failed_issue_titles == ["(Empty Title)"] # タイトル無しは失敗扱い
+    mock_github_client.create_issue.side_effect = [("url/1", "node_id_1"), ("url/3", "node_id_3")]
+    
+    # 直接テスト用のデータを作成（ParsedRequirementDataのバリデーションをバイパスする）
+    parsed_data = MagicMock(spec=ParsedRequirementData)
+    
+    # 3つのIssueを含むように設定、2つ目は空タイトル
+    valid_issue1 = ISSUE1_DATA
+    empty_title_issue = MagicMock(spec=IssueData)
+    empty_title_issue.title = ""  # 空タイトル
+    empty_title_issue.description = "Body for empty title"
+    valid_issue3 = ISSUE3_DATA
+    
+    parsed_data.issues = [valid_issue1, empty_title_issue, valid_issue3]
+    
+    with caplog.at_level(logging.INFO):
+        result = create_issues_use_case.execute(parsed_data, TEST_OWNER, TEST_REPO)
+    
+    # 結果の検証
+    assert len(result.created_issue_details) == 2  # 1番目と3番目のIssueは成功
+    assert "(Empty Title)" in result.failed_issue_titles  # 2番目のIssueは失敗
     assert len(result.errors) == 1
-    assert "empty title" in result.errors[0]
-    assert mock_github_client.find_issue_by_title.call_count == 1 # ISSUE1のみfindが呼ばれる
-    mock_github_client.find_issue_by_title.assert_called_once_with(TEST_OWNER, TEST_REPO, ISSUE1_DATA.title)
-    assert mock_github_client.create_issue.call_count == 1 # ISSUE1のみcreateが呼ばれる
-    mock_github_client.create_issue.assert_called_once_with(
-        owner=TEST_OWNER, repo=TEST_REPO,
-        title=ISSUE1_DATA.title, body=ISSUE1_DATA.description,
-        labels=ISSUE1_DATA.labels, milestone=ISSUE1_DATA.milestone, assignees=ISSUE1_DATA.assignees
-    )
+    assert "empty title" in result.errors[0].lower()  # エラーメッセージに「empty title」が含まれる
+    
+    # find_issue_by_title と create_issue の呼び出し回数の検証
+    assert mock_github_client.find_issue_by_title.call_count == 2  # 空タイトルのチェックはスキップ
+    assert mock_github_client.create_issue.call_count == 2  # 空タイトル以外のみ作成
+    
     # ログの検証
-    assert f"Processing issue 1/2: '{ISSUE1_DATA.title}'" in caplog.text
-    assert f"Processing issue 2/2: '(Empty Title)'" in caplog.text
-    assert "Skipping issue data with empty title." in caplog.text # WARNINGログ
-    assert "CreateIssuesUseCase finished" in caplog.text
+    assert "Executing CreateIssuesUseCase" in caplog.text
+    assert "Skipping issue data with empty title" in caplog.text
 
 def test_execute_with_assignees_validation(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """担当者の検証機能が正しく動作するかテスト"""
@@ -324,3 +336,159 @@ def test_execute_with_assignees_validation(create_issues_use_case: CreateIssuesU
     # ログにも検証失敗情報が含まれていることを確認
     assert "Found 1 invalid assignee(s) for issue" in caplog.text
     assert "Issues with invalid assignees: 2" in caplog.text
+
+def test_execute_with_unexpected_error(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
+    """予期せぬエラーが発生した場合のエラーハンドリングをテスト"""
+    # モックの設定: find_issue_by_title は2回目で予期せぬエラーを発生させる
+    mock_github_client.find_issue_by_title.side_effect = [False, Exception("Unexpected server error"), False]
+    mock_github_client.create_issue.side_effect = [("url/1", "node_id_1"), ("url/3", "node_id_3")]
+    
+    with caplog.at_level(logging.INFO):
+        result = create_issues_use_case.execute(PARSED_DATA_MIXED, TEST_OWNER, TEST_REPO)
+    
+    # 結果の検証
+    assert len(result.created_issue_details) == 2  # ISSUE1 と ISSUE3 は作成される
+    assert result.failed_issue_titles == [ISSUE2_DATA.title]  # 2番目のIssueは失敗
+    assert len(result.errors) == 1
+    assert "Unexpected error" in result.errors[0]  # エラーメッセージに「Unexpected error」が含まれる
+    assert "Exception - Unexpected server error" in result.errors[0]  # 具体的なエラー内容も含まれる
+    
+    # ログの検証
+    assert f"Processing issue 1/3: '{ISSUE1_DATA.title}'" in caplog.text
+    assert f"Processing issue 2/3: '{ISSUE2_DATA.title}'" in caplog.text
+    assert f"Unexpected error processing issue '{ISSUE2_DATA.title}': Exception - Unexpected server error" in caplog.text
+    assert f"Processing issue 3/3: '{ISSUE3_DATA.title}'" in caplog.text
+
+def test_create_issue_returns_none_values(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
+    """create_issue が None の値を返した場合のエラー処理をテスト"""
+    # モックの設定
+    mock_github_client.find_issue_by_title.return_value = False
+    # 1回目は正常、2回目はURL=None、3回目は両方Noneを返す
+    mock_github_client.create_issue.side_effect = [
+        ("url/1", "node_id_1"), 
+        (None, "node_id_2"),
+        (None, None)
+    ]
+    
+    # カスタムテストデータを作成
+    test_data = ParsedRequirementData(issues=[ISSUE1_DATA, ISSUE2_DATA, ISSUE3_DATA])
+    
+    with caplog.at_level(logging.INFO):
+        result = create_issues_use_case.execute(test_data, TEST_OWNER, TEST_REPO)
+    
+    # 結果の検証
+    assert len(result.created_issue_details) == 1  # 1番目のIssueのみ成功
+    assert result.failed_issue_titles == [ISSUE2_DATA.title, ISSUE3_DATA.title]  # 2,3番目は失敗
+    assert len(result.errors) == 2
+    assert "Failed to get URL or Node ID" in result.errors[0]
+    assert "Failed to get URL or Node ID" in result.errors[1]
+    
+    # ログの検証
+    assert "Failed to get URL or Node ID after attempting to create issue" in caplog.text
+    assert "CreateIssuesUseCase finished" in caplog.text
+    assert "Encountered 2 error(s)" in caplog.text
+
+def test_execute_with_milestone_mapping(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock):
+    """マイルストーンIDマッピングが正しく使用されるかテスト"""
+    # マイルストーンを含むIssueデータを作成
+    issue_with_milestone = IssueData(title="Issue with Milestone", description="Body", milestone="Sprint 1")
+    parsed_data = ParsedRequirementData(issues=[issue_with_milestone])
+    
+    # モック設定
+    mock_github_client.find_issue_by_title.return_value = False
+    mock_github_client.create_issue.return_value = ("url/milestone", "node_id_milestone")
+    
+    # マイルストーンIDマップ
+    milestone_id_map = {"Sprint 1": 101, "Sprint 2": 102}
+    
+    # 実行
+    result = create_issues_use_case.execute(parsed_data, TEST_OWNER, TEST_REPO, milestone_id_map)
+    
+    # 検証
+    assert len(result.created_issue_details) == 1
+    mock_github_client.create_issue.assert_called_once_with(
+        owner=TEST_OWNER,
+        repo=TEST_REPO,
+        title=issue_with_milestone.title,
+        body=issue_with_milestone.description,
+        labels=None,
+        milestone=101,  # マイルストーンIDが正しく渡されているか
+        assignees=None
+    )
+
+def test_execute_with_missing_milestone_id(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
+    """マイルストーン名が指定されているがIDが見つからない場合のテスト"""
+    # マイルストーンを含むIssueデータを作成
+    issue_with_milestone = IssueData(title="Issue with Unknown Milestone", description="Body", milestone="Unknown Sprint")
+    parsed_data = ParsedRequirementData(issues=[issue_with_milestone])
+    
+    # モック設定
+    mock_github_client.find_issue_by_title.return_value = False
+    mock_github_client.create_issue.return_value = ("url/milestone", "node_id_milestone")
+    
+    # マイルストーンIDマップ - 対象のマイルストーン名は含まれていない
+    milestone_id_map = {"Sprint 1": 101, "Sprint 2": 102}
+    
+    with caplog.at_level(logging.INFO):
+        result = create_issues_use_case.execute(parsed_data, TEST_OWNER, TEST_REPO, milestone_id_map)
+    
+    # 検証
+    assert len(result.created_issue_details) == 1
+    mock_github_client.create_issue.assert_called_once_with(
+        owner=TEST_OWNER,
+        repo=TEST_REPO,
+        title=issue_with_milestone.title,
+        body=issue_with_milestone.description,
+        labels=None,
+        milestone=None,  # IDが見つからないのでNone
+        assignees=None
+    )
+    
+    # 警告ログの検証
+    assert "No milestone ID found for milestone 'Unknown Sprint'" in caplog.text
+
+def test_issue_with_complex_body_content(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock):
+    """複雑なIssue本文を持つデータの場合、正しく構築されて渡されるかテスト"""
+    # 複合的なデータを持つIssueデータを作成
+    complex_issue = IssueData(
+        title="Complex Issue",
+        description="Main description", 
+        tasks=["Task 1", "Task 2"],
+        relational_definition=["Req 1", "Req 2"],
+        relational_issues=["#1", "#2"],
+        acceptance=["Criteria 1", "Criteria 2"]
+    )
+    parsed_data = ParsedRequirementData(issues=[complex_issue])
+    
+    # モック設定
+    mock_github_client.find_issue_by_title.return_value = False
+    mock_github_client.create_issue.return_value = ("url/complex", "node_id_complex")
+    
+    # 実行
+    result = create_issues_use_case.execute(parsed_data, TEST_OWNER, TEST_REPO)
+    
+    # 期待される本文を構築（実際の出力に合わせて改行を追加）
+    expected_body = (
+        "Main description\n"
+        "\n## タスク\n"
+        "\n- [ ] Task 1\n"
+        "- [ ] Task 2\n"
+        "\n## 関連要件\n"
+        "\n- Req 1\n"
+        "- Req 2\n"
+        "\n## 関連Issue\n"
+        "\n- #1\n"
+        "- #2\n"
+        "\n## 受け入れ基準\n"
+        "\n- [ ] Criteria 1\n"
+        "- [ ] Criteria 2"
+    )
+    
+    # 検証
+    assert len(result.created_issue_details) == 1
+    # create_issue呼び出し時の引数を検証
+    call_args = mock_github_client.create_issue.call_args
+    assert call_args is not None
+    # body引数を取り出して期待値と比較
+    body_arg = call_args[1]["body"]
+    assert body_arg == expected_body

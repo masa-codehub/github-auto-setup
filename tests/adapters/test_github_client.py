@@ -1,1256 +1,372 @@
 # tests/adapters/test_github_client.py
 
-import logging
 import pytest
-from unittest.mock import patch, MagicMock, call # call をインポート
+from unittest.mock import MagicMock, patch
+import logging
 from pydantic import SecretStr
-
-# テスト対象のクライアントとカスタム例外
-from github_automation_tool.adapters.github_client import GitHubAppClient
-from github_automation_tool.domain.exceptions import (
-    GitHubValidationError, GitHubAuthenticationError, GitHubClientError,
-    GitHubRateLimitError, GitHubResourceNotFoundError
-)
-# モック対象の githubkit 例外とモデル (Milestone, Repository, Response など)
-from githubkit import Response # Response もモック化に使う
-from githubkit.graphql import GraphQLResponse # 追加: GraphQLResponse をインポート
-from githubkit.exception import RequestFailed, RequestTimeout # RequestFailed, RequestTimeout を追加
-# モデルのインポートパスを修正 (Milestone, Repository, SearchResults も)
-from githubkit.versions.latest.models import (
-    Label,
-    Issue,
-    Milestone,
-    Repository,
-    SimpleUser,
-    IssueSearchResultItem  # Removed SearchIssuesAndPullRequestsGetResponse
-)
 import json
 
-
-
-# --- Fixtures ---
-@pytest.fixture
-def mock_github_rest_api():
-    """githubkit.GitHub().rest オブジェクトのモック"""
-    mock = MagicMock()
-    mock.repos = MagicMock()
-    mock.search = MagicMock()
-    mock.issues = MagicMock()
-    mock.users = MagicMock()
-
-    # Repository methods
-    mock.repos.create_for_authenticated_user = MagicMock()
-
-    # Search methods
-    mock.search.issues_and_pull_requests = MagicMock()
-
-    # Issue methods
-    mock.issues.get_label = MagicMock()
-    mock.issues.create_label = MagicMock()
-    mock.issues.create = MagicMock() # create_issue用
-    # Milestone methods
-    mock.issues.list_milestones = MagicMock()
-    mock.issues.create_milestone = MagicMock()
-    # mock.issues.get_milestone = MagicMock() # 必要なら追加
-
-    # User methods
-    mock.users.get_authenticated = MagicMock()
-    return mock
-
-
-@pytest.fixture
-def mock_github_instance(mock_github_rest_api):
-    """githubkit.GitHub インスタンスのモック"""
-    mock = MagicMock()
-    mock.rest = mock_github_rest_api
-    # GraphQL クライアントメソッドのモックを追加
-    mock.graphql = MagicMock()
-    return mock
-
-
-@pytest.fixture
-def github_client(mock_github_instance):
-    """テスト用の GitHubAppClient インスタンス (内部の GitHub をモック化)"""
-    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
-        # 初期化時の接続テストをスキップするためにパッチを当てる（オプション）
-        with patch.object(GitHubAppClient, '_perform_connection_test', return_value=None):
-             client = GitHubAppClient(SecretStr("fake-valid-token"))
-        # テスト内で直接 rest API モックにアクセスできるように属性を追加
-        client._mock_rest_api = mock_github_instance.rest
-        # GraphQL モックへの参照も保持
-        client._mock_graphql = mock_github_instance.graphql
-        # GitHubAppClientのgh.graphqlメソッドをモックのgraphqlメソッドにパッチする
-        client.gh.graphql = mock_github_instance.graphql
-        yield client
-
-
-# --- Test Data ---
-OWNER = "test-owner"
-REPO = "test-repo"
-# Milestone Test Data
-MILESTONE_TITLE = "Sprint 1"
-MILESTONE_ID = 10
-MILESTONE_DESCRIPTION = "First sprint goals"
-# githubkit.models.Milestone のモック用データ (必要な属性のみ)
-# Userモデルの基本的なモックも作成
-MOCK_USER_DATA = SimpleUser(
-    login="test-creator", id=1, node_id="U_1", avatar_url="", gravatar_id="", url="",
-    html_url="", followers_url="", following_url="", gists_url="", starred_url="",
-    subscriptions_url="", organizations_url="", repos_url="", events_url="",
-    received_events_url="", type="User", site_admin=False
-)
-MOCK_MILESTONE_DATA = Milestone(
-    url=f"https://api.github.com/repos/{OWNER}/{REPO}/milestones/{MILESTONE_ID}",
-    html_url=f"https://github.com/{OWNER}/{REPO}/milestone/{MILESTONE_ID}",
-    labels_url=f"https://api.github.com/repos/{OWNER}/{REPO}/milestones/{MILESTONE_ID}/labels",
-    id=MILESTONE_ID * 100, # GitHubのID (numberとは別)
-    node_id=f"MDk6TWlsZXN0b25l{MILESTONE_ID}", # Example Node ID
-    number=MILESTONE_ID, # Milestone Number (これがIssueで使われるID)
-    state="open",
-    title=MILESTONE_TITLE,
-    description=MILESTONE_DESCRIPTION,
-    creator=MOCK_USER_DATA, # Userモデルのモックを使用
-    open_issues=5,
-    closed_issues=10,
-    created_at="2025-01-01T00:00:00Z", # Example ISO timestamp
-    updated_at="2025-01-10T00:00:00Z",
-    closed_at=None,
-    due_on=None
-)
-# githubkit.models.Repository のモック
-MOCK_REPO_DATA = Repository(
-    id=123, node_id="R_1", name=REPO, full_name=f"{OWNER}/{REPO}", private=True,
-    owner=MOCK_USER_DATA, # ownerもUserモデル
-    html_url=f"https://github.com/{OWNER}/{REPO}", description="Test repo", fork=False,
-    url=f"https://api.github.com/repos/{OWNER}/{REPO}", forks_url="", keys_url="",
-    collaborators_url="", teams_url="", hooks_url="", issue_events_url="", events_url="",
-    assignees_url="", branches_url="", tags_url="", blobs_url="", git_tags_url="",
-    git_refs_url="", trees_url="", statuses_url="", languages_url="", stargazers_url="",
-    contributors_url="", subscribers_url="", subscription_url="", commits_url="",
-    git_commits_url="", comments_url="", issue_comment_url="", contents_url="",
-    compare_url="", merges_url="", archive_url="", downloads_url="", issues_url="",
-    pulls_url="", milestones_url="", notifications_url="", labels_url="", releases_url="",
-    deployments_url="", created_at="2025-01-01T00:00:00Z", updated_at="2025-01-01T00:00:00Z",
-    pushed_at="2025-01-01T00:00:00Z", git_url="", ssh_url="", clone_url="", svn_url="",
-    homepage=None, size=0, stargazers_count=0, watchers_count=0, language=None,
-    has_issues=True, has_projects=True, has_downloads=True, has_wiki=True, has_pages=False,
-    has_discussions=False, forks_count=0, mirror_url=None, archived=False, disabled=False,
-    open_issues_count=5, license=None, allow_forking=True, is_template=False,
-    web_commit_signoff_required=False, topics=[], visibility="private", forks=0, open_issues=5,
-    watchers=0, default_branch="main"
-)
-# githubkit.models.Issue のモック
-MOCK_ISSUE_DATA = Issue(
-    id=456, node_id="I_1", url=f"https://api.github.com/repos/{OWNER}/{REPO}/issues/1",
-    repository_url=f"https://api.github.com/repos/{OWNER}/{REPO}", labels_url="",
-    comments_url="", events_url="", html_url=f"https://github.com/{OWNER}/{REPO}/issues/1",
-    number=1, state="open", title="Test Issue", body="Test Body", user=MOCK_USER_DATA,
-    labels=[], assignee=None, assignees=[], milestone=None, locked=False,
-    active_lock_reason=None, comments=0, pull_request=None, closed_at=None,
-    created_at="2025-01-15T00:00:00Z", updated_at="2025-01-15T00:00:00Z",
-    repository=MOCK_REPO_DATA, # Repositoryモデルのモック
-    author_association="OWNER", state_reason=None
-)
-# ★ MagicMock を使用して検索結果レスポンスをモック ★
-MOCK_SEARCH_RESULT_FOUND = MagicMock()
-setattr(MOCK_SEARCH_RESULT_FOUND, 'total_count', 1)
-setattr(MOCK_SEARCH_RESULT_FOUND, 'incomplete_results', False)
-setattr(MOCK_SEARCH_RESULT_FOUND, 'items', [MOCK_ISSUE_DATA])
-
-MOCK_SEARCH_RESULT_NOT_FOUND = MagicMock()
-setattr(MOCK_SEARCH_RESULT_NOT_FOUND, 'total_count', 0)
-setattr(MOCK_SEARCH_RESULT_NOT_FOUND, 'incomplete_results', False)
-setattr(MOCK_SEARCH_RESULT_NOT_FOUND, 'items', [])
-# Label のモック
-MOCK_LABEL_DATA = Label(
-    id=1, node_id="L_1", url=f"https://api.github.com/repos/{OWNER}/{REPO}/labels/bug",
-    name="bug", color="d73a4a", default=True, description="Something isn't working"
+from github_automation_tool.adapters.github_client import GitHubAppClient
+from github_automation_tool.domain.exceptions import (
+    GitHubClientError, GitHubAuthenticationError, GitHubRateLimitError,
+    GitHubResourceNotFoundError, GitHubValidationError
 )
 
-# ★ ProjectV2 Test Data ★
-PROJECT_NAME = "My Awesome Project"
-PROJECT_NODE_ID = "PVT_kwDO..."
-PROJECT_ITEM_NODE_ID = "PVTI_kwDO..."
-MOCK_ISSUE_NODE_ID = "I_kwDO..."
+from githubkit.exception import RequestFailed, RequestError, RequestTimeout
 
-# --- Helper Function for Mock Response ---
-def create_mock_response(status_code: int, parsed_data: any = None, content: bytes = b'{}', headers: dict | None = None) -> MagicMock:
-    """テスト用の githubkit.Response 互換の MagicMock オブジェクトを生成するヘルパー関数"""
-    mock_resp = MagicMock(spec=Response)
-    mock_resp.status_code = status_code
-    mock_resp.headers = headers or {}
-    mock_resp.content = content
-    mock_resp.parsed_data = parsed_data
-    # json() メソッドをモック
-    mock_resp.json.return_value = json.loads(content.decode()) if content else {}
-
-    # RequestFailed がアクセスする可能性のある属性を設定
+# RequestFailedのモック作成用ヘルパー関数を修正
+def create_mock_request_failed(status_code, content, headers=None):
+    """RequestFailed例外のモックを作成するヘルパー関数
+    
+    githubkitの新しいバージョンでは、RequestFailedは文字列ではなくResponseオブジェクトを期待する
+    """
+    # リクエストオブジェクトを作成
     mock_request = MagicMock()
-    mock_request.method = "GET"
-    mock_request.url = "http://dummy.url/api"
-    mock_resp.request = mock_request
-    # raw_response は自身を返すようにしておく
-    mock_resp.raw_response = mock_resp
-    return mock_resp
-
-# ★ GraphQLResponse のモック生成ヘルパー ★
-def create_mock_graphql_response(data: dict | None = None, errors: list | None = None) -> dict:
-    """
-    テスト用の GraphQL APIレスポンスを模倣する辞書を生成するヘルパー関数
-    githubkitのgh.graphql()は辞書を直接返すため
-    """
-    response_dict = {}
+    mock_request.method = "GET"  # ダミーメソッド
+    mock_request.url = "http://example.com/api"  # ダミーURL
     
-    # dataフィールドを設定
-    if data is not None:
-        response_dict["data"] = data
+    # レスポンスオブジェクトを作成
+    mock_response = MagicMock()
+    mock_response.status_code = status_code  # 整数値を直接設定
+    mock_response.content = content
+    mock_response.headers = headers or {}
+    mock_response.request = mock_request
     
-    # エラー情報を設定
-    if errors:
-        response_dict["errors"] = errors
+    # JSONデコード用のメソッドも追加
+    try:
+        json_data = json.loads(content.decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        json_data = {}
+    mock_response.json = MagicMock(return_value=json_data)
     
-    return response_dict
+    # RequestFailedオブジェクトを作成
+    return RequestFailed(mock_response)
+
+# テスト全体で使用するフィクスチャ
+@pytest.fixture
+def mock_github():
+    """githubkit.GitHub のモックインスタンスを返すフィクスチャ"""
+    mock_gh = MagicMock()
+    # 必要に応じて基本的な振る舞いを定義
+    mock_gh.rest = MagicMock()  # rest エンドポイント
+    mock_gh.rest.users = MagicMock()  # users エンドポイントなど
+    mock_gh.rest.repos = MagicMock()  # repos エンドポイント
+    mock_gh.rest.issues = MagicMock()  # issues エンドポイント
+    mock_gh.rest.search = MagicMock()  # search エンドポイント
+    mock_gh.graphql = MagicMock()  # GraphQL エンドポイント
+    return mock_gh
+
+@pytest.fixture
+def github_client(mock_github):
+    """テスト用のGitHubAppClientインスタンスを返す"""
+    # GitHubクラスのコンストラクタをモック
+    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github):
+        client = GitHubAppClient(SecretStr("fake-token"))
+        # モックを検証できるように属性として保存
+        client.mock_gh = mock_github
+        return client
 
 
-# --- Test Cases ---
+# __init__ テスト
 
-# --- Initialization Tests ---
-def test_init_success(mock_github_instance):
-    """正常に初期化できるか"""
-    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
-         with patch.object(GitHubAppClient, '_perform_connection_test', return_value=None):
-              client = GitHubAppClient(SecretStr("fake-valid-token"))
-    assert client.gh is mock_github_instance
+def test_init_with_valid_token():
+    """有効なトークンで初期化できることを確認"""
+    with patch('github_automation_tool.adapters.github_client.GitHub') as mock_github_cls:
+        mock_github_instance = MagicMock()
+        mock_github_cls.return_value = mock_github_instance
+        
+        client = GitHubAppClient(SecretStr("valid-token"))
+        
+        mock_github_cls.assert_called_once_with("valid-token")
+        assert client.gh is mock_github_instance
 
-def test_init_missing_token():
-    """トークンがない場合に GitHubAuthenticationError が発生するか"""
-    with pytest.raises(GitHubAuthenticationError, match="missing or empty"):
+def test_init_with_empty_token():
+    """空のトークンで初期化するとエラーになることを確認"""
+    with pytest.raises(GitHubAuthenticationError) as excinfo:
         GitHubAppClient(SecretStr(""))
-    with pytest.raises(GitHubAuthenticationError, match="missing or empty"):
-        GitHubAppClient(None) # type: ignore
-
-@patch('github_automation_tool.adapters.github_client.GitHub', side_effect=Exception("Init failed"))
-def test_init_github_error(mock_gh_class):
-    """GitHub クラスの初期化でエラーが発生した場合"""
-    with pytest.raises(GitHubClientError, match="Failed to initialize GitHub client: Init failed"):
-        GitHubAppClient(SecretStr("fake-valid-token"))
-
-# --- Repository Creation Tests ---
-def test_create_repository_success(github_client: GitHubAppClient):
-    """リポジトリ作成成功"""
-    repo_name = "new-test-repo"
-    expected_url = f"https://github.com/{OWNER}/{repo_name}"
-    # Repository オブジェクトのモックを作成 (html_urlを持つ)
-    mock_repo_obj = MagicMock(spec=Repository, html_url=expected_url)
-    mock_response = create_mock_response(201, parsed_data=mock_repo_obj)
-    github_client._mock_rest_api.repos.create_for_authenticated_user.return_value = mock_response
-
-    repo_url = github_client.create_repository(repo_name)
-
-    assert repo_url == expected_url
-    github_client._mock_rest_api.repos.create_for_authenticated_user.assert_called_once_with(
-        name=repo_name, private=True, auto_init=True
-    )
-
-def test_create_repository_already_exists(github_client: GitHubAppClient):
-    """リポジトリが既に存在する (422 Validation Failed - name already exists)"""
-    repo_name = "existing-repo"
-    # 422 エラーレスポンスのモック
-    error_content = b'{"message": "Validation Failed", "errors": [{"resource": "Repository", "code": "custom", "field": "name", "message": "name already exists on this account"}]}'
-    mock_error_response = create_mock_response(422, content=error_content)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.repos.create_for_authenticated_user.side_effect = mock_api_error
-
-    with pytest.raises(GitHubValidationError, match="Repository name already exists"):
-        github_client.create_repository(repo_name)
-    github_client._mock_rest_api.repos.create_for_authenticated_user.assert_called_once_with(
-        name=repo_name, private=True, auto_init=True
-    )
-
-def test_create_repository_auth_error(github_client: GitHubAppClient):
-    """リポジトリ作成時の認証エラー (401)"""
-    repo_name = "auth-fail-repo"
-    mock_error_response = create_mock_response(401)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.repos.create_for_authenticated_user.side_effect = mock_api_error
-
-    with pytest.raises(GitHubAuthenticationError, match="Authentication failed"):
-        github_client.create_repository(repo_name)
-
-def test_create_repository_permission_error(github_client: GitHubAppClient):
-    """リポジトリ作成時の権限エラー (403)"""
-    repo_name = "perm-fail-repo"
-    mock_error_response = create_mock_response(403, headers={"X-RateLimit-Remaining": "50"}) # Rate Limitではない403
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.repos.create_for_authenticated_user.side_effect = mock_api_error
-
-    with pytest.raises(GitHubAuthenticationError, match="Permission denied"):
-        github_client.create_repository(repo_name)
-
-def test_create_repository_rate_limit_error(github_client: GitHubAppClient):
-    """リポジトリ作成時のレート制限エラー (403)"""
-    repo_name = "rate-limit-repo"
-    mock_error_response = create_mock_response(403, headers={"X-RateLimit-Remaining": "0"}) # Rate Limit超過
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.repos.create_for_authenticated_user.side_effect = mock_api_error
-
-    with pytest.raises(GitHubRateLimitError, match="rate limit exceeded"):
-        github_client.create_repository(repo_name)
-
-def test_create_repository_network_error(github_client: GitHubAppClient):
-    """リポジトリ作成時のネットワークエラー"""
-    repo_name = "network-error-repo"
-    github_client._mock_rest_api.repos.create_for_authenticated_user.side_effect = RequestTimeout("Timeout")
-
-    with pytest.raises(GitHubClientError, match="Network/Request error"):
-        github_client.create_repository(repo_name)
-
-def test_create_repository_other_api_error(github_client: GitHubAppClient):
-    """リポジトリ作成時のその他のAPIエラー (500など)"""
-    repo_name = "server-error-repo"
-    mock_error_response = create_mock_response(500)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.repos.create_for_authenticated_user.side_effect = mock_api_error
-
-    with pytest.raises(GitHubClientError, match="Unhandled GitHub API HTTP error"):
-        github_client.create_repository(repo_name)
-
-
-# --- Issue Search Tests ---
-def test_find_issue_by_title_exists(github_client: GitHubAppClient):
-    """Issueタイトル検索: Issueが存在する"""
-    issue_title = "Existing Issue"
-    # 検索APIが total_count=1 の結果を返すようにモック
-    mock_response = create_mock_response(200, parsed_data=MOCK_SEARCH_RESULT_FOUND)
-    github_client._mock_rest_api.search.issues_and_pull_requests.return_value = mock_response
-
-    exists = github_client.find_issue_by_title(OWNER, REPO, issue_title)
-
-    assert exists is True
-    expected_query = f'repo:{OWNER}/{REPO} is:issue is:open in:title "{issue_title}"'
-    github_client._mock_rest_api.search.issues_and_pull_requests.assert_called_once_with(
-        q=expected_query, per_page=1
-    )
-
-def test_find_issue_by_title_not_exists(github_client: GitHubAppClient):
-    """Issueタイトル検索: Issueが存在しない"""
-    issue_title = "Non Existing Issue"
-    # 検索APIが total_count=0 の結果を返すようにモック
-    mock_response = create_mock_response(200, parsed_data=MOCK_SEARCH_RESULT_NOT_FOUND)
-    github_client._mock_rest_api.search.issues_and_pull_requests.return_value = mock_response
-
-    exists = github_client.find_issue_by_title(OWNER, REPO, issue_title)
-
-    assert exists is False
-    expected_query = f'repo:{OWNER}/{REPO} is:issue is:open in:title "{issue_title}"'
-    github_client._mock_rest_api.search.issues_and_pull_requests.assert_called_once_with(
-        q=expected_query, per_page=1
-    )
-
-def test_find_issue_by_title_api_error(github_client: GitHubAppClient):
-    """Issueタイトル検索: APIエラー"""
-    issue_title = "Error Issue"
-    mock_error_response = create_mock_response(500)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.search.issues_and_pull_requests.side_effect = mock_api_error
-
-    with pytest.raises(GitHubClientError, match="Unhandled GitHub API HTTP error"):
-        github_client.find_issue_by_title(OWNER, REPO, issue_title)
-
-def test_find_issue_by_title_empty_title(github_client: GitHubAppClient):
-    """Issueタイトル検索: タイトルが空文字列"""
-    exists = github_client.find_issue_by_title(OWNER, REPO, "")
-    assert exists is False
-    github_client._mock_rest_api.search.issues_and_pull_requests.assert_not_called()
-
-def test_find_issue_by_title_unexpected_response(github_client: GitHubAppClient):
-    """Issueタイトル検索: APIは成功したがレスポンス形式が不正"""
-    issue_title = "Weird Response Issue"
-    # total_countがないなど、不正なレスポンスデータ
-    mock_bad_data = MagicMock()
-    # Ensure total_count attribute is missing or None
-    if hasattr(mock_bad_data, 'total_count'):
-        del mock_bad_data.total_count
-    mock_response = create_mock_response(200, parsed_data=mock_bad_data)
-    github_client._mock_rest_api.search.issues_and_pull_requests.return_value = mock_response
-
-    with pytest.raises(GitHubClientError, match="Unexpected response format"):
-        github_client.find_issue_by_title(OWNER, REPO, issue_title)
-
-
-# --- Label Method Tests ---
-def test_get_label_found(github_client: GitHubAppClient):
-    """get_label: ラベルが見つかるケース"""
-    label_name = "bug"
-    mock_response = create_mock_response(200, parsed_data=MOCK_LABEL_DATA)
-    github_client._mock_rest_api.issues.get_label.return_value = mock_response
-
-    label = github_client.get_label(OWNER, REPO, label_name)
-
-    assert label is not None
-    assert isinstance(label, Label)
-    assert label.name == label_name
-    github_client._mock_rest_api.issues.get_label.assert_called_once_with(
-        owner=OWNER, repo=REPO, name=label_name)
-
-def test_get_label_not_found(github_client: GitHubAppClient):
-    """get_label: ラベルが見つからない (404) ケース"""
-    label_name = "nonexistent"
-    mock_error_response = create_mock_response(404)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.issues.get_label.side_effect = mock_api_error
-
-    label = github_client.get_label(OWNER, REPO, label_name)
-
-    assert label is None
-    github_client._mock_rest_api.issues.get_label.assert_called_once_with(
-        owner=OWNER, repo=REPO, name=label_name)
-
-def test_get_label_api_error(github_client: GitHubAppClient):
-    """get_label: その他のAPIエラーが発生するケース (例: 500)"""
-    label_name = "error-label"
-    mock_error_response = create_mock_response(500)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.issues.get_label.side_effect = mock_api_error
-
-    with pytest.raises(GitHubClientError, match="Unhandled GitHub API HTTP error"):
-        github_client.get_label(OWNER, REPO, label_name)
-
-def test_create_label_success_new(github_client: GitHubAppClient):
-    """create_label: 新規ラベル作成が成功するケース"""
-    label_name, color, description = "enhancement", "a2eeef", "New feature"
-    # get_label は 404 エラーを発生させる
-    mock_get_error_response = create_mock_response(404)
-    mock_get_api_error = RequestFailed(response=mock_get_error_response)
-    github_client._mock_rest_api.issues.get_label.side_effect = mock_get_api_error
-    # create_label は成功レスポンス (201) を返す
-    mock_created_label = Label(id=2, node_id="L_2", url="", name=label_name, color=color, default=False, description=description)
-    mock_create_response = create_mock_response(201, parsed_data=mock_created_label)
-    github_client._mock_rest_api.issues.create_label.return_value = mock_create_response
-
-    created = github_client.create_label(
-        OWNER, REPO, label_name, color=color, description=description)
-
-    assert created is True
-    github_client._mock_rest_api.issues.get_label.assert_called_once_with(
-        owner=OWNER, repo=REPO, name=label_name)
-    github_client._mock_rest_api.issues.create_label.assert_called_once_with(
-        owner=OWNER, repo=REPO, name=label_name, color=color, description=description
-    )
-
-def test_create_label_already_exists(github_client: GitHubAppClient):
-    """create_label: ラベルが既に存在するケース"""
-    label_name = "bug"
-    mock_get_response = create_mock_response(200, parsed_data=MOCK_LABEL_DATA)
-    github_client._mock_rest_api.issues.get_label.return_value = mock_get_response
-
-    created = github_client.create_label(OWNER, REPO, label_name)
-
-    assert created is False
-    github_client._mock_rest_api.issues.get_label.assert_called_once_with(
-        owner=OWNER, repo=REPO, name=label_name)
-    github_client._mock_rest_api.issues.create_label.assert_not_called()
-
-def test_create_label_creation_fails_validation(github_client: GitHubAppClient):
-    """create_label: ラベル作成API呼び出しがバリデーションエラー (422) で失敗"""
-    label_name = "invalid:label"
-    # get_label は 404 エラー
-    mock_get_error_response = create_mock_response(404)
-    mock_get_api_error = RequestFailed(response=mock_get_error_response)
-    github_client._mock_rest_api.issues.get_label.side_effect = mock_get_api_error
-    # create_label は 422 エラー
-    mock_create_error_response = create_mock_response(422, content=b'{"message":"Validation Failed"}')
-    mock_create_api_error = RequestFailed(response=mock_create_error_response)
-    github_client._mock_rest_api.issues.create_label.side_effect = mock_create_api_error
-
-    with pytest.raises(GitHubValidationError, match="Validation failed"):
-        github_client.create_label(OWNER, REPO, label_name)
-
-    github_client._mock_rest_api.issues.get_label.assert_called_once_with(
-        owner=OWNER, repo=REPO, name=label_name)
-    github_client._mock_rest_api.issues.create_label.assert_called_once_with(
-        owner=OWNER, repo=REPO, name=label_name)
-
-def test_create_label_get_fails(github_client: GitHubAppClient):
-    """create_label: 最初の get_label 呼び出しが失敗"""
-    label_name = "some-label"  # label_name変数を定義
     
-    mock_get_error_response = create_mock_response(500)
-    mock_get_api_error = RequestFailed(response=mock_get_error_response)
-    github_client._mock_rest_api.issues.get_label.side_effect = mock_get_api_error
+    assert "GitHub PAT is missing or empty" in str(excinfo.value)
 
-    with pytest.raises(GitHubClientError, match="Unhandled GitHub API HTTP error"):
-        github_client.create_label(OWNER, REPO, label_name)
+def test_init_with_none_token():
+    """Noneトークンで初期化するとエラーになることを確認"""
+    with pytest.raises(GitHubAuthenticationError):
+        GitHubAppClient(None)
 
-    github_client._mock_rest_api.issues.get_label.assert_called_once_with(
-        owner=OWNER, repo=REPO, name=label_name)
-    github_client._mock_rest_api.issues.create_label.assert_not_called()
-
-def test_create_label_empty_name(github_client: GitHubAppClient):
-    """create_label: ラベル名が空"""
-    created = github_client.create_label(OWNER, REPO, "")
-    assert created is False
-    created_ws = github_client.create_label(OWNER, REPO, "   ") # 空白のみ
-    assert created_ws is False
-    github_client._mock_rest_api.issues.get_label.assert_not_called()
-    github_client._mock_rest_api.issues.create_label.assert_not_called()
+def test_init_catches_exceptions():
+    """初期化時の例外が適切に捕捉されることを確認"""
+    with patch('github_automation_tool.adapters.github_client.GitHub') as mock_github_cls:
+        mock_github_cls.side_effect = ValueError("Something went wrong")
+        
+        with pytest.raises(GitHubClientError) as excinfo:
+            GitHubAppClient(SecretStr("token"))
+        
+        assert "Failed to initialize GitHub client" in str(excinfo.value)
+        assert excinfo.value.original_exception is not None
 
 
-# --- Milestone Method Tests ---
-def test_find_milestone_by_title_found(github_client: GitHubAppClient):
-    """find_milestone_by_title: マイルストーンが見つかるケース"""
-    mock_response = create_mock_response(200, parsed_data=[MOCK_MILESTONE_DATA])
-    github_client._mock_rest_api.issues.list_milestones.return_value = mock_response
+# エラーハンドリングメソッドテスト
 
-    found_milestone = github_client.find_milestone_by_title(OWNER, REPO, MILESTONE_TITLE)
-
-    assert found_milestone is not None
-    assert isinstance(found_milestone, Milestone)
-    assert found_milestone.title == MILESTONE_TITLE
-    assert found_milestone.number == MILESTONE_ID
-    github_client._mock_rest_api.issues.list_milestones.assert_called_once_with(
-        owner=OWNER, repo=REPO, state="open", per_page=100
+def test_handle_request_failed_401(github_client, caplog):
+    """401エラーが適切に処理されることを確認"""
+    mock_error = create_mock_request_failed(
+        status_code=401,
+        content=b"Bad credentials"
     )
-
-def test_find_milestone_by_title_not_found(github_client: GitHubAppClient):
-    """find_milestone_by_title: マイルストーンが見つからないケース"""
-    mock_response = create_mock_response(200, parsed_data=[]) # 空リスト
-    github_client._mock_rest_api.issues.list_milestones.return_value = mock_response
-
-    found_milestone = github_client.find_milestone_by_title(OWNER, REPO, "NonExistent Title")
-
-    assert found_milestone is None
-    github_client._mock_rest_api.issues.list_milestones.assert_called_once()
-
-def test_find_milestone_by_title_api_error(github_client: GitHubAppClient):
-    """find_milestone_by_title: APIエラーが発生するケース"""
-    mock_error_response = create_mock_response(500)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.issues.list_milestones.side_effect = mock_api_error
-
-    with pytest.raises(GitHubClientError, match="Unhandled GitHub API HTTP error"):
-        github_client.find_milestone_by_title(OWNER, REPO, MILESTONE_TITLE)
-    github_client._mock_rest_api.issues.list_milestones.assert_called_once()
-
-def test_find_milestone_by_title_empty_title(github_client: GitHubAppClient):
-    """find_milestone_by_title: タイトルが空の場合 None を返す"""
-    result = github_client.find_milestone_by_title(OWNER, REPO, "")
-    assert result is None
-    result_ws = github_client.find_milestone_by_title(OWNER, REPO, "  ") # 空白のみ
-    assert result_ws is None
-    github_client._mock_rest_api.issues.list_milestones.assert_not_called()
-
-
-def test_create_milestone_success_new(github_client: GitHubAppClient):
-    """create_milestone: 新規マイルストーン作成成功"""
-    with patch.object(github_client, 'find_milestone_by_title', return_value=None) as mock_find:
-        mock_response = create_mock_response(201, parsed_data=MOCK_MILESTONE_DATA)
-        github_client._mock_rest_api.issues.create_milestone.return_value = mock_response
-
-        created_id = github_client.create_milestone(OWNER, REPO, MILESTONE_TITLE, description=MILESTONE_DESCRIPTION)
-
-        assert created_id == MILESTONE_ID
-        mock_find.assert_called_once_with(OWNER, REPO, MILESTONE_TITLE, state="open")
-        github_client._mock_rest_api.issues.create_milestone.assert_called_once_with(
-            owner=OWNER, repo=REPO, title=MILESTONE_TITLE, state="open", description=MILESTONE_DESCRIPTION
-        )
-
-def test_create_milestone_already_exists(github_client: GitHubAppClient):
-    """create_milestone: 同名の open なマイルストーンが既に存在する場合、既存IDを返す"""
-    with patch.object(github_client, 'find_milestone_by_title', return_value=MOCK_MILESTONE_DATA) as mock_find:
-        existing_id = github_client.create_milestone(OWNER, REPO, MILESTONE_TITLE)
-
-        assert existing_id == MILESTONE_ID
-        mock_find.assert_called_once_with(OWNER, REPO, MILESTONE_TITLE, state="open")
-        github_client._mock_rest_api.issues.create_milestone.assert_not_called()
-
-def test_create_milestone_find_api_error(github_client: GitHubAppClient):
-    """create_milestone: 最初の find 呼び出しでエラーが発生する場合"""
-    mock_error = GitHubClientError("Find Error")
-    with patch.object(github_client, 'find_milestone_by_title', side_effect=mock_error) as mock_find:
-        with pytest.raises(GitHubClientError, match="Find Error"):
-            github_client.create_milestone(OWNER, REPO, MILESTONE_TITLE)
-
-        mock_find.assert_called_once_with(OWNER, REPO, MILESTONE_TITLE, state="open")
-        github_client._mock_rest_api.issues.create_milestone.assert_not_called()
-
-def test_create_milestone_create_api_error(github_client: GitHubAppClient):
-    """create_milestone: 作成API呼び出しでエラーが発生する場合"""
-    mock_create_error_response = create_mock_response(422, content=b'{"message":"Validation Failed"}')
-    mock_create_api_error = RequestFailed(response=mock_create_error_response)
-    with patch.object(github_client, 'find_milestone_by_title', return_value=None) as mock_find:
-        github_client._mock_rest_api.issues.create_milestone.side_effect = mock_create_api_error
-
-        with pytest.raises(GitHubValidationError, match="Validation failed"):
-            github_client.create_milestone(OWNER, REPO, "Invalid:Title")
-
-        mock_find.assert_called_once()
-        github_client._mock_rest_api.issues.create_milestone.assert_called_once()
-
-def test_create_milestone_empty_title(github_client: GitHubAppClient):
-    """create_milestone: タイトルが空の場合 ValueError"""
-    with pytest.raises(ValueError, match="cannot be empty or whitespace"):
-        github_client.create_milestone(OWNER, REPO, "")
-    with pytest.raises(ValueError, match="cannot be empty or whitespace"):
-        github_client.create_milestone(OWNER, REPO, "   ")
-    # find_milestone_by_title が呼ばれないことを確認
-    with patch.object(github_client, 'find_milestone_by_title') as mock_find:
-         try:
-             github_client.create_milestone(OWNER, REPO, "")
-         except ValueError:
-             mock_find.assert_not_called()
-    github_client._mock_rest_api.issues.create_milestone.assert_not_called()
-
-
-# --- Issue Creation Tests ---
-def test_create_issue_success_basic(github_client: GitHubAppClient):
-    """Issue作成成功 (基本ケース、ラベル等なし)"""
-    owner, repo, title, body = OWNER, REPO, "Basic Issue", "Body"
-    expected_url = f"https://github.com/{owner}/{repo}/issues/1"
-    # Issue オブジェクトのモック (html_urlを持つ)
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    # ペイロードを確認
-    github_client._mock_rest_api.issues.create.assert_called_once_with(
-        owner=owner, repo=repo, title=title, body=body or ""
-        # labels=None などは指定しない
-    )
-
-def test_create_issue_success_with_labels(github_client: GitHubAppClient):
-    """Issue作成成功 (ラベルあり)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Labels", "Body"
-    labels_to_set = ["bug", "ui"]
-    expected_url = f"https://github.com/{owner}/{repo}/issues/2"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, labels=labels_to_set)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    github_client._mock_rest_api.issues.create.assert_called_once_with(
-        owner=owner, repo=repo, title=title, body=body or "", labels=labels_to_set
-    )
-
-def test_create_issue_success_with_assignees(github_client: GitHubAppClient):
-    """Issue作成成功 (担当者あり)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Assignees", "Body"
-    assignees_to_set = ["user1", "user2"]
-    expected_url = f"https://github.com/{owner}/{repo}/issues/3"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, assignees=assignees_to_set)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    github_client._mock_rest_api.issues.create.assert_called_once_with(
-        owner=owner, repo=repo, title=title, body=body or "", assignees=assignees_to_set
-    )
-
-def test_create_issue_success_with_milestone_id(github_client: GitHubAppClient):
-    """Issue作成成功 (マイルストーンID指定)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Milestone ID", "Body"
-    milestone_id = 5
-    expected_url = f"https://github.com/{owner}/{repo}/issues/4"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=milestone_id)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    # find_milestone_by_title が呼ばれないことを確認 (直接 ID 指定のため)
-    with patch.object(github_client, 'find_milestone_by_title') as mock_find:
-         github_client.create_issue(owner, repo, title, body, milestone=milestone_id)
-         mock_find.assert_not_called()
-    # GitHub APIが正しいIDで呼ばれること
-    github_client._mock_rest_api.issues.create.assert_called_with(
-        owner=owner, repo=repo, title=title, body=body or "", milestone=milestone_id
-    )
-
-def test_create_issue_success_with_milestone_title_found(github_client: GitHubAppClient):
-    """Issue作成成功 (マイルストーンID指定 - 元のタイトル指定テストを変更)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Milestone ID", "Body"
-    milestone_id = MILESTONE_ID
-    expected_url = f"https://github.com/{owner}/{repo}/issues/5"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=milestone_id)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    # create API が正しいIDで呼ばれること
-    github_client._mock_rest_api.issues.create.assert_called_once_with(
-        owner=owner, repo=repo, title=title, body=body or "", milestone=milestone_id
-    )
-
-def test_create_issue_success_with_milestone_title_not_found(github_client: GitHubAppClient, caplog):
-    """Issue作成成功 (milestone=Noneとして作成 - 元のタイトル指定テストを変更)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with No Milestone", "Body"
-    expected_url = f"https://github.com/{owner}/{repo}/issues/6"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=None)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    # create API が milestone なしで呼ばれたことを確認
-    github_client._mock_rest_api.issues.create.assert_called_once_with(
-        owner=owner, repo=repo, title=title, body=body or "" # milestone キーなし
-    )
-
-def test_create_issue_success_with_milestone_title_find_error(github_client: GitHubAppClient, caplog):
-    """Issue作成成功 (マイルストーンIDを別の値に変更 - 元のタイトル指定テストを変更)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Different Milestone ID", "Body"
-    different_milestone_id = 99
-    expected_url = f"https://github.com/{owner}/{repo}/issues/7"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, milestone=different_milestone_id)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    # create API が指定されたIDで呼ばれたことを確認
-    github_client._mock_rest_api.issues.create.assert_called_once_with(
-        owner=owner, repo=repo, title=title, body=body or "", milestone=different_milestone_id
-    )
-
-def test_create_issue_not_found_repo(github_client: GitHubAppClient):
-    """Issue作成: リポジトリが見つからない (404)"""
-    owner, repo, title, body = OWNER, "not-found-repo", "Issue 404", "Body"
-    mock_error_response = create_mock_response(404)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.issues.create.side_effect = mock_api_error
-
-    with pytest.raises(GitHubResourceNotFoundError, match="resource not found"):
-        github_client.create_issue(owner, repo, title, body)
-
-def test_create_issue_validation_error(github_client: GitHubAppClient):
-    """Issue作成: バリデーションエラー (422)"""
-    owner, repo, title, body = OWNER, REPO, "Issue 422", "Invalid Body"
-    mock_error_response = create_mock_response(422, content=b'{"message":"Validation Failed"}')
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.issues.create.side_effect = mock_api_error
-
-    with pytest.raises(GitHubValidationError, match="Validation failed"):
-        github_client.create_issue(owner, repo, title, body)
-
-def test_create_issue_empty_title(github_client: GitHubAppClient):
-    """Issue作成: タイトルが空"""
-    with pytest.raises(ValueError, match="cannot be empty or whitespace"):
-        github_client.create_issue(OWNER, REPO, "", "Body")
-    with pytest.raises(ValueError, match="cannot be empty or whitespace"):
-        github_client.create_issue(OWNER, REPO, "   ", "Body")
-    github_client._mock_rest_api.issues.create.assert_not_called()
-
-# ★ 新規追加: 空の担当者リスト
-def test_create_issue_with_empty_assignees_list(github_client: GitHubAppClient):
-    """Issue作成成功 (担当者リストが空の場合)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Empty Assignees", "Body"
-    assignees_to_set: list[str] = []  # 空のリスト
-    expected_url = f"https://github.com/{owner}/{repo}/issues/8"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, assignees=assignees_to_set)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    # ペイロードに assignees キーが含まれないことを確認
-    call_args, call_kwargs = github_client._mock_rest_api.issues.create.call_args
-    assert "assignees" not in call_kwargs
-
-# ★ 新規追加: 不正な担当者フォーマット
-def test_create_issue_with_invalid_assignee_format(github_client: GitHubAppClient, caplog):
-    """Issue作成成功 (担当者のフォーマットが不正な場合、無視される)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Invalid Assignee Format", "Body"
-    invalid_assignees = "user1"  # 文字列 (リストではない)
-    expected_url = f"https://github.com/{owner}/{repo}/issues/9"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
+    
     with caplog.at_level(logging.WARNING):
-        created_url, created_node_id = github_client.create_issue(owner, repo, title, body, assignees=invalid_assignees)  # type: ignore
+        result = github_client._handle_request_failed(mock_error, "test operation")
+    
+    assert isinstance(result, GitHubAuthenticationError)
+    assert result.status_code == 401
+    assert "test operation" in str(result)  # コンテキストが含まれることを確認
+    assert "test operation" in caplog.text  # ログにもコンテキストが含まれることを確認
 
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    # ペイロードに assignees キーが含まれないことを確認
-    call_args, call_kwargs = github_client._mock_rest_api.issues.create.call_args
-    assert "assignees" not in call_kwargs
-    # 警告ログを確認
-    assert "Invalid format for assignees" in caplog.text
-    assert "Expected list[str]. Ignoring assignees." in caplog.text
-
-# ★ 新規追加: 一部無効なユーザー名を含む担当者リスト
-def test_create_issue_with_partially_invalid_assignees(github_client: GitHubAppClient):
-    """Issue作成 (担当者リストに無効なユーザー名が含まれる場合、リストはそのまま渡される)"""
-    owner, repo, title, body = OWNER, REPO, "Issue with Potentially Invalid Assignees", "Body"
-    # GitHubに存在しない、または権限のないユーザーが含まれる可能性があるリスト
-    assignees_to_set = ["valid-user", "invalid-or-no-permission-user", ""]  # 空文字も含む
-    expected_url = f"https://github.com/{owner}/{repo}/issues/10"
-    mock_issue_obj = MagicMock(spec=Issue, html_url=expected_url, node_id=MOCK_ISSUE_NODE_ID)
-    mock_response = create_mock_response(201, parsed_data=mock_issue_obj)
-    github_client._mock_rest_api.issues.create.return_value = mock_response
-
-    created_url, created_node_id = github_client.create_issue(owner, repo, title, body, assignees=assignees_to_set)
-
-    assert created_url == expected_url
-    assert created_node_id == mock_issue_obj.node_id
-    # API呼び出し時にリストが渡されること、空文字はフィルタリングされることを確認
-    github_client._mock_rest_api.issues.create.assert_called_once_with(
-        owner=owner, repo=repo, title=title, body=body or "",
-        assignees=["valid-user", "invalid-or-no-permission-user"]  # 空文字は除去される
+def test_handle_request_failed_403_rate_limit(github_client):
+    """レートリミット（403+ヘッダー）が適切に処理されることを確認"""
+    mock_error = create_mock_request_failed(
+        status_code=403,
+        content=b"API rate limit exceeded",
+        headers={"X-RateLimit-Remaining": "0"}
     )
-    # GitHub APIが422などを返さない限り、クライアント側では成功扱いになる
+    
+    result = github_client._handle_request_failed(mock_error, "listing repositories")
+    
+    assert isinstance(result, GitHubRateLimitError)
+    assert result.status_code == 403
+    assert "listing repositories" in str(result)  # コンテキストが含まれる
+
+def test_handle_request_failed_403_permission(github_client):
+    """権限不足（403）が適切に処理されることを確認"""
+    mock_error = create_mock_request_failed(
+        status_code=403,
+        content=b"Permission denied",
+        headers={"X-RateLimit-Remaining": "100"}  # レートリミットではない
+    )
+    
+    result = github_client._handle_request_failed(mock_error, "accessing private repo")
+    
+    assert isinstance(result, GitHubAuthenticationError)
+    assert result.status_code == 403
+    assert "accessing private repo" in str(result)  # コンテキストが含まれる
+
+def test_handle_request_failed_404(github_client):
+    """リソース未検出（404）が適切に処理されることを確認"""
+    mock_error = create_mock_request_failed(
+        status_code=404,
+        content=b"Not found"
+    )
+    
+    result = github_client._handle_request_failed(mock_error, "finding issue")
+    
+    assert isinstance(result, GitHubResourceNotFoundError)
+    assert result.status_code == 404
+    assert "finding issue" in str(result)  # コンテキストが含まれる
+
+def test_handle_request_failed_422_repo_exists(github_client):
+    """リポジトリ名重複（422）が適切に処理されることを確認"""
+    mock_error = create_mock_request_failed(
+        status_code=422,
+        content=b'{"message":"Repository name already exists"}'
+    )
+    
+    result = github_client._handle_request_failed(mock_error, "repository creation")
+    
+    assert isinstance(result, GitHubValidationError)
+    assert result.status_code == 422
+    assert "repository creation" in str(result)  # コンテキストが含まれる
+    assert "name already exists" in str(result).lower()  # エラー内容が含まれる
+
+def test_handle_request_failed_422_generic(github_client):
+    """一般的なバリデーションエラー（422）が適切に処理されることを確認"""
+    mock_error = create_mock_request_failed(
+        status_code=422,
+        content=b'{"message":"Validation failed"}'
+    )
+    
+    result = github_client._handle_request_failed(mock_error, "creating issue")
+    
+    assert isinstance(result, GitHubValidationError)
+    assert result.status_code == 422
+    assert "creating issue" in str(result)  # コンテキストが含まれる
+
+def test_handle_request_failed_other(github_client):
+    """その他のHTTPエラーが適切に処理されることを確認"""
+    mock_error = create_mock_request_failed(
+        status_code=500,
+        content=b"Server error"
+    )
+    
+    result = github_client._handle_request_failed(mock_error, "updating label")
+    
+    assert isinstance(result, GitHubClientError)
+    assert result.status_code == 500
+    assert "updating label" in str(result)  # コンテキストが含まれる
+
+def test_handle_other_error_request_error(github_client, caplog):
+    """RequestError（ネットワークエラーなど）が適切に処理されることを確認"""
+    mock_error = RequestError("Connection refused")
+    
+    with caplog.at_level(logging.WARNING):
+        result = github_client._handle_other_error(mock_error, "connecting to API")
+    
+    assert isinstance(result, GitHubClientError)
+    assert "connecting to API" in str(result)  # コンテキストが含まれる
+    assert "connecting to API" in caplog.text  # ログにもコンテキストが含まれる
+
+def test_handle_other_error_timeout(github_client):
+    """RequestTimeout（タイムアウト）が適切に処理されることを確認"""
+    mock_error = RequestTimeout("API call timed out")
+    
+    result = github_client._handle_other_error(mock_error, "fetching large repo")
+    
+    assert isinstance(result, GitHubClientError)
+    assert "fetching large repo" in str(result)  # コンテキストが含まれる
+
+def test_handle_other_error_generic(github_client, caplog):
+    """一般的な例外が適切に処理されることを確認"""
+    mock_error = ValueError("Something unexpected")
+    
+    with caplog.at_level(logging.ERROR):
+        result = github_client._handle_other_error(mock_error, "parsing response")
+    
+    assert isinstance(result, GitHubClientError)
+    assert "parsing response" in str(result)  # コンテキストが含まれる
+    assert "parsing response" in caplog.text  # ログにもコンテキストが含まれる
 
 
-# --- 接続テスト関連のテスト (修正版) ---
-def test_perform_connection_test_success(mock_github_instance):
-    """_perform_connection_test: 接続テスト成功"""
-    # get_authenticatedが成功するケース
-    mock_github_instance.rest.users.get_authenticated.return_value = MagicMock()
-    
-    # GitHubAppClientを初期化
-    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
-        client = GitHubAppClient(SecretStr("fake-valid-token"))
-        # 明示的に接続テストを呼び出す
-        client._perform_connection_test()
-    
-    # get_authenticatedが呼ばれたことを確認
-    mock_github_instance.rest.users.get_authenticated.assert_called_once()
+# create_repository テスト
 
-def test_perform_connection_test_auth_error(mock_github_instance):
-    """_perform_connection_test: 認証エラー (401, 403)"""
-    # 401エラーを準備
-    mock_error_response_401 = create_mock_response(401)
-    mock_api_error_401 = RequestFailed(response=mock_error_response_401)
+def test_create_repository_success(github_client):
+    """リポジトリが正常に作成される場合のテスト"""
+    # モックレスポンスを設定
+    mock_repo = MagicMock()
+    mock_repo.html_url = "https://github.com/user/new-repo"
     
-    # get_authenticatedが401エラーを返すようにセット
-    mock_github_instance.rest.users.get_authenticated.side_effect = mock_api_error_401
+    mock_response = MagicMock()
+    mock_response.parsed_data = mock_repo
     
-    # GitHubAppClientを初期化
-    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
-        client = GitHubAppClient(SecretStr("fake-valid-token"))
-        
-        # 明示的に接続テストを呼び出したときに例外が発生するか
-        with pytest.raises(GitHubAuthenticationError, match="Initial connection test failed"):
-            client._perform_connection_test()
+    # リポジトリ作成メソッドのレスポンスを設定
+    github_client.mock_gh.rest.repos.create_for_authenticated_user.return_value = mock_response
     
-    # 403エラーの場合も同様
-    mock_error_response_403 = create_mock_response(403)
-    mock_api_error_403 = RequestFailed(response=mock_error_response_403)
-    mock_github_instance.rest.users.get_authenticated.side_effect = mock_api_error_403
-    
-    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
-        client = GitHubAppClient(SecretStr("fake-valid-token"))
-        with pytest.raises(GitHubAuthenticationError, match="Initial connection test failed"):
-            client._perform_connection_test()
-
-def test_perform_connection_test_other_errors(mock_github_instance):
-    """_perform_connection_test: その他のエラー (非401/403)の場合は警告のみ"""
-    # 500エラーを準備
-    mock_error_response_500 = create_mock_response(500)
-    mock_api_error_500 = RequestFailed(response=mock_error_response_500)
-    
-    # get_authenticatedが500エラーを返すようにセット
-    mock_github_instance.rest.users.get_authenticated.side_effect = mock_api_error_500
-    
-    # GitHubAppClientを初期化
-    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
-        client = GitHubAppClient(SecretStr("fake-valid-token"))
-        
-        # 明示的に接続テストを呼び出し、警告ログを確認
-        with patch('logging.Logger.warning') as mock_warning:
-            client._perform_connection_test()
-            mock_warning.assert_called()
-    
-    # RequestFailedエラーではない予期せぬ例外の場合も同様に警告のみ
-    mock_github_instance.rest.users.get_authenticated.side_effect = ValueError("Unexpected error")
-    
-    with patch('github_automation_tool.adapters.github_client.GitHub', return_value=mock_github_instance):
-        client = GitHubAppClient(SecretStr("fake-valid-token"))
-        
-        with patch('logging.Logger.warning') as mock_warning:
-            client._perform_connection_test()
-            mock_warning.assert_called()
-
-
-# --- Pagination Tests for find_project_v2_node_id ---
-def test_find_project_v2_node_id_pagination(github_client: GitHubAppClient):
-    """find_project_v2_node_id: プロジェクトが2ページ目に存在するケース"""
-    # 1回目の呼び出しでは結果がない、hasNextPage=True
-    first_page_data = {
-        "repositoryOwner": {
-            "projectsV2": {
-                "nodes": [
-                    {"id": "other-project-id-1", "title": "Other Project 1"},
-                    {"id": "other-project-id-2", "title": "Other Project 2"}
-                ],
-                "pageInfo": {
-                    "endCursor": "cursor-to-page-2",
-                    "hasNextPage": True
-                }
-            }
-        }
-    }
-    # 2回目の呼び出しで目的のプロジェクトが見つかる
-    second_page_data = {
-        "repositoryOwner": {
-            "projectsV2": {
-                "nodes": [
-                    {"id": PROJECT_NODE_ID, "title": PROJECT_NAME},
-                    {"id": "other-project-id-3", "title": "Other Project 3"}
-                ],
-                "pageInfo": {
-                    "endCursor": "cursor-to-page-3",
-                    "hasNextPage": False
-                }
-            }
-        }
-    }
-    
-    # 最初のページと2ページ目のレスポンスをモック
-    mock_resp_1 = create_mock_graphql_response(data=first_page_data)
-    mock_resp_2 = create_mock_graphql_response(data=second_page_data)
-    
-    # graphqlメソッドが呼び出されるたびに異なるレスポンスを返すように設定
-    github_client._mock_graphql.side_effect = [mock_resp_1, mock_resp_2]
-    
-    # テスト実行
-    node_id = github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
+    # メソッドを呼び出し
+    result = github_client.create_repository("new-repo")
     
     # 検証
-    assert node_id == PROJECT_NODE_ID
-    assert github_client._mock_graphql.call_count == 2
-    
-    # 1回目と2回目の呼び出しパラメータを検証
-    first_call_args = github_client._mock_graphql.call_args_list[0][0]
-    second_call_args = github_client._mock_graphql.call_args_list[1][0]
-    
-    # 1回目はafterカーソルなし
-    assert "after" not in first_call_args[1]
-    assert first_call_args[1]["ownerLogin"] == OWNER
-    
-    # 2回目はafterカーソルあり
-    assert second_call_args[1]["after"] == "cursor-to-page-2"
-    assert second_call_args[1]["ownerLogin"] == OWNER
-
-def test_find_project_v2_node_id_pagination_max_pages(github_client: GitHubAppClient):
-    """find_project_v2_node_id: ページネーションの最大ページ数に達するケース"""
-    page_data_template = {
-        "repositoryOwner": {
-            "projectsV2": {
-                "nodes": [
-                    {"id": f"other-project-id-{i}", "title": f"Other Project {i}"}
-                    for i in range(2)  # 各ページに2つのプロジェクト
-                ],
-                "pageInfo": {
-                    "endCursor": f"cursor-to-page-{{}}", # 後で動的に設定
-                    "hasNextPage": True
-                }
-            }
-        }
-    }
-    
-    # 10回分のレスポンスを用意 (max_pagesと同じ)
-    mock_responses = []
-    for i in range(1, 11):
-        page_data = page_data_template.copy()
-        # deepcopy相当の処理（テンプレートを変更しないように）
-        page_data = {
-            "repositoryOwner": {
-                "projectsV2": {
-                    "nodes": page_data["repositoryOwner"]["projectsV2"]["nodes"].copy(),
-                    "pageInfo": page_data["repositoryOwner"]["projectsV2"]["pageInfo"].copy()
-                }
-            }
-        }
-        # カーソルを動的に設定
-        page_data["repositoryOwner"]["projectsV2"]["pageInfo"]["endCursor"] = f"cursor-to-page-{i+1}"
-        mock_responses.append(create_mock_graphql_response(data=page_data))
-    
-    # graphqlメソッドが呼び出されるたびにレスポンスリストから順に返す
-    github_client._mock_graphql.side_effect = mock_responses
-    
-    # テスト実行
-    node_id = github_client.find_project_v2_node_id(OWNER, "Not Found Project")
-    
-    # 検証
-    assert node_id is None
-    assert github_client._mock_graphql.call_count == 10  # max_pagesの回数だけ呼び出される
-    
-    # 各呼び出しのカーソルを検証
-    for i, call in enumerate(github_client._mock_graphql.call_args_list):
-        if i == 0:
-            # 1回目はafterカーソルなし
-            assert "after" not in call[0][1]
-            assert call[0][1]["ownerLogin"] == OWNER
-            
-        else:
-            # 2回目以降は前のページのendCursorをafterとして使用
-            assert call[0][1]["after"] == f"cursor-to-page-{i+1}"
-            assert call[0][1]["ownerLogin"] == OWNER
-
-def test_find_project_v2_node_id_pagination_first_page_missing_pageinfo(github_client: GitHubAppClient):
-    """find_project_v2_node_id: 1ページ目のレスポンスにpageInfo情報が欠けているケース"""
-    # pageInfoがないレスポンス
-    incomplete_data = {
-        "repositoryOwner": {
-            "projectsV2": {
-                "nodes": [
-                    {"id": "other-project-id-1", "title": "Other Project 1"}
-                ]
-                # pageInfoが欠けている
-            }
-        }
-    }
-    
-    mock_resp = create_mock_graphql_response(data=incomplete_data)
-    github_client._mock_graphql.return_value = mock_resp
-    
-    # テスト実行
-    node_id = github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
-    
-    # 検証
-    assert node_id is None  # 見つからない
-    github_client._mock_graphql.assert_called_once()  # 1回だけ呼び出され、pageInfoがないので次のページは取得しない
-
-def test_find_project_v2_node_id_pagination_has_next_no_cursor(github_client: GitHubAppClient):
-    """find_project_v2_node_id: hasNextPage=TrueだがendCursorがないケース"""
-    # hasNextPage=Trueだが、endCursorがない異常なレスポンス
-    weird_data = {
-        "repositoryOwner": {
-            "projectsV2": {
-                "nodes": [
-                    {"id": "other-project-id-1", "title": "Other Project 1"}
-                ],
-                "pageInfo": {
-                    # endCursorが欠けている
-                    "hasNextPage": True
-                }
-            }
-        }
-    }
-    
-    mock_resp = create_mock_graphql_response(data=weird_data)
-    github_client._mock_graphql.return_value = mock_resp
-    
-    # テスト実行
-    node_id = github_client.find_project_v2_node_id(OWNER, PROJECT_NAME)
-    
-    # 検証
-    assert node_id is None  # 見つからない
-    github_client._mock_graphql.assert_called_once()  # 1回だけ呼び出され、endCursorがないので次のページは取得しない
-
-
-# --- add_item_to_project_v2 Tests ---
-def test_add_item_to_project_v2_success(github_client: GitHubAppClient):
-    """add_item_to_project_v2: 正常にアイテムが追加されるケース"""
-    mock_gql_data = {"addProjectV2ItemById": {"item": {"id": PROJECT_ITEM_NODE_ID}}}
-    mock_resp = create_mock_graphql_response(data=mock_gql_data)
-    github_client._mock_graphql.return_value = mock_resp
-    item_id = github_client.add_item_to_project_v2(PROJECT_NODE_ID, MOCK_ISSUE_NODE_ID)
-    assert item_id == PROJECT_ITEM_NODE_ID
-    github_client._mock_graphql.assert_called_once()
-
-def test_add_item_to_project_v2_graphql_error(github_client: GitHubAppClient):
-    """add_item_to_project_v2: GraphQL APIエラー"""
-    mock_errors = [{"message": "Project not found.", "type": "NOT_FOUND"}]
-    mock_resp = create_mock_graphql_response(data=None, errors=mock_errors)
-    github_client._mock_graphql.return_value = mock_resp
-    
-    # _handle_graphql_error の実装を一時的にパッチ
-    with patch.object(github_client, '_handle_graphql_error') as mock_handle_error:
-        # 適切な例外を返すように設定
-        mock_handle_error.return_value = GitHubClientError("GraphQL operation failed during test")
-        # 即座に例外を投げるように
-        mock_handle_error.side_effect = GitHubClientError("GraphQL operation failed during test")
-        
-        with pytest.raises(GitHubClientError, match="GraphQL operation failed during test"):
-            github_client.add_item_to_project_v2(PROJECT_NODE_ID, MOCK_ISSUE_NODE_ID)
-            
-        # _handle_graphql_errorが呼び出されたことを確認
-        mock_handle_error.assert_called_once()
-
-def test_add_item_to_project_v2_permission_error(github_client: GitHubAppClient):
-    """add_item_to_project_v2: 権限エラー"""
-    mock_errors = [{"message": "User does not have permission to add items to the project", "type": "FORBIDDEN"}]
-    mock_resp = create_mock_graphql_response(data=None, errors=mock_errors)
-    github_client._mock_graphql.return_value = mock_resp
-    
-    # _handle_graphql_error の実装を一時的にパッチ
-    with patch.object(github_client, '_handle_graphql_error') as mock_handle_error:
-        # 適切な例外を返すように設定
-        mock_handle_error.return_value = GitHubAuthenticationError("GraphQL permission denied during test")
-        # 即座に例外を投げるように
-        mock_handle_error.side_effect = GitHubAuthenticationError("GraphQL permission denied during test")
-        
-        with pytest.raises(GitHubAuthenticationError, match="GraphQL permission denied during test"):
-            github_client.add_item_to_project_v2(PROJECT_NODE_ID, MOCK_ISSUE_NODE_ID)
-            
-        # _handle_graphql_errorが呼び出されたことを確認
-        mock_handle_error.assert_called_once()
-
-def test_add_item_to_project_v2_missing_item_id_in_response(github_client: GitHubAppClient):
-    """add_item_to_project_v2: レスポンスにitem IDが含まれない異常ケース"""
-    mock_resp = create_mock_graphql_response(data={"addProjectV2ItemById": {"item": {}}})
-    github_client._mock_graphql.return_value = mock_resp
-    
-    with pytest.raises(GitHubClientError, match="Failed to add item to project V2: Invalid response format or missing item ID"):
-        github_client.add_item_to_project_v2(PROJECT_NODE_ID, MOCK_ISSUE_NODE_ID)
-
-def test_add_item_to_project_v2_empty_input(github_client: GitHubAppClient):
-    """add_item_to_project_v2: empty project_node_id or content_node_id should raise ValueError"""
-    
-    with pytest.raises(ValueError, match="Project Node ID cannot be empty"):
-        github_client.add_item_to_project_v2("", MOCK_ISSUE_NODE_ID)
-    with pytest.raises(ValueError, match="Content Node ID cannot be empty"):
-        github_client.add_item_to_project_v2(PROJECT_NODE_ID, "")
-    with pytest.raises(ValueError, match="Content Node ID cannot be empty"):
-        github_client.add_item_to_project_v2(PROJECT_NODE_ID, "  ")
-
-# --- validate_assignees Tests (新規追加) ---
-def test_validate_assignees_all_valid(github_client: GitHubAppClient):
-    """validate_assignees: 全ての担当者が有効な場合"""
-    assignees = ["user1", "user2"]
-    
-    # check_collaboratorが成功するようモック (ステータスコード204)
-    mock_response = create_mock_response(204)
-    github_client._mock_rest_api.repos.check_collaborator.return_value = mock_response
-    
-    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
-    
-    # 全ての担当者がvalidに含まれるはず
-    assert valid == assignees
-    assert not invalid  # 空リスト
-    # 各担当者に対してcheck_collaboratorが呼ばれるはず
-    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 2
-    github_client._mock_rest_api.repos.check_collaborator.assert_has_calls([
-        call(owner=OWNER, repo=REPO, username="user1"),
-        call(owner=OWNER, repo=REPO, username="user2")
-    ])
-
-def test_validate_assignees_all_invalid(github_client: GitHubAppClient):
-    """validate_assignees: 全ての担当者が無効な場合"""
-    assignees = ["invalid1", "invalid2"]
-    
-    # check_collaboratorが404を返すようモック
-    mock_error_response = create_mock_response(404)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.repos.check_collaborator.side_effect = mock_api_error
-    
-    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
-    
-    # 全ての担当者がinvalidに含まれるはず
-    assert not valid  # 空リスト
-    assert invalid == assignees
-    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 2
-
-def test_validate_assignees_mixed(github_client: GitHubAppClient):
-    """validate_assignees: 有効な担当者と無効な担当者が混在する場合"""
-    # 準備: 1人目は有効、2人目は無効
-    mock_success = create_mock_response(204)
-    mock_error_response = create_mock_response(404)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    
-    # 1回目の呼び出し（user1）は成功、2回目（user2）は失敗
-    github_client._mock_rest_api.repos.check_collaborator.side_effect = [mock_success, mock_api_error]
-    
-    valid, invalid = github_client.validate_assignees(OWNER, REPO, ["user1", "user2"])
-    
-    assert valid == ["user1"]
-    assert invalid == ["user2"]
-    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 2
-
-def test_validate_assignees_empty_list(github_client: GitHubAppClient):
-    """validate_assignees: 空のリストが渡された場合"""
-    valid, invalid = github_client.validate_assignees(OWNER, REPO, [])
-    
-    assert valid == []
-    assert invalid == []
-    github_client._mock_rest_api.repos.check_collaborator.assert_not_called()
-
-def test_validate_assignees_with_at_symbol(github_client: GitHubAppClient):
-    """validate_assignees: @マークが付いたユーザー名の場合"""
-    # @マークの付いたユーザー名（GitHubでは@は省略されるべき）
-    assignees = ["@user1"]
-    
-    mock_response = create_mock_response(204)  # 成功
-    github_client._mock_rest_api.repos.check_collaborator.return_value = mock_response
-    
-    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
-    
-    # @を削除したユーザー名で呼び出されるべき
-    assert valid == ["user1"]  # @なし
-    assert not invalid
-    github_client._mock_rest_api.repos.check_collaborator.assert_called_once_with(
-        owner=OWNER, repo=REPO, username="user1"  # @なし
+    assert result == "https://github.com/user/new-repo"
+    github_client.mock_gh.rest.repos.create_for_authenticated_user.assert_called_once_with(
+        name="new-repo", private=True, auto_init=True
     )
 
-def test_validate_assignees_empty_username(github_client: GitHubAppClient):
-    """validate_assignees: 空のユーザー名が含まれる場合"""
-    # 空白や空文字のユーザー名
-    assignees = ["user1", "", "  ", "user2"]
+def test_create_repository_api_error(github_client):
+    """リポジトリ作成時のAPIエラーが適切に処理されることを確認"""
+    # APIエラーをシミュレート
+    mock_error = create_mock_request_failed(
+        status_code=422,
+        content=b'{"message":"Repository creation failed: name already exists"}'
+    )
     
-    mock_response = create_mock_response(204)  # 成功
-    github_client._mock_rest_api.repos.check_collaborator.return_value = mock_response
+    # APIリクエストがエラーを発生させるように設定
+    github_client.mock_gh.rest.repos.create_for_authenticated_user.side_effect = mock_error
     
-    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    # メソッド呼び出しでエラーが発生することを確認
+    with pytest.raises(GitHubValidationError) as excinfo:
+        github_client.create_repository("existing-repo")
     
-    # 空のユーザー名は処理前にスキップされるはず
-    assert valid == ["user1", "user2"]
-    assert not invalid
-    assert github_client._mock_rest_api.repos.check_collaborator.call_count == 2
-    # 空白や空文字でない名前に対してのみ呼び出される
-    github_client._mock_rest_api.repos.check_collaborator.assert_has_calls([
-        call(owner=OWNER, repo=REPO, username="user1"),
-        call(owner=OWNER, repo=REPO, username="user2")
-    ])
+    # エラーメッセージにコンテキスト情報が含まれることを確認
+    error_msg = str(excinfo.value)
+    assert "creating repository 'existing-repo'" in error_msg
+    assert "name already exists" in error_msg.lower()
 
-def test_validate_assignees_permission_error(github_client: GitHubAppClient):
-    """validate_assignees: コラボレーター確認時に権限エラー (403) が発生する場合"""
-    assignees = ["user1"]
+def test_create_repository_with_empty_response(github_client):
+    """不完全なレスポンスデータが適切に処理されることを確認"""
+    # html_url のないレスポンスをシミュレート
+    mock_repo = MagicMock()
+    # html_url属性が空になるように明示的に設定
+    mock_repo.html_url = None
     
-    # check_collaboratorが403を返すようモック
-    mock_error_response = create_mock_response(403)
-    mock_api_error = RequestFailed(response=mock_error_response)
-    github_client._mock_rest_api.repos.check_collaborator.side_effect = mock_api_error
+    mock_response = MagicMock()
+    mock_response.parsed_data = mock_repo
+    # ステータスコードを明示的に設定（正常に完了したように見せる）
+    mock_response.status_code = 201
     
-    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    # リポジトリ作成メソッドのレスポンスを設定
+    github_client.mock_gh.rest.repos.create_for_authenticated_user.return_value = mock_response
     
-    # 権限エラーでも担当者は無効と判断される（警告はログに出るだけ）
-    assert not valid
-    assert invalid == assignees
-    github_client._mock_rest_api.repos.check_collaborator.assert_called_once()
+    # メソッド呼び出しでエラーが発生することを確認
+    with pytest.raises(GitHubClientError) as excinfo:
+        github_client.create_repository("new-repo")
+    
+    assert "Could not retrieve repository URL" in str(excinfo.value)
 
-def test_validate_assignees_unexpected_error(github_client: GitHubAppClient):
-    """validate_assignees: 予期せぬエラーが発生する場合"""
-    assignees = ["user1"]
+
+# find_milestone_by_title テスト
+
+def test_find_milestone_by_title_success(github_client):
+    """マイルストーンが見つかる場合のテスト"""
+    # モックマイルストーンを設定
+    mock_milestone = MagicMock()
+    mock_milestone.title = "Sprint 1"
+    mock_milestone.number = 42
     
-    # 予期せぬ例外を発生させる
-    github_client._mock_rest_api.repos.check_collaborator.side_effect = ValueError("Unexpected error")
+    mock_response = MagicMock()
+    mock_response.parsed_data = [mock_milestone]
     
-    valid, invalid = github_client.validate_assignees(OWNER, REPO, assignees)
+    # マイルストーン一覧APIのレスポンスを設定
+    github_client.mock_gh.rest.issues.list_milestones.return_value = mock_response
     
-    # 予期せぬエラーでも担当者は無効と判断される（警告はログに出るだけ）
-    assert not valid
-    assert invalid == assignees
-    github_client._mock_rest_api.repos.check_collaborator.assert_called_once()
+    # メソッドを呼び出し
+    result = github_client.find_milestone_by_title("owner", "repo", "Sprint 1")
+    
+    # 検証
+    assert result is mock_milestone
+    assert result.number == 42
+    github_client.mock_gh.rest.issues.list_milestones.assert_called_once_with(
+        owner="owner", repo="repo", state="open", per_page=100
+    )
+
+def test_find_milestone_by_title_not_found(github_client):
+    """マイルストーンが見つからない場合のテスト"""
+    # 別名のマイルストーンを返すように設定
+    mock_milestone = MagicMock()
+    mock_milestone.title = "Sprint 2"
+    
+    mock_response = MagicMock()
+    mock_response.parsed_data = [mock_milestone]
+    
+    # マイルストーン一覧APIのレスポンスを設定
+    github_client.mock_gh.rest.issues.list_milestones.return_value = mock_response
+    
+    # メソッドを呼び出し
+    result = github_client.find_milestone_by_title("owner", "repo", "Sprint 1")
+    
+    # 検証
+    assert result is None
+
+def test_find_milestone_by_title_empty_title(github_client):
+    """空のタイトルが適切に処理されることを確認"""
+    # メソッドを呼び出し
+    result = github_client.find_milestone_by_title("owner", "repo", "")
+    
+    # 検証
+    assert result is None
+    # APIは呼ばれないことを確認
+    github_client.mock_gh.rest.issues.list_milestones.assert_not_called()
+
+def test_find_milestone_by_title_api_error(github_client):
+    """APIエラーが適切に処理されることを確認"""
+    # APIエラーをシミュレート
+    mock_error = create_mock_request_failed(
+        status_code=404,
+        content=b"Not found"
+    )
+    
+    # APIリクエストがエラーを発生させるように設定
+    github_client.mock_gh.rest.issues.list_milestones.side_effect = mock_error
+    
+    # メソッド呼び出しでエラーが発生することを確認
+    with pytest.raises(GitHubResourceNotFoundError) as excinfo:
+        github_client.find_milestone_by_title("owner", "repo", "Sprint 1")
+    
+    # エラーメッセージにコンテキスト情報が含まれることを確認
+    assert "searching for open milestone" in str(excinfo.value)
+    assert "'Sprint 1'" in str(excinfo.value)

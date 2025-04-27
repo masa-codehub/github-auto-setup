@@ -197,13 +197,21 @@ def test_display_create_github_resources_result_success(reporter: CliReporter, c
     
     # プロジェクト情報の確認
     assert "[Project] Found 'My Project'" in caplog.text
-    assert "Project Integration: Added 2/2 issues" in caplog.text
-    assert "Failed to add 1 issues to project:" in caplog.text
+    # ---- 修正: 新しいフォーマットに合わせる ----
+    assert "Project Integration: Added: 2/2" in caplog.text
+    assert "Failed: 1/2" in caplog.text
+    # --------------------------------------
+    assert "Failed to add items to project:" in caplog.text
     assert "Issue (Node ID: failed_issue_id): Permission Denied" in caplog.text
     
     # Issue作成情報（ネストされた呼び出し）の確認
     assert "Issue Creation Summary" in caplog.text
-    assert "Created: 2, Skipped: 1, Failed: 1" in caplog.text
+    # ---- 修正: 新しいサマリーフォーマットに合わせる ----
+    assert "Total processed:" in caplog.text
+    assert "Created: 2" in caplog.text
+    assert "Skipped: 1" in caplog.text
+    assert "Failed: 1" in caplog.text
+    # --------------------------------------
 
 def test_display_create_github_resources_result_fatal_error(reporter: CliReporter, caplog):
     """総合結果表示メソッドの致命的エラーテスト"""
@@ -377,3 +385,113 @@ def test_display_create_github_resources_result_no_milestones(reporter: CliRepor
     
     assert "Successful:" not in milestone_line
     assert "Failed:" not in milestone_line
+
+def test_display_create_github_resources_result_with_multiline_errors(reporter: CliReporter, caplog):
+    """改行を含むエラーメッセージが適切に整形されるかのテスト"""
+    # 複数行のエラーメッセージを含む結果を作成
+    issue_result = CreateIssuesResult(
+        created_issue_details=[("https://github.com/o/r/issues/1", "id1")],
+        failed_issue_titles=["Failed Issue"],
+        errors=["Error with\nmultiple lines\nof text"]
+    )
+    overall_result = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        created_labels=["bug"],
+        failed_labels=[("complex-label", "Validation Error with\nnewlines in\nthe message")],
+        processed_milestones=[("Sprint 1", 101)],
+        failed_milestones=[("Complex Sprint", "Error with\nmultiple\nlines")],
+        issue_result=issue_result,
+        project_node_id="proj_id",
+        project_name="Test Project",
+        project_items_added_count=1,
+        project_items_failed=[("failed_node", "GraphQL error with\nmultiple lines")]
+    )
+
+    with caplog.at_level(logging.INFO):
+        reporter.display_create_github_resources_result(overall_result)
+
+    # 各エラーメッセージで改行が空白に置換されていることを確認
+    assert "'complex-label': Validation Error with newlines in the message" in caplog.text
+    assert "'Complex Sprint': Error with multiple lines" in caplog.text
+    assert "Issue (Node ID: failed_node): GraphQL error with multiple lines" in caplog.text
+    
+    # Issue作成結果の表示でも改行が置換されている
+    assert "- 'Failed Issue': Error with multiple lines of text" in caplog.text
+
+def test_display_create_github_resources_result_with_no_issues(reporter: CliReporter, caplog):
+    """Issueが作成されなかった場合のプロジェクト連携メッセージのテスト"""
+    # issue_result がNoneの場合と空の場合の両方をテスト
+    
+    # 1. issue_result が None のケース
+    result_with_null_issues = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        project_name="My Project",
+        project_node_id="proj_id",
+        created_labels=["bug"],
+        processed_milestones=[("Sprint 1", 101)],
+        issue_result=None  # None に設定
+    )
+
+    with caplog.at_level(logging.INFO):
+        caplog.clear()  # 前のテストのログをクリア
+        reporter.display_create_github_resources_result(result_with_null_issues)
+    
+    # プロジェクト統合メッセージを確認
+    assert "Project Integration: No issues were created to add" in caplog.text
+    
+    # 2. issue_result が空のケース
+    empty_issue_result = CreateIssuesResult(
+        created_issue_details=[],
+        skipped_issue_titles=[],
+        failed_issue_titles=[]
+    )
+    
+    result_with_empty_issues = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        project_name="My Project",
+        project_node_id="proj_id",
+        created_labels=["bug"],
+        processed_milestones=[("Sprint 1", 101)],
+        issue_result=empty_issue_result  # 空のIssueResultに設定
+    )
+
+    with caplog.at_level(logging.INFO):
+        caplog.clear()  # 前のテストのログをクリア
+        reporter.display_create_github_resources_result(result_with_empty_issues)
+    
+    # プロジェクト統合メッセージを確認
+    assert "Project Integration: No issues were created to add" in caplog.text
+
+def test_display_improved_project_integration_summary(reporter: CliReporter, caplog):
+    """改善されたプロジェクト連携サマリー表示をテスト"""
+    # 一部の連携が成功し、一部が失敗するケース
+    issue_result = CreateIssuesResult(
+        created_issue_details=[
+            ("https://github.com/o/r/issues/1", "id1"),
+            ("https://github.com/o/r/issues/2", "id2"),
+            ("https://github.com/o/r/issues/3", "id3"),
+            ("https://github.com/o/r/issues/4", "id4")
+        ]
+    )
+    
+    result = CreateGitHubResourcesResult(
+        repository_url="https://github.com/o/r",
+        project_name="My Project",
+        project_node_id="proj_id",
+        issue_result=issue_result,
+        project_items_added_count=2,  # 4件中2件が成功
+        project_items_failed=[
+            ("id3", "Permission Error"),
+            ("id4", "Timeout Error")
+        ]
+    )
+    
+    with caplog.at_level(logging.INFO):
+        reporter.display_create_github_resources_result(result)
+    
+    # 改善された表示形式を検証
+    assert "Project Integration: Added: 2/4, Failed: 2/4" in caplog.text
+    
+    # 失敗したアイテムの詳細もフォーマットされていることを確認
+    assert "Issue (Node ID: id3): Permission Error" in caplog.text
+    assert "Issue (Node ID: id4): Timeout Error" in caplog.text

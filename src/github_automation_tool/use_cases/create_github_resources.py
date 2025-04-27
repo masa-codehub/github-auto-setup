@@ -158,35 +158,35 @@ class CreateGitHubResourcesUseCase:
                             lbl for lbl in issue.labels if lbl and lbl.strip()]
                         unique_labels_in_file.update(valid_labels)
 
+            # ---- 修正: 失敗時のログと結果記録を改善 ----
             created_labels_count = 0
             skipped_labels_count = 0
             result.created_labels = []
-            result.failed_labels = []
+            result.failed_labels = [] # (名前, エラーメッセージ) のタプルリスト
             sorted_labels = sorted(list(unique_labels_in_file))
             total_labels = len(sorted_labels)
 
             if total_labels > 0:
-                logger.debug(
-                    f"Found {total_labels} unique labels in file: {sorted_labels}")
-                # enumerate で進捗表示
+                logger.debug(f"Found {total_labels} unique labels in file: {sorted_labels}")
                 for i, label_name in enumerate(sorted_labels):
-                    logger.info(f"Processing label {i+1}/{total_labels}: '{label_name}'") # 進捗ログ
+                    context = f"ensuring label '{label_name}' in {repo_full_name}" # コンテキストを定義
+                    logger.info(f"Processing label {i+1}/{total_labels}: '{label_name}'")
                     try:
-                        created = self.github_client.create_label(
-                            repo_owner, repo_name, label_name)
-                        if created:
-                            created_labels_count += 1
-                        else:
-                            skipped_labels_count += 1
+                        created = self.github_client.create_label(repo_owner, repo_name, label_name)
+                        if created: created_labels_count += 1
+                        else: skipped_labels_count += 1
                         result.created_labels.append(label_name)
                     except GitHubClientError as e:
-                        logger.error(
-                            f"Failed to ensure label '{label_name}': {e}")
-                        result.failed_labels.append((label_name, str(e)))
+                        # 失敗したラベル名とエラーメッセージを記録
+                        error_msg = f"Failed to {context}: {e}"
+                        logger.error(error_msg)
+                        result.failed_labels.append((label_name, str(e))) # エラーメッセージのみ記録
                     except Exception as e:
-                        logger.exception(
-                            f"Unexpected error ensuring label '{label_name}': {e}")
+                        # 予期せぬエラーも同様に記録
+                        error_msg = f"Unexpected error during {context}: {e}"
+                        logger.exception(error_msg) # トレースバックも記録
                         result.failed_labels.append((label_name, f"Unexpected error: {e}"))
+            # --------------------------------------------
             else:
                 logger.info("No valid labels found in parsed data to ensure.")
 
@@ -209,29 +209,34 @@ class CreateGitHubResourcesUseCase:
                     if issue.milestone and issue.milestone.strip():
                         unique_milestones_in_file.add(issue.milestone.strip())
 
-            # マイルストーン名とIDのマップを作成 (Issue作成時に使用)
+            # ---- 修正: 失敗時のログと結果記録を改善 ----
             milestone_id_map = {}
             total_milestones = len(unique_milestones_in_file)
+            result.processed_milestones = [] # (名前, ID) のタプルリスト
+            result.failed_milestones = []   # (名前, エラーメッセージ) のタプルリスト
 
             if total_milestones > 0:
                 logger.info(f"Found {total_milestones} unique milestones to process")
-                # 各マイルストーンを処理
                 for i, milestone_name in enumerate(sorted(unique_milestones_in_file)):
+                    context = f"ensuring milestone '{milestone_name}' in {repo_full_name}" # コンテキスト
                     logger.info(f"Processing milestone {i+1}/{total_milestones}: '{milestone_name}'")
                     try:
                         milestone_id = self.github_client.create_milestone(repo_owner, repo_name, milestone_name)
                         milestone_id_map[milestone_name] = milestone_id
                         result.processed_milestones.append((milestone_name, milestone_id))
-                        logger.info(f"Successfully ensured milestone '{milestone_name}' exists with ID: {milestone_id}")
+                        # logger.info 内で ID が表示されるので成功ログは省略可
                     except GitHubClientError as e:
-                        logger.error(f"Failed to create/ensure milestone '{milestone_name}': {e}")
+                        error_msg = f"Failed to {context}: {e}"
+                        logger.error(error_msg)
                         result.failed_milestones.append((milestone_name, str(e)))
                     except Exception as e:
-                        logger.exception(f"Unexpected error creating milestone '{milestone_name}': {e}")
+                        error_msg = f"Unexpected error during {context}: {e}"
+                        logger.exception(error_msg)
                         result.failed_milestones.append((milestone_name, f"Unexpected error: {e}"))
+            # --------------------------------------------
             else:
                 logger.info("No milestones found in parsed data.")
-            
+
             # マイルストーン処理のサマリーをログ出力
             log_milestone_summary = (
                 f"Step 5 finished. Processed milestones: {len(result.processed_milestones)}/{total_milestones}, "
@@ -243,25 +248,27 @@ class CreateGitHubResourcesUseCase:
             else:
                 logger.info(log_milestone_summary)
 
-            # --- ステップ 6: プロジェクト検索（指定されていれば） ---
+            # --- ステップ 6: プロジェクト検索 ---
             project_node_id = None
             if project_name:
-                logger.info(f"Step 6: Finding Project V2 '{project_name}' for owner '{repo_owner}'...")
+                context = f"finding Project V2 '{project_name}' for owner '{repo_owner}'" # コンテキスト
+                logger.info(f"Step 6: {context}...")
                 try:
                     project_node_id = self.github_client.find_project_v2_node_id(repo_owner, project_name)
                     if project_node_id:
                         result.project_node_id = project_node_id
                         logger.info(f"Found Project V2 '{project_name}' with Node ID: {project_node_id}")
                     else:
-                        logger.warning(f"Project V2 '{project_name}' not found for owner '{repo_owner}'. Skipping item addition.")
-                except GitHubResourceNotFoundError as e:
-                    logger.warning(f"Project '{project_name}' not found: {e}. Skipping item addition.")
-                except GitHubClientError as e:
-                    logger.error(f"Error finding project '{project_name}': {e}. Skipping item addition.")
-                    # プロジェクト検索エラーでも処理は続行
+                        logger.warning(f"Project V2 '{project_name}' not found. Skipping item addition.") # context 不要
+                except (GitHubResourceNotFoundError, GitHubClientError) as e: # まとめて捕捉
+                    # ---- 修正: ログメッセージ改善 ----
+                    logger.warning(f"Could not find project during {context}: {e}. Skipping item addition.")
+                    # --------------------------------
+                except Exception as e:
+                    logger.exception(f"Unexpected error during {context}: {e}. Skipping item addition.")
                 logger.info("Step 6 finished.")
             else:
-                logger.info("Step 6: No project name specified, skipping project search and integration.")
+                logger.info("Step 6: No project name specified, skipping.") # メッセージ修正
 
             # --- ステップ 7: Issue 作成 (マイルストーンマップを渡す) ---
             logger.info(f"Step 7: Creating issues in '{repo_full_name}'...")
@@ -272,47 +279,50 @@ class CreateGitHubResourcesUseCase:
             logger.info("Step 7 finished.")
 
             # --- ステップ 8: Issueをプロジェクトに追加 ---
-            if project_node_id and issue_result and issue_result.created_issue_details: # issue_result もチェック
+            if project_node_id and issue_result and issue_result.created_issue_details:
                 total_issues_to_add = len(issue_result.created_issue_details)
                 logger.info(f"Step 8: Adding {total_issues_to_add} created issues to project '{project_name}'...")
-                result.project_items_failed = [] # 初期化
+                result.project_items_failed = []
 
-                # enumerate で進捗表示
                 for i, (issue_url, issue_node_id) in enumerate(issue_result.created_issue_details):
-                    logger.info(f"Adding item {i+1}/{total_issues_to_add} to project '{project_name}': Issue Node ID {issue_node_id}") # 進捗ログ
+                    # ---- 修正: コンテキスト定義とログ改善 ----
+                    context = f"adding item (Issue Node ID: {issue_node_id}) to project '{project_name}' (Project Node ID: {project_node_id})"
+                    logger.info(f"Processing item {i+1}/{total_issues_to_add}: {context}")
                     try:
                         item_id = self.github_client.add_item_to_project_v2(project_node_id, issue_node_id)
-                        if item_id:
-                            result.project_items_added_count += 1
-                            # 成功ログは add_item_to_project_v2 内にあるので省略しても良いかも
+                        if item_id: result.project_items_added_count += 1
                         else:
-                            error_msg = f"Failed to get project item ID after adding issue (Node ID: {issue_node_id})"
-                            result.project_items_failed.append((issue_node_id, error_msg))
-                            logger.error(error_msg)
+                             # item_id が None 等で返るケースは API Client 側で例外を投げる想定
+                             error_msg = f"Failed to {context}: Did not receive valid item ID."
+                             logger.error(error_msg)
+                             result.project_items_failed.append((issue_node_id, "Did not receive valid item ID"))
                     except GitHubClientError as e:
-                        error_msg = str(e)
-                        result.project_items_failed.append((issue_node_id, error_msg))
-                        logger.error(f"Failed to add issue (Node ID: {issue_node_id}) to project: {error_msg}")
+                        error_msg = f"Failed to {context}: {e}"
+                        logger.error(error_msg)
+                        result.project_items_failed.append((issue_node_id, str(e)))
                     except Exception as e:
-                        error_msg = f"Unexpected error: {str(e)}"
-                        result.project_items_failed.append((issue_node_id, error_msg))
-                        logger.exception(f"Unexpected error adding issue (Node ID: {issue_node_id}) to project: {e}")
+                        error_msg = f"Unexpected error during {context}: {e}"
+                        logger.exception(error_msg)
+                        result.project_items_failed.append((issue_node_id, f"Unexpected error: {e}"))
+                    # --------------------------------------------
 
+                # ---- 修正: サマリー表示改善 ----
                 log_proj_summary = (
-                    f"Project integration finished. Added: {result.project_items_added_count}/{total_issues_to_add}, "
-                    f"Failed: {len(result.project_items_failed)}."
+                    f"Step 8 finished. Project Integration: Added: {result.project_items_added_count}/{total_issues_to_add}, "
+                    f"Failed: {len(result.project_items_failed)}/{total_issues_to_add}."
                 )
                 if result.project_items_failed:
-                     logger.warning(log_proj_summary + f" Failed items: {[l[0] for l in result.project_items_failed]}")
+                     logger.warning(log_proj_summary + f" Failed items: {[f[0] for f in result.project_items_failed]}")
                 else:
                      logger.info(log_proj_summary)
-                logger.info("Step 8 finished.")
+            # ---- 修正: Issueがない場合などの表示 ----
+            elif project_node_id and project_name:
+                logger.info("Step 8: Project found, but no issues were created to add.")
             elif project_name:
-                logger.info("Step 8: Project found, but no new issues were created or available to add.")
+                logger.info("Step 8: Project not found or failed to retrieve its ID. Skipping item addition.")
+            # -----------------------------------
             else:
-                # プロジェクト名が指定されなかった場合 (Step 6 でログ済みなので省略可)
-                logger.info("Step 8: Skipped adding items to project.")
-
+                logger.info("Step 8: No project integration specified.")
 
             logger.info(
                 "GitHub resource creation workflow completed successfully.")
