@@ -67,11 +67,31 @@ def dummy_config_file(tmp_path: Path) -> Path:
 def mock_dependencies(dummy_md_file):
     """主要な依存関係のモックをまとめて提供するフィクスチャ"""
     # モックの準備
-    mock_settings = MagicMock(spec=Settings, log_level="INFO")
+    mock_settings = MagicMock(spec=Settings)
+    # specはあくまでメソッド検証用で、属性は手動で設定する必要がある
     mock_settings.github_pat = SecretStr("valid-token")
     mock_settings.openai_api_key = SecretStr("valid-key")
     mock_settings.gemini_api_key = None
     mock_settings.ai_model = "openai" # デフォルト
+    
+    # 修正: 重要なプロパティを追加 - 特にAIの設定
+    # AISettingsのモック
+    ai_settings_mock = MagicMock()
+    ai_settings_mock.prompt_template = "Test prompt template {markdown_text} {format_instructions}"
+    ai_settings_mock.openai_model_name = "gpt-4o"
+    ai_settings_mock.gemini_model_name = "gemini-1.5-flash"
+    mock_settings.ai = ai_settings_mock
+    
+    # プロパティ関数の戻り値を設定
+    mock_settings.prompt_template = "Test prompt template {markdown_text} {format_instructions}"
+    mock_settings.final_openai_model_name = "gpt-4o" 
+    mock_settings.final_gemini_model_name = "gemini-1.5-flash"
+    mock_settings.final_log_level = "INFO"  # 大文字である必要がある
+    
+    # ロギング設定
+    logging_settings_mock = MagicMock()
+    logging_settings_mock.log_level = "INFO"
+    mock_settings.logging = logging_settings_mock
 
     mock_gh_client_instance = MagicMock(spec=GitHubAppClient)
     # オーナー推測用のモック設定
@@ -326,9 +346,10 @@ def test_cli_error_handling_settings_validation(mock_dependencies, dummy_md_file
             ])
 
         assert result.exit_code == 1
-        # ログメッセージを確認
-        assert "Workflow failed: ValueError" in caplog.text 
-        assert "Configuration error" in caplog.text
+        # ログメッセージを確認（実際のメッセージ形式に合わせて修正）
+        assert "Configuration validation error(s)" in caplog.text
+        assert "GITHUB_PAT" in caplog.text
+        assert "Field required" in caplog.text
     finally:
         # クリーンアップと元のモックの復元
         new_mock.stop()

@@ -1,0 +1,45 @@
+# config.yaml.sample
+# 設定ファイルのサンプルです。実際の値は環境に合わせて変更してください。
+# 環境変数が設定されている場合、環境変数の値がこのファイルの設定を上書きします。
+
+ai:
+  # model: openai # 環境変数 AI_MODEL で指定可 (例: openai, gemini)
+  openai_model_name: gpt-4o # OpenAI 使用時のデフォルトモデル名 (環境変数 OPENAI_MODEL_NAME で上書き可)
+  gemini_model_name: gemini-1.5-flash # Gemini 使用時のデフォルトモデル名 (環境変数 GEMINI_MODEL_NAME で上書き可)
+  # openai_api_key: sk-... # 環境変数 OPENAI_API_KEY で設定推奨
+  # gemini_api_key: ...    # 環境変数 GEMINI_API_KEY で設定推奨
+  prompt_template: |
+    以下のMarkdownテキストから、GitHub Issueとして登録すべき情報を抽出し、指定されたJSON形式で出力してください。
+    テキストは '---' で区切られた複数のIssue候補で構成されている場合があります。
+    各Issue候補 ('---' で区切られたブロック) から、以下の情報を正確に抽出してください。
+
+    入力テキスト:
+    ```{markdown_text}```
+
+    抽出指示:
+    各Issue候補ごとに、以下のキーを持つJSONオブジェクトを作成してください。
+    - `title` (string, 必須): Issueのタイトル。通常 `**Title:**` の後に記述されています。
+    - `description` (string, 必須): Issueの説明文。通常 `**Description:**` の後に記述されています。もし Description セクションがない場合は、Issueの本文から主要な説明部分を抜き出してください。なければ空文字列。
+    - `tasks` (array of strings, 必須): タスクリスト。通常 `**Tasks:**` や `**タスク:**` の下のリスト項目 (`-` や `- [ ]`)。各タスクを文字列要素とするリスト。なければ空リスト `[]`。
+    - `relational_definition` (array of strings, 必須): 関連要件のリスト。通常 `**関連要件:**` の下のリスト項目。なければ空リスト `[]`。
+    - `relational_issues` (array of strings, 必須): 関連Issueのリスト。通常 `**関連Issue:**` の下のリスト項目。なければ空リスト `[]`。
+    - `acceptance` (array of strings, 必須): 受け入れ基準のリスト。通常 `**受け入れ基準:**` の下のリスト項目。なければ空リスト `[]`。
+    - `labels` (array of strings | null): ラベルのリスト。通常 `Labels:` の後にカンマ区切りで記述されています。ラベル名をトリムして文字列のリストにしてください。該当セクションがなければ `null`。
+    - `milestone` (string | null): マイルストーン名。通常 `Milestone:` または `**Milestone:**` の後に記述されています。**各Issue候補内で**見つかった場合にその値を設定し、なければ `null`。各Issue候補は独自のマイルストーンを持つことができます。
+    - `assignees` (array of strings | null): 担当者のGitHubユーザー名リスト。通常 `Assignee:` の後に `@` 付きでカンマ区切りで記述されています。`@` を除いたユーザー名のみを文字列のリストにしてください。該当セクションがなければ `null`。
+
+    抽出した全てのIssueオブジェクトを `issues` というキーを持つJSON配列にまとめてください。
+
+    {format_instructions}
+
+    注意:
+    - 各フィールドが存在しない場合は、指示に従い空文字列、空リスト `[]`、または `null` を適切に設定してください。
+    - Markdownの書式（太字やリスト）は、抽出後の本文関連フィールド（description, tasksなど）では維持せず、プレーンテキストまたはリストの要素として抽出してください。
+    - タイトル行やラベル行などのキーワード行自体は、最終的な本文フィールド（descriptionなど）に含めないでください。
+    - 各Issue候補は自身のマイルストーンを持ち、他のIssue候補のマイルストーンに影響されません。
+
+logging:
+  log_level: INFO # ログレベル (環境変数 LOG_LEVEL で上書き可)
+
+# 必要に応じて他の設定項目を追加できます
+# example_setting: value
