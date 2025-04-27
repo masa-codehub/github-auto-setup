@@ -1,107 +1,101 @@
 import pytest
-from unittest.mock import MagicMock  # GitHubAppClient をモック化するために使用
+from unittest.mock import MagicMock, patch
+import logging
 
-# テスト対象の UseCase と、それが依存する Client、発生しうる例外をインポート
+from github_automation_tool.adapters.github_client import GitHubClientError, GitHubAppClient
+from github_automation_tool.domain.exceptions import GitHubValidationError, GitHubAuthenticationError
 from github_automation_tool.use_cases.create_repository import CreateRepositoryUseCase
-from github_automation_tool.adapters.github_client import GitHubAppClient  # モックの spec に使う
-from github_automation_tool.domain.exceptions import (
-    GitHubValidationError, GitHubAuthenticationError, GitHubClientError
-)
-
-# --- Fixtures ---
 
 
 @pytest.fixture
-def mock_github_client() -> MagicMock:
-    """GitHubAppClient のモックインスタンスを作成するフィクスチャ"""
-    # spec=GitHubAppClient を指定すると、存在しないメソッドを呼んだ場合にエラーになる
-    mock = MagicMock(spec=GitHubAppClient)
-    return mock
+def mock_github_client():
+    """GitHub クライアントのモック"""
+    mock_client = MagicMock(spec=GitHubAppClient)  # GitHubAppClientのインスタンスとして認識させる
+    # デフォルトではリポジトリ作成が成功すると想定
+    mock_client.create_repository.return_value = "https://github.com/user/test-repo"
+    return mock_client
 
 
 @pytest.fixture
-def create_repo_use_case(mock_github_client: MagicMock) -> CreateRepositoryUseCase:
-    """テスト対象の UseCase インスタンスを作成（モッククライアントを注入）"""
+def use_case(mock_github_client):
+    """テスト用のユースケースインスタンス"""
     return CreateRepositoryUseCase(github_client=mock_github_client)
 
-# --- Test Cases ---
+
+def test_execute_success(use_case):
+    """リポジトリの作成に成功するケース"""
+    repo_name = "test-repo"
+    
+    result = use_case.execute(repo_name)
+    
+    assert result == "https://github.com/user/test-repo"
+    use_case.github_client.create_repository.assert_called_once_with(
+        repo_name
+    )
 
 
-def test_execute_success(create_repo_use_case: CreateRepositoryUseCase, mock_github_client: MagicMock):
-    """リポジトリ作成が成功し、正しいURLが返されることをテスト"""
-    repo_name = "my-awesome-repo"
-    expected_url = f"https://github.com/user/{repo_name}"
-
-    # モックの設定: client.create_repository が呼ばれたら expected_url を返す
-    mock_github_client.create_repository.return_value = expected_url
-
-    # UseCase を実行
-    actual_url = create_repo_use_case.execute(repo_name)
-
-    # 検証
-    assert actual_url == expected_url
-    # 依存する client のメソッドが正しい引数で1回呼ばれたことを確認
-    mock_github_client.create_repository.assert_called_once_with(repo_name)
+def test_execute_github_client_error(use_case):
+    """GitHub クライアントエラーが発生した場合、例外が再送出されること"""
+    repo_name = "test-repo"
+    client_error = GitHubClientError("Repository creation failed")
+    use_case.github_client.create_repository.side_effect = client_error
+    
+    with pytest.raises(GitHubClientError) as excinfo:
+        use_case.execute(repo_name)
+    
+    assert "Repository creation failed" in str(excinfo.value)
+    use_case.github_client.create_repository.assert_called_once()
 
 
-def test_execute_raises_validation_error_when_client_does(
-    create_repo_use_case: CreateRepositoryUseCase, mock_github_client: MagicMock
-):
-    """GitHubクライアントが GitHubValidationError を送出した場合、UseCaseもそれを送出するか"""
-    repo_name = "existing-repo"
-    # モックの設定: client.create_repository が GitHubValidationError を送出する
-    mock_exception = GitHubValidationError(
-        f"Repository '{repo_name}' already exists.", status_code=422)
-    mock_github_client.create_repository.side_effect = mock_exception
-
-    # UseCase を実行し、期待する例外が発生するか検証
-    with pytest.raises(GitHubValidationError, match=f"Repository '{repo_name}' already exists.") as excinfo:
-        create_repo_use_case.execute(repo_name)
-
-    # (オプション) 送出された例外がモックしたものと同じ内容か確認
-    assert excinfo.value.status_code == 422
-    # mock_github_client.create_repository が呼ばれたことを確認
-    mock_github_client.create_repository.assert_called_once_with(repo_name)
+def test_execute_unexpected_error(use_case, caplog):
+    """予期せぬエラーが発生した場合、適切にログが出力され、GitHubClientErrorがスローされること"""
+    repo_name = "test-repo"
+    unexpected_error = ValueError("Unexpected error")
+    use_case.github_client.create_repository.side_effect = unexpected_error
+    
+    with caplog.at_level(logging.ERROR), pytest.raises(GitHubClientError) as excinfo:
+        use_case.execute(repo_name)
+    
+    assert "An unexpected error occurred during repository creation" in str(excinfo.value)
+    assert "Unexpected error" in str(excinfo.value)  # 元の例外メッセージが含まれる
+    assert "ValueError" in caplog.text  # 例外の種類がログに含まれる
+    assert "Unexpected error" in caplog.text  # 元の例外メッセージがログにも含まれる
+    use_case.github_client.create_repository.assert_called_once()
 
 
-def test_execute_raises_auth_error_when_client_does(
-    create_repo_use_case: CreateRepositoryUseCase, mock_github_client: MagicMock
-):
-    """GitHubクライアントが GitHubAuthenticationError を送出した場合、UseCaseもそれを送出するか"""
-    repo_name = "forbidden-repo"
-    mock_exception = GitHubAuthenticationError(
-        "Permission denied.", status_code=403)
-    mock_github_client.create_repository.side_effect = mock_exception
-
-    with pytest.raises(GitHubAuthenticationError, match="Permission denied.") as excinfo:
-        create_repo_use_case.execute(repo_name)
-
-    assert excinfo.value.status_code == 403
-    mock_github_client.create_repository.assert_called_once_with(repo_name)
+def test_execute_empty_name(use_case):
+    """空のリポジトリ名の場合、エラーを返すこと"""
+    # 空文字や空白だけの名前
+    for empty_name in ["", None]:  # 空文字とNone
+        with pytest.raises(ValueError):
+            use_case.execute(empty_name)
+        
+        # GitHub クライアントは呼ばれないこと
+        use_case.github_client.create_repository.assert_not_called()
 
 
-def test_execute_raises_client_error_when_client_does(
-    create_repo_use_case: CreateRepositoryUseCase, mock_github_client: MagicMock
-):
-    """GitHubクライアントが GitHubClientError を送出した場合、UseCaseもそれを送出するか"""
-    repo_name = "error-repo"
-    mock_exception = GitHubClientError("Network error.")
-    mock_github_client.create_repository.side_effect = mock_exception
-
-    with pytest.raises(GitHubClientError, match="Network error."):
-        create_repo_use_case.execute(repo_name)
-
-    mock_github_client.create_repository.assert_called_once_with(repo_name)
-
-
-def test_execute_raises_value_error_for_invalid_repo_name(
-    create_repo_use_case: CreateRepositoryUseCase, mock_github_client: MagicMock
-):
-    """不正なリポジトリ名（スラッシュを含む）の場合に ValueError が発生するか"""
-    invalid_repo_name = "owner/repo"
-
+def test_execute_invalid_name_with_slash(use_case):
+    """スラッシュを含むリポジトリ名の場合、エラーを返すこと"""
     with pytest.raises(ValueError, match="Invalid repository name"):
-        create_repo_use_case.execute(invalid_repo_name)
+        use_case.execute("invalid/name")
+    
+    # GitHub クライアントは呼ばれないこと
+    use_case.github_client.create_repository.assert_not_called()
 
-    # GitHubクライアントは呼ばれないはず
-    mock_github_client.create_repository.assert_not_called()
+
+def test_execute_none_client():
+    """GitHub クライアントが None の場合、エラーを返すこと"""
+    with pytest.raises(TypeError, match="github_client must be an instance"):
+        CreateRepositoryUseCase(github_client=None)
+
+
+def test_execute_logs_debug_info(use_case, caplog):
+    """実行中のデバッグ情報が適切にログ出力されること"""
+    repo_name = "test-repo"
+    
+    with caplog.at_level(logging.INFO):
+        use_case.execute(repo_name)
+    
+    # 開始と完了のログが出力されていることを確認
+    assert f"Executing CreateRepositoryUseCase for repository: '{repo_name}'" in caplog.text
+    assert "Repository successfully created by client" in caplog.text
