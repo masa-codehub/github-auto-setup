@@ -1,7 +1,7 @@
 # 要件定義書: GitHub Automation Tool
 
-**バージョン:** 1.7
-**最終更新日:** 2025-04-27 (JST)
+**バージョン:** **1.8**
+**最終更新日:** **2025-04-28 (JST)**
 **ステータス:** 仕様確定
 
 ## 1. 概要と背景
@@ -25,9 +25,9 @@
 * **システムが満たすべき主要な成功基準:**
     * **機能:** 指定された Markdown ファイルと CLI 引数、**および設定ファイル/環境変数**に基づき、設定された生成 AI (OpenAI/Gemini) が情報を解析し、GitHub 上にリポジトリ、ラベル、ファイル内で言及された全てのマイルストーン、Issue (タイトル、本文、ラベル、Issueごとに指定されたマイルストーン、検証済みの担当者) を冪等性を保ちつつ自動作成・設定できること。AI が抽出した担当者は、Issue 作成前に GitHub API で有効性を検証し、無効な担当者は除外すること。 指定された場合は GitHub Projects (V2) に作成した Issue をアイテムとして追加できること。
     * **操作性:** 開発者が容易に利用できる CLI (`Typer`) を提供すること。
-    * **フィードバック:** 処理結果 (成功、失敗、**スキップ件数**、検証に失敗した担当者、エラー詳細) をログ (`logging`) および整形されたレポート (`CliReporter`) で明確にユーザーに提示すること。
+    * **フィードバック:** 処理結果 (成功、失敗、**スキップ件数**、検証に失敗した担当者、エラー詳細) をログ (`logging`) および整形されたレポート (`CliReporter`) で明確にユーザーに提示すること。**Dry Run モード実行時も、実行されるであろう操作のシミュレーション結果を明確に提示すること。**
     * **安全性:** Dry Run モード (`--dry-run`) で実際の変更前に実行結果をシミュレーションできること。
-    * **品質 (TDD観点):** 主要な機能コンポーネント (UseCase, Adapters, Domain Models) に対するユニットテストが実装され、テストスイートが常に成功し、コードカバレッジ 80% 以上を維持すること。
+    * **品質 (TDD観点):** 主要な機能コンポーネント (UseCase, Adapters, Domain Models) に対するユニットテストが実装され、テストスイートが常に成功し、コードカバレッジ **90%** 以上を維持すること。
     * **保守性/拡張性 (Clean Architecture観点):** UI (CLI)-UseCase-Domain-Infrastructure の各層が明確に分離され、依存関係のルール (内側への依存のみ許可) が遵守されていること。
     * **柔軟性:** **設定ファイル (`config.yaml`) または環境変数**により、使用する生成 AI モデル (OpenAI/Gemini)、**具体的なモデル名、AI プロンプトテンプレート、ログレベル**などを設定・切り替え可能であること。
 
@@ -39,13 +39,13 @@
         * CLI 引数:
             * リポジトリ名 (`--repo`、`owner/repo` または `repo` 形式)。
             * (任意) GitHub Project (V2) 名 (`--project`)。
-            * (任意) Dry Run フラグ (`--dry-run`)。
+            * (任意) Dry Run フラグ (`--dry-run`)。 **[更新: 実装済み]**
             * (任意) **設定ファイルパス (`--config-file`、デフォルト: `config.yaml`)。**
         * **設定ファイル (`config.yaml`):** AI モデル名 (`openai_model_name`, `gemini_model_name`)、**AI プロンプトテンプレート (`prompt_template`)**、ログレベル (`log_level`) など。**(詳細は `config.yaml.sample` を参照)**
         * **環境変数:** GitHub PAT (`GITHUB_PAT`, 必須)、AI API キー (`OPENAI_API_KEY`, `GEMINI_API_KEY`)、**使用するAIプロバイダー (`AI_MODEL`)、AIモデル名 (`OPENAI_MODEL_NAME`, `GEMINI_MODEL_NAME`)、ログレベル (`LOG_LEVEL`)。これらは `config.yaml` の設定を上書きします。**
     * **処理:**
         * **設定読み込み (`infrastructure/config.py`):** 指定された設定ファイル (`config.yaml`) と環境変数から設定値を読み込みます (`pydantic-settings`, `PyYAML` 利用)。**環境変数が YAML ファイルの設定を上書きします。** GitHub PAT など必須設定の欠落、設定値のバリデーションエラー発生時はエラー終了します。YAML ファイルが存在しない、またはパースエラーの場合は警告ログを出力し、デフォルト値と環境変数で処理を続行します。
-        * **ファイル読み込み (`infrastructure/file_reader.py`):** 指定された Markdown ファイルの内容を読み込みます。
+        * **ファイル読み込み (`infrastructure/file_reader.py`):** 指定された Markdown ファイルの内容を読み込みます。**`FileReader` クラスは削除され、スタンドアロン関数 (`read_markdown_file`, `read_yaml_file`等) を直接利用します。**
         * **AI 解析 (`adapters/ai_parser.py`):** 設定された AI モデル (LangChain 経由) と**設定から読み込まれたプロンプトテンプレート**を使用し、Markdown テキストから Issue 情報を抽出し、`ParsedRequirementData` ドメインモデル (`domain/models.py`) にマッピングします。**AI の解析結果が Pydantic モデルのバリデーション（例: Issue タイトルが空でないこと）を満たさない場合、エラーとして処理します。解析の結果、Issue が 0 件だった場合は警告ログを出力します。**
         * **GitHub 操作 (UseCase 経由、`adapters/github_client.py` を使用):**
             * **リポジトリ作成/確認 (`CreateRepositoryUseCase`):** プライベートリポジトリを `githubkit` で作成します (冪等)。Owner 省略時は認証ユーザー (`get_authenticated`) を Owner とします。
@@ -55,12 +55,19 @@
             * **Issue 作成/設定 (`CreateIssuesUseCase` -> `GitHubAppClient.create_issue`):** `ParsedRequirementData` 内の各 `IssueData` に基づき Issue を作成します。タイトル、本文 (抽出した各セクションを結合)、ラベル、その Issue に指定されたマイルストーンの ID (事前に解決しておく)、**上記で検証済みの有効な**担当者リストを設定します。同名タイトル (Open状態) の Issue が存在する場合はスキップします。API エラー発生時は Issue 単位で処理継続し結果に記録します。成功時に Issue URL と Node ID を取得します。
             * **プロジェクト検索 (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.find_project_v2_node_id`):** `--project` 指定時、オーナー名とプロジェクト名で Project (V2) の Node ID を GraphQL で検索します。
             * **プロジェクトへの Issue 追加 (`CreateGitHubResourcesUseCase` -> `GitHubAppClient.add_item_to_project_v2`):** プロジェクト Node ID と作成された Issue の Node ID を使用し、GraphQL でプロジェクトにアイテムを追加します。**エラー発生時はコンテキスト情報を含むログを出力し、**アイテム単位で処理継続し結果に記録します。
-        * **ワークフロー制御 (`CreateGitHubResourcesUseCase`):** 上記 GitHub 操作の実行順序 (Repo -> Labels -> Milestones (複数) -> Project Search -> Issues -> Project Add) を制御します。リポジトリ作成などの致命的エラー発生時は処理を中断し例外を送出します。**ループ処理中の部分的なエラーは可能な限りハンドルし、結果に記録します。**
+        * **ワークフロー制御 (`CreateGitHubResourcesUseCase`):** 上記 GitHub 操作の実行順序 (Repo -> Labels -> Milestones (複数) -> Project Search -> Issues -> Project Add) を制御します。リポジトリ作成などの致命的エラー発生時は処理を中断し例外を送出します。**ループ処理中の部分的なエラーは可能な限りハンドルし、結果に記録します。** **`--dry-run` 指定時は、GitHubへの書き込み操作を行わず、実行されるであろう操作内容をシミュレートし結果オブジェクトに格納します。**
     * **出力:**
         * 標準出力/標準エラー出力: ログレベルに応じた処理状況、エラーメッセージ (`logging`)。**エラーメッセージには、発生箇所や対象リソースなどのコンテキスト情報が含まれるように改善されました。** 詳細な原因や対処法までは含めません。
-        * 整形済み結果レポート: 全体の処理結果サマリー (`CreateGitHubResourcesResult`) を `CliReporter` がログに出力します。**サマリーにはスキップされた Issue の件数も含まれます。** 部分的失敗（検証失敗担当者情報、ラベル・マイルストーン・アイテム追加の失敗詳細）もこのレポートに含まれます。
+        * 整形済み結果レポート: 全体の処理結果サマリー (`CreateGitHubResourcesResult`) を `CliReporter` がログに出力します。**サマリーにはスキップされた Issue の件数も含まれます。** 部分的失敗（検証失敗担当者情報、ラベル・マイルストーン・アイテム追加の失敗詳細）もこのレポートに含まれます。**Dry Run モード実行時は、その旨とシミュレーション結果がレポートに含まれます。**
     * **実行形態:** Python CLI アプリケーション (`Typer`、`main.py` がエントリーポイント)。Docker コンテナでの実行を推奨します。
     * **認証:** GitHub PAT (Classic: `repo`, `project` スコープ / Fine-grained: 必要な権限セット)、選択された AI モデルの API キー。**これらは環境変数または `.env` ファイルで設定します。**
+* **対象範囲外（Out of Scope）:** (明確化のため追加)
+    * GitHub リソースの更新・削除。
+    * Markdownファイル自体の生成・編集支援。
+    * Pull Request の自動作成や連携。
+    * GitHub以外のプラットフォーム連携 (Jira, GitLab等)。
+    * GUIインターフェースの提供。
+    * API呼び出しのリトライ機構 (現状)。
 
 ## 4. 主要なステークホルダーと役割
 
@@ -108,7 +115,33 @@
         * 設定読み込み、ファイル読み込み、AI 解析 (必須項目不足含む)、リポジトリ名解決、リポジトリ作成/確認、**担当者検証** のいずれかで致命的エラーが発生した場合、UseCase または `main.py` が例外を送出し、`main.py` が捕捉してエラーメッセージを表示し、非ゼロコードで終了する。
         * ラベル作成、マイルストーン作成 (個別)、プロジェクト検索、Issue 作成 (個別)、プロジェクトへのアイテム追加 (個別) でAPIエラー等が発生した場合、処理は可能な限り続行され、エラー情報が最終結果に記録される。
 
+* **UC-002: ドライランモードで実行結果をシミュレートする** [追加]
+    * **アクター:** 開発者、プロジェクトマネージャー
+    * **事前条件:**
+        1.  UC-001 の事前条件 1, 2, 3 を満たす。
+        2.  CLI で `--file`, `--repo` に加え、`--dry-run` が指定されている。
+    * **事後条件:**
+        1.  GitHub 上のリソース (リポジトリ、ラベル、マイルストーン、Issue、プロジェクトアイテム) に**変更は加えられない**。
+        2.  標準出力/標準エラー出力およびレポートに、Dry Run モードである旨と、作成/設定/追加される**予定だった**リソースの情報（リポジトリ名、ラベル名リスト、マイルストーン名リスト、Issueタイトルリスト、プロジェクト連携情報など）が表示される。
+        3.  処理は正常終了する (致命的エラーが発生しない限り)。
+    * **基本フロー (概要):**
+        1.  `main.py`: Typer が CLI 引数を解析・検証 (`--dry-run` を認識)。
+        2.  `main.py`: `load_settings()` で設定を読み込み、検証。ロガーを設定。
+        3.  `main.py`: `read_markdown_file()` で指定された Markdown ファイルを読み込む。
+        4.  `main.py`: `AIParser` を初期化し、`parse()` メソッドで Markdown を解析、`ParsedRequirementData` を取得。
+        5.  `main.py`: 依存コンポーネントをインスタンス化。
+        6.  `main.py`: `CreateGitHubResourcesUseCase.execute()` を呼び出し、`dry_run=True` を渡す。
+        7.  `CreateGitHubResourcesUseCase`: `dry_run` フラグを検知。
+        8.  `CreateGitHubResourcesUseCase`: リポジトリ名解決を実行。
+        9.  `CreateGitHubResourcesUseCase`: GitHub への書き込み処理 (リポジトリ作成UC呼び出し、ラベル/マイルストーン/Issue作成UC呼び出し、プロジェクトアイテム追加Client呼び出し) を**スキップ**する。
+        10. `CreateGitHubResourcesUseCase`: `ParsedRequirementData` とリポジトリ情報に基づき、作成されるであろうラベル、マイルストーン、Issue、プロジェクトアイテムの情報を**シミュレート**する。
+        11. `CreateGitHubResourcesUseCase`: シミュレーション結果を含む `CreateGitHubResourcesResult` オブジェクトを構築して返却 (例: `repository_url` に `(Dry Run)` を付与)。
+        12. `main.py`: 受け取った `CreateGitHubResourcesResult` を `CliReporter.display_create_github_resources_result()` に渡し、Dry Run モードの結果として表示。
+    * **代替フロー（例外フロー）:**
+        * 設定読み込み、ファイル読み込み、AI 解析、リポジトリ名解決で致命的エラーが発生した場合は UC-001 と同様にエラー終了する。
+
 ## 6. ドメインモデル（初期案）
+
 * **値オブジェクト (Value Object):**
     * `IssueData`: AI によって解析された単一 Issue の情報の不変なスナップショットです。タイトル、説明、タスクリスト、関連要件リスト、関連 Issue リスト、受け入れ基準リスト、ラベルリスト、**その Issue に対応する**マイルストーン名、担当者リストを持ちます。`Pydantic BaseModel` で実装されます。**`title` フィールドは空文字・空白のみを許可しないバリデーションが追加されました。**
 * **エンティティ (Entity):**
@@ -126,16 +159,18 @@
     * `GitHubResourceNotFoundError`
     * `GitHubValidationError`
     * `AiParserError`
+    * **`FileReaderError`**
     これらは外部システムとのインタラクションにおけるドメイン知識（エラーの種類）を表現します。
-* **ユビキタス言語候補 (再掲):** 要件定義ファイル (Markdown), 解析 (Parse), 登録 (Create/Ensure), 冪等性 (Idempotency), スキップ (Skip), リポジトリ (Repository), Issue, ラベル (Label), マイルストーン (Milestone), 担当者 (Assignee), プロジェクト (Project V2), アイテム (Item), PAT, APIキー, **設定ファイル (Config File)**, CLI, Dry Run, UseCase, Adapter, 結果 (Result), エラー (Error), 成功 (Success), 失敗 (Failed), 検証失敗担当者 (Validation Failed Assignee), **プロンプトテンプレート (Prompt Template)**。
+* **ユビキタス言語候補 (再掲):** 要件定義ファイル (Markdown), 解析 (Parse), 登録 (Create/Ensure), 冪等性 (Idempotency), スキップ (Skip), リポジトリ (Repository), Issue, ラベル (Label), マイルストーン (Milestone), 担当者 (Assignee), プロジェクト (Project V2), アイテム (Item), PAT, APIキー, **設定ファイル (Config File)**, CLI, Dry Run, UseCase, Adapter, 結果 (Result), エラー (Error), 成功 (Success), 失敗 (Failed), 検証失敗担当者 (Validation Failed Assignee), **プロンプトテンプレート (Prompt Template)**, **シミュレーション (Simulate)**。
 
 ## 7. 機能要件
+
 * **(TDD観点):** 各要件は入力、処理、期待される出力/状態変化が明確であり、テストケースを作成可能にします。
 * **FR-001:** 指定された Markdown ファイル (`--file`) の内容を UTF-8 で読み込むこと。
     * 入力: ファイルパス (Path オブジェクト)
     * 処理: ファイルを開き、内容を文字列として読み取る。
     * 出力: ファイル内容の文字列。
-    * 例外: `FileNotFoundError`, `PermissionError`, `UnicodeDecodeError`, `IOError` を適切に送出すること (`infrastructure/file_reader.py`)。
+    * 例外: `FileNotFoundError`, `PermissionError`, `UnicodeDecodeError`, `IOError` **を捕捉し、`FileReaderError` として送出すること** (`infrastructure/file_reader.py`)。
 * **FR-002:** **設定ファイルまたは環境変数で指定された** AI モデル (OpenAI または Gemini) と**プロンプトテンプレート**を使用して、Markdown テキストから Issue 情報を抽出し、`ParsedRequirementData` オブジェクトに構造化すること (`adapters/ai_parser.py`)。Pydantic モデルでのバリデーション (**特に title が空でないこと**) を含む。
     * 入力: Markdown テキスト文字列、**設定オブジェクト (`Settings`)**。
     * 処理: **設定された**プロンプトテンプレートと AI API を使用して解析。抽出項目は `IssueData` モデルのフィールドに対応。
@@ -188,10 +223,10 @@
         * プロジェクトが見つかり、Issue が作成された場合、`GitHubAppClient.add_item_to_project_v2()` を呼び出す (GraphQL)。
     * 出力: プロジェクト Node ID、追加されたアイテムの ID (またはエラー情報)。
     * 例外: プロジェクト検索エラー、アイテム追加エラー (`GitHubClientError` 等) を捕捉し、`CreateGitHubResourcesResult` に記録。
-* **FR-009:** `--dry-run` オプションが指定された場合、GitHub への書き込み操作 (リポジトリ作成、ラベル作成、マイルストーン作成、Issue 作成、アイテム追加) を行わず、実行されるであろう操作のログを出力すること。
+* **FR-009:** `--dry-run` オプションが指定された場合、GitHub への書き込み操作を行わず、実行されるであろう操作の**シミュレーション結果**をログおよびレポートに出力すること。
     * 入力: `--dry-run` フラグ。
-    * 処理: `CreateGitHubResourcesUseCase` 内でフラグをチェックし、書き込みを伴う UseCase や Client メソッドの呼び出しをスキップ。シミュレーション結果を `CreateGitHubResourcesResult` に設定。
-    * 出力: Dry Run モードである旨のログ、実行されるはずだった操作のログ、シミュレーション結果を含む `CreateGitHubResourcesResult`。
+    * 処理: `CreateGitHubResourcesUseCase` 内でフラグをチェックし、書き込みを伴う UseCase や Client メソッドの呼び出しをスキップ。**解析データに基づき、作成/設定/追加されるリソースをシミュレート**し、結果を `CreateGitHubResourcesResult` に設定。
+    * 出力: Dry Run モードである旨のログ、**実行されるはずだった操作のシミュレーションログ**、シミュレーション結果を含む `CreateGitHubResourcesResult`。
 * **FR-010 (新規):** 設定ファイル (`config.yaml` 等) と環境変数を読み込み、設定オブジェクト (`Settings`) を生成すること (`infrastructure/config.py`)。
     * 入力: 設定ファイルパス (CLI オプション `--config-file` またはデフォルト)、環境変数。
     * 処理: 指定された YAML ファイルを読み込む (`PyYAML`)。環境変数を読み込む (`pydantic-settings`)。環境変数が YAML の値を上書きする。必須項目 (例: `GITHUB_PAT`) が欠落している場合は `ValidationError` を送出。YAML ファイルが存在しない/パースエラーの場合は警告ログを出力し、デフォルト値/環境変数で処理を試行（必須項目が満たせなければ `ValidationError`）。
@@ -218,8 +253,13 @@
     * 新しい AI モデルや GitHub クライアントライブラリへの変更は、対応する Adapter の修正に限定されるようにします。
     * 新しい機能 (例: PR作成) は、新しい UseCase や必要に応じて Domain モデル、Adapter を追加することで実現できるようにします。
     * **将来的なリトライ処理の導入を考慮し、API クライアント層 (`GitHubAppClient`) での例外ハンドリングとログコンテキストが改善されました。**
+    * **I/O処理分離:** ファイル読み込み処理 (`read_markdown_file`, `read_yaml_file`) が `infrastructure/file_reader.py` に明確に分離され、`FileReader` クラスが削除されたことで、関心の分離がより明確になりました。
     * **将来的な中間生成物（JSON等）の操作機能追加を考慮し、AI 解析処理 (`AIParser`) と GitHub 登録処理 (`CreateGitHubResourcesUseCase`) が明確に分離されていることを維持します。**
     * **将来的なリポジトリ可視性（Public/Private）設定の追加や、デフォルトルールセット適用のための拡張ポイントをリポジトリ作成 UseCase 周辺に考慮しておきます（インターフェースの柔軟性など）。**
+* **テスト容易性:** [追加]
+    * 主要な機能はユニットテストで検証可能であること。
+    * 外部 API への依存はモック可能であること。
+    * **Dry Run モードの動作を検証するテストが存在すること。**
 
 ## 9. 受け入れ基準（Acceptance Criteria）
 
@@ -229,7 +269,7 @@
     * `--project "Existing Project"` を付けて実行し、"Existing Project" が存在する場合、作成された Issue がそのプロジェクトにアイテムとして追加され、成功ログが出力されること。
     * `--project "Non Existing Project"` を付けて実行した場合、プロジェクトが見つからない旨の警告ログが出力され、アイテム追加処理は行われず、他の処理は正常に完了すること。
 * **AC-Dry-Run (FR-009):**
-    * `--dry-run` を付けて実行した場合、GitHub 上に変更が加えられず、「Dry run mode enabled」および実行されるであろう操作を示すログが出力されること。
+    * `--dry-run` を付けて実行した場合、GitHub 上に変更が加えられず、「Dry run mode enabled」および**実行されるであろう操作を示すログ**（例: `[Dry Run] Would create repository...`）と、**整形されたシミュレーション結果レポート**が出力されること。
 * **AC-Owner-Infer (FR-003):**
     * `--repo repo-name-only` を付けて実行した場合、認証ユーザー (`test-auth-user`) の下に `test-auth-user/repo-name-only` リポジトリが作成されること。
 * **AC-Error-Handling (NFR-Err-01, NFR-Err-02):**
@@ -240,8 +280,8 @@
 * **AC-Assignee-Validation-AllInvalid (新規):** 全ての担当者が無効な Issue を処理した場合、Issue は担当者が設定されない状態で作成され、無効な担当者が検証に失敗した旨の警告ログが出力されること。
 * **AC-Assignee-Validation-ApiError (新規):** 担当者検証のための GitHub API 呼び出しが失敗した場合（例: レート制限）、該当 Issue の担当者設定は行われず、エラーがログに記録されること（Issue 作成自体は試行される）。
 * **AC-Tests-Pass (NFR-Test-01, NFR-Test-02):**
-    * 開発環境で `pytest` コマンドを実行すると、全てのユニットテスト (現時点で 145 件 **+ 新機能分**) が成功すること。
-    * `pytest --cov` によるカバレッジ計測結果が 80% 以上であること。
+    * 開発環境で `pytest` コマンドを実行すると、全てのユニットテスト (**現時点で 193 件**) が成功すること。
+    * `pytest --cov` によるカバレッジ計測結果が **90%** 以上であること。
 * **AC-AI-Switch (NFR-AI-01):**
     * 環境変数 `AI_MODEL=gemini` (かつ `GEMINI_API_KEY` が有効) を設定して実行すると、Gemini モデルが使用されて処理が正常に完了すること (ログ等で確認)。デフォルト (または `AI_MODEL=openai`) では OpenAI モデルが使用されること。
 
@@ -263,6 +303,8 @@
 * **Adapter:** UseCase 層と外部要素 (UI, DB, 外部 API クライアント) を接続するコンポーネント。依存性の方向を制御する役割を持つ (例: `GitHubAppClient`, `AIParser`, `CliReporter`)。
 * **Dry Run:** 実際には GitHub 上の状態を変更せず、実行されるであろう操作をシミュレートし、ログに出力するモード (`--dry-run`)。
 * **担当者検証 (Assignee Validation):** Issue 作成前に、指定された担当者名が GitHub 上で有効なユーザーであり、かつ対象リポジトリにアクセス可能かを確認するプロセス。
+* **シミュレーション (Simulation):** Dry Run モードにおいて、実際には操作を行わず、実行されるであろう処理内容や結果を模擬的に生成すること。
+* **FileReaderError:** ファイル読み込み操作 (Markdown, YAML 等) におけるエラーを示すカスタム例外クラス。
 
 ## 11. 制約条件・前提条件
 * **開発言語:** Python 3.10 以上 (テスト環境: Python 3.13.3)。
