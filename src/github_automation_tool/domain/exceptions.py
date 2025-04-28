@@ -20,7 +20,11 @@ class GitHubRateLimitError(GitHubClientError):
 
 class GitHubResourceNotFoundError(GitHubClientError):
     """リソースが見つからないエラー (404)"""
-    pass
+    
+    def __init__(self, message: str, status_code: int | None = 404, original_exception: Exception | None = None, is_graphql_not_found: bool = False):
+        super().__init__(message, status_code=status_code, original_exception=original_exception)
+        # GraphQLのNot Foundエラー(ignore_not_found用)を示すフラグ
+        self.is_graphql_not_found = is_graphql_not_found
 
 
 class GitHubValidationError(GitHubClientError):
