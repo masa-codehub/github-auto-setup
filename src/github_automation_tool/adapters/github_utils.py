@@ -96,7 +96,7 @@ def github_api_error_handler(
     GraphQL APIの場合、戻り値のレスポンスにエラーが含まれているかもチェックします。
 
     Args:
-        context_func: メソッド呼び出し時のコンテキスト文字列を生成する関数 (self, *args, **kwargs を受け取る)。
+        context_func: メソッド呼び出し時のコンテキスト文字列を生成する関数 (self, *args を受け取る)。
                      コンテキストはログ出力とエラーメッセージに使用されます。
                      省略した場合、デコレートされる関数名が使用されます。
         ignore_not_found: Trueの場合、404 Not Foundエラーを無視し、Noneを返します。
@@ -108,7 +108,7 @@ def github_api_error_handler(
 
     Examples:
         ```python
-        def get_repo_context(self, owner, repo, **kwargs): 
+        def get_repo_context(self, owner, repo): 
             return f"get repo {owner}/{repo}"
 
         @github_api_error_handler(get_repo_context)

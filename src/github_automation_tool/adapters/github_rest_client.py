@@ -2,7 +2,7 @@
 # GitHubのREST APIを扱うためのクライアントクラス
 
 import logging
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, cast
 from githubkit import GitHub, Response
 # 必要なモデルを githubkit からインポート
 from githubkit.versions.latest.models import (
@@ -36,32 +36,32 @@ class GitHubRestClient:
         logger.info("GitHubRestClient initialized.")
 
     # --- Context Generators for Decorator ---
-    # デコレータに渡すコンテキスト生成メソッド (private)
-    def _create_repo_context(self, repo_name: str, **kwargs: Any) -> str:
+    # デコレータに渡すコンテキスト生成メソッド (private) - **kwargs削除
+    def _create_repo_context(self, repo_name: str) -> str:
         return f"creating repository '{repo_name}'"
     
-    def _get_auth_user_context(self, **kwargs: Any) -> str:
+    def _get_auth_user_context(self) -> str:
         return "getting authenticated user"
     
-    def _get_label_context(self, owner: str, repo: str, label_name: str, **kwargs: Any) -> str:
+    def _get_label_context(self, owner: str, repo: str, label_name: str) -> str:
         return f"getting label '{label_name}' in {owner}/{repo}"
     
-    def _create_label_context(self, owner: str, repo: str, label_name: str, **kwargs: Any) -> str:
+    def _create_label_context(self, owner: str, repo: str, label_name: str, **_) -> str: # color, descを受け取っても無視
         return f"creating label '{label_name}' in {owner}/{repo}"
     
-    def _list_milestones_context(self, owner: str, repo: str, **kwargs: Any) -> str:
+    def _list_milestones_context(self, owner: str, repo: str, **_) -> str: # state, per_pageを受け取っても無視
         return f"listing milestones for {owner}/{repo}"
     
-    def _create_milestone_context(self, owner: str, repo: str, title: str, **kwargs: Any) -> str:
+    def _create_milestone_context(self, owner: str, repo: str, title: str, **_) -> str: # state, descを受け取っても無視
         return f"creating milestone '{title}' in {owner}/{repo}"
     
-    def _create_issue_context(self, owner: str, repo: str, title: str, **kwargs: Any) -> str:
+    def _create_issue_context(self, owner: str, repo: str, title: str, **_) -> str: # body etc を受け取っても無視
         return f"creating issue '{title}' in {owner}/{repo}"
     
-    def _search_issues_context(self, q: str, **kwargs: Any) -> str:
+    def _search_issues_context(self, q: str, **_) -> str: # per_pageを受け取っても無視
         return f"searching issues with query '{q}'"
     
-    def _check_collaborator_context(self, owner: str, repo: str, username: str, **kwargs: Any) -> str:
+    def _check_collaborator_context(self, owner: str, repo: str, username: str) -> str:
         return f"checking collaborator status for '{username}' in {owner}/{repo}"
 
     # --- Repository ---
@@ -82,7 +82,7 @@ class GitHubRestClient:
         if not response or not response.parsed_data:
             # 通常、APIが201を返せばparsed_dataは存在するはず
             raise GitHubClientError(f"Repository creation for '{repo_name}' seemed successful but response data is missing.")
-        logger.info(f"Successfully created repository: {response.parsed_data.html_url}")
+        logger.debug(f"Successfully created repository: {response.parsed_data.html_url}") # INFO -> DEBUG
         return response.parsed_data
 
     # --- Authenticated User ---
@@ -113,8 +113,8 @@ class GitHubRestClient:
         if response and response.status_code == 200 and not response.parsed_data:
              logger.warning(f"get_label for '{label_name}' returned 200 OK but no data.")
              return None
-        # parsed_dataがあればそれを返す (Noneの場合もそのまま返す)
-        return response.parsed_data if response else None
+        # parsed_dataがあればそれを返す (Noneの場合もそのまま返す) - castを追加
+        return cast(Optional[Label], response.parsed_data) if response else None
 
     @github_api_error_handler(_create_label_context)
     def create_label(self, owner: str, repo: str, label_name: str,
@@ -138,7 +138,7 @@ class GitHubRestClient:
         )
         if not response or not response.parsed_data:
             raise GitHubClientError(f"Label creation for '{trimmed_label_name}' seemed successful but response data is missing.")
-        logger.info(f"Successfully created label '{trimmed_label_name}'.")
+        logger.debug(f"Successfully created label '{trimmed_label_name}'.") # INFO -> DEBUG
         return response.parsed_data
 
     # --- Milestones ---
@@ -177,7 +177,7 @@ class GitHubRestClient:
         )
         if not response or not response.parsed_data or response.parsed_data.number is None:
             raise GitHubClientError(f"Milestone creation for '{trimmed_title}' seemed successful but response data is missing or invalid.")
-        logger.info(f"Successfully created milestone '{trimmed_title}' with ID {response.parsed_data.number}.")
+        logger.debug(f"Successfully created milestone '{trimmed_title}' with ID {response.parsed_data.number}.") # INFO -> DEBUG
         return response.parsed_data
 
     # --- Issues ---
@@ -205,7 +205,7 @@ class GitHubRestClient:
         response: Response[Issue] = self.gh.rest.issues.create(**payload)
         if not response or not response.parsed_data or not response.parsed_data.html_url:
              raise GitHubClientError(f"Issue creation for '{trimmed_title}' seemed successful but response data is missing.")
-        logger.info(f"Successfully created issue '{trimmed_title}': {response.parsed_data.html_url}")
+        logger.debug(f"Successfully created issue '{trimmed_title}': {response.parsed_data.html_url}") # INFO -> DEBUG
         return response.parsed_data
 
     # --- Search ---
@@ -214,7 +214,7 @@ class GitHubRestClient:
         """
         Issue と Pull Request を検索します。
         成功した場合、検索結果オブジェクトを返します。
-        注意: githubkitの内部型は変更される可能性があるため、Any型を使用しています。
+        注意: githubkitのバージョンによって型が異なるため、Any型を使用しています。
               返却値には total_count プロパティと items プロパティが含まれることを想定します。
         """
         logger.debug(f"Searching issues/PRs with query: {q} (per_page={per_page})")
@@ -238,7 +238,7 @@ class GitHubRestClient:
         """
         logger.debug(f"Checking collaborator status for '{username}' on {owner}/{repo}")
         # 成功時は status_code 204 が返り、parsed_data は None
-        response = self.gh.rest.repos.check_collaborator(
+        response: Optional[Response[None]] = self.gh.rest.repos.check_collaborator(
             owner=owner, repo=repo, username=username
         )
         

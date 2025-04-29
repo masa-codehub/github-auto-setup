@@ -1,7 +1,8 @@
 # src/github_automation_tool/adapters/github_graphql_client.py
 
 import logging
-from typing import Optional, Dict, Any, cast, TypeVar
+from typing import Optional, Dict, Any
+
 from githubkit import GitHub
 
 # GraphQLResponse のインポート元を修正 (githubkit v1.0.0 以降を想定)
@@ -22,9 +23,6 @@ from github_automation_tool.domain.exceptions import (
 )
 
 logger = logging.getLogger(__name__)
-
-# 戻り値の型アノテーション用
-R = TypeVar('R')
 
 class GitHubGraphQLClient:
     """
@@ -67,6 +65,10 @@ class GitHubGraphQLClient:
         # UseCase側で引数のバリデーションを行う想定
         trimmed_owner = owner.strip()
         trimmed_name = project_name.strip()
+        if not trimmed_owner or not trimmed_name:
+            logger.warning("Owner or project name is empty after trimming.")
+            return None # 空の場合は検索しない
+
         logger.info(f"Attempting to find Project V2 '{trimmed_name}' for owner '{trimmed_owner}'...")
 
         query = """
@@ -82,6 +84,7 @@ class GitHubGraphQLClient:
         has_next_page = True
         page_count = 0
         max_pages = 10 # Safety limit
+        found_project_id: Optional[str] = None
 
         while has_next_page and page_count < max_pages:
             page_count += 1
@@ -90,48 +93,85 @@ class GitHubGraphQLClient:
 
             logger.debug(f"Querying page {page_count} of projects for '{trimmed_owner}', cursor: {after_cursor}")
 
-            # GraphQL APIを呼び出し
-            response = self.gh.graphql(query, variables) # type: ignore # Ignore complex response type
-            
-            # 404 Not Found はデコレータが処理して None を返すはず。
-            # errorsフィールドがある場合もデコレータが処理するので、ここでは対処不要
+            # --- 修正: GraphQL呼び出しとレスポンス処理 ---
+            response = self.gh.graphql(query, variables) # type: ignore
 
-            # --- Data Extraction ---
-            # レスポンスがNoneの場合（デコレータがエラー処理した場合）
+            # デコレータがエラー (NOT_FOUND含む) を処理した場合、Noneが返るのでチェック
             if response is None:
-                logger.warning(f"Project V2 '{trimmed_name}' not found for owner '{trimmed_owner}' (handled as None).")
-                return None
+                logger.warning(f"GraphQL query failed or resource not found during project search (page {page_count}). Returning None.")
+                return None # エラーまたはNot Foundの場合は終了
 
-            data = response.get("data") if isinstance(response, dict) else getattr(response, 'data', None)
-            if not data:
-                logger.warning(f"GraphQL response has empty data on page {page_count} for project search. This might indicate an issue.")
-                return None  # データがない場合はNoneを返す
+            # --- ★修正箇所: レスポンス処理のデータ抽出を改善★ ---
+            data = None
+            if isinstance(response, dict):
+                # まず、response自体がデータ辞書（repositoryOwnerキーを持つ）かチェック
+                if "repositoryOwner" in response:
+                    data = response # response そのものがデータ
+                    logger.debug("Response appears to be the data dictionary itself.")
+                # 次に、標準的な {"data": ...} 構造かチェック
+                elif "data" in response:
+                    data = response.get("data")
+                    logger.debug("Accessed data via response['data'].")
+                # エラーチェック (念のため)
+                if response.get("errors"):
+                    logger.error(f"GraphQL errors found in response: {response['errors']}")
+                    raise GitHubClientError(f"GraphQL errors on page {page_count}: {response['errors']}")
+            elif hasattr(response, 'data'): # オブジェクトの場合
+                data = response.data
+                logger.debug("Accessed data via response.data.")
+                if hasattr(response, 'errors') and response.errors:
+                    logger.error(f"GraphQL errors found in response object: {response.errors}")
+                    raise GitHubClientError(f"GraphQL errors on page {page_count}: {response.errors}")
+            # --- ★修正箇所ここまで★ ---
 
+            logger.debug(f"  Response data type after extraction: {type(data)}")
+            logger.debug(f"  Response data content after extraction: {data}")
+
+            # 修正: dataがNoneの場合のみエラーとし、空辞書{}は有効なデータとして扱う
+            if data is None:
+                logger.warning(f"Could not extract valid data from GraphQL response on page {page_count}.")
+                return None # データが抽出できなければ終了
+
+            # --- repositoryOwnerキーの存在チェックとエラーメッセージの改善 ---
             owner_data = data.get("repositoryOwner")
-            if not owner_data:
-                # Ownerが見つからない場合はNoneを返す
-                logger.warning(f"Repository owner '{trimmed_owner}' not found or has no projects (page {page_count}). Returning None.")
-                return None
+            if owner_data is None:  # Noneの場合のみエラー扱いに変更（空辞書{}は有効）
+                logger.warning(f"Repository owner '{trimmed_owner}' not found or missing 'repositoryOwner' field in response (page {page_count}).")
+                return None # Ownerが完全に見つからない場合はNone
 
+            # ProjectsV2フィールドの存在チェックを改善
             projects_v2 = owner_data.get("projectsV2")
             if not projects_v2:
-                logger.warning(f"No projectsV2 data found for owner '{trimmed_owner}' (page {page_count}). Returning None.")
-                return None # projectsV2 field がない場合も Not Found 扱い
+                logger.warning(f"Repository owner '{trimmed_owner}' not found or has no projects (page {page_count}).")
+                return None # projectsV2 field がない場合もNone
 
             nodes = projects_v2.get("nodes", [])
             page_info = projects_v2.get("pageInfo", {})
             if nodes is None or page_info is None:
                 logger.error(f"GraphQL response missing 'nodes' or 'pageInfo' on page {page_count}.")
-                return None  # エラーの場合もNoneを返す
+                raise GitHubClientError(f"Invalid GraphQL response structure on page {page_count}.") # エラーとして扱う
 
+            logger.debug(f"Checking {len(nodes)} nodes on page {page_count}...")
             for node in nodes:
-                if node and isinstance(node, dict) and node.get("title") == trimmed_name:
-                    found_project_id = node.get("id")
-                    if found_project_id:
-                        logger.info(f"Found project '{trimmed_name}' with Node ID: {found_project_id}")
-                        return found_project_id # 発見
+                if node and isinstance(node, dict):
+                     node_title = node.get("title")
+                     node_id = node.get("id")
+                     logger.debug(f" Checking node: title='{node_title}', id='{node_id}'") # 詳細ログ追加
+                     if node_title == trimmed_name:
+                         if node_id:
+                             found_project_id = node_id
+                             logger.info(f"FOUND project '{trimmed_name}' with ID: {found_project_id}")
+                             has_next_page = False # 見つかったらループ終了フラグ
+                             break # inner loop break
+                         else:
+                              logger.warning(f"Found project '{trimmed_name}' but it has no ID. Skipping.")
 
-            # Pagination update
+            if found_project_id:
+                break # outer loop break
+
+            # ページネーション更新 (ループ終了フラグが立っていない場合のみ)
+            if not has_next_page:
+                 break
+                 
             has_next_page = page_info.get("hasNextPage", False)
             if has_next_page:
                 after_cursor = page_info.get("endCursor")
@@ -140,12 +180,14 @@ class GitHubGraphQLClient:
                     has_next_page = False
         # --- End While Loop ---
 
-        if page_count >= max_pages:
-            logger.warning(f"Reached maximum page limit ({max_pages}) while searching for project '{trimmed_name}'. Project not found.")
+        if found_project_id:
+            return found_project_id
         else:
-             # ループが正常に終了したが、見つからなかった場合
-             logger.warning(f"Project V2 '{trimmed_name}' not found for owner '{trimmed_owner}' after searching {page_count} page(s).")
-        return None # 見つからなかった
+            if page_count >= max_pages:
+                logger.warning(f"Reached maximum page limit ({max_pages}) while searching for project '{trimmed_name}'. Project not found.")
+            else:
+                 logger.warning(f"Project V2 '{trimmed_name}' not found for owner '{trimmed_owner}' after searching {page_count} page(s).")
+            return None # 見つからなかった
 
     @github_api_error_handler(_add_item_context)
     def add_item_to_project_v2(self, project_node_id: str, content_node_id: str) -> str:
@@ -182,24 +224,23 @@ class GitHubGraphQLClient:
         
         # レスポンスがNoneの場合（デコレータがエラー処理した場合）
         if response is None:
-            logger.warning(f"Failed to add item to project {p_id} (handled by decorator).")
+            logger.warning(f"GraphQL mutation failed or returned None during item addition for project {p_id} (handled by decorator?).")
             raise GitHubClientError(f"Failed to add item to project {p_id}.")
 
         # --- Data Extraction (Simplified) ---
         data = response.get("data") if isinstance(response, dict) else getattr(response, 'data', None)
         if not data:
-            # ここではエラーが発生しません - デコレータがGraphQLエラーを検出して処理するため
-            # テスト用に条件文だけ残し、pass処理を追加
-            pass
+            # エラー処理を戻す - dataがない場合は例外を送出
+            raise GitHubClientError(f"GraphQL response missing 'data' during item addition for project {p_id}.")
 
-        add_item_response = data.get("addProjectV2ItemById") if data else None
+        add_item_response = data.get("addProjectV2ItemById")
         if add_item_response:
             item = add_item_response.get("item")
             # Optional Chaining の代わりに get を使用
             if item and isinstance(item, dict):
                  item_id = item.get("id")
                  if item_id and isinstance(item_id, str):
-                      logger.info(f"Successfully added item '{c_id}' to project '{p_id}', new item ID: {item_id}")
+                      logger.info(f"Successfully added item '{c_id}' to project '{p_id}', new item ID: {item_id}") # DEBUGからINFOに変更
                       return item_id
 
         # If we reach here, the expected data structure was missing

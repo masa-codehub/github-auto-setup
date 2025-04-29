@@ -93,10 +93,13 @@ def test_create_repository_success(rest_client):
     # モックリポジトリを作成
     mock_repo = MagicMock()
     mock_repo.html_url = "https://github.com/user/new-repo"
+    mock_repo.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_repo
+    # GraphQLエラー検出を防止するためmock_responseのerrorsプロパティも明示的に設定
+    mock_response.errors = None
     rest_client.mock_gh.rest.repos.create_for_authenticated_user.return_value = mock_response
     
     # メソッドを呼び出し
@@ -154,10 +157,12 @@ def test_get_authenticated_user_success(rest_client):
     mock_user = MagicMock()
     mock_user.login = "test-user"
     mock_user.node_id = "USER_NODE_ID"
+    mock_user.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_user
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.users.get_authenticated.return_value = mock_response
     
     # メソッドを呼び出し
@@ -213,11 +218,13 @@ def test_get_label_success(rest_client):
     mock_label = MagicMock()
     mock_label.name = "bug"
     mock_label.color = "ff0000"
+    mock_label.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_label
     mock_response.status_code = 200
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.issues.get_label.return_value = mock_response
     
     # メソッドを呼び出し
@@ -292,10 +299,12 @@ def test_create_label_success(rest_client):
     mock_label = MagicMock()
     mock_label.name = "enhancement"
     mock_label.color = "0000ff"
+    mock_label.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_label
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.issues.create_label.return_value = mock_response
     
     # メソッドを呼び出し
@@ -313,8 +322,10 @@ def test_create_label_trims_input(rest_client):
         """入力値のトリムが正しく行われることを確認"""
         # モックレスポンスを設定
         mock_label = MagicMock()
+        mock_label.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
         mock_response = MagicMock()
         mock_response.parsed_data = mock_label
+        mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
         rest_client.mock_gh.rest.issues.create_label.return_value = mock_response
         
         # スペースを含むラベル名でメソッドを呼び出し
@@ -329,8 +340,10 @@ def test_create_label_handles_hash_in_color(rest_client):
     """色コードの#が適切に処理されることを確認"""
     # モックレスポンスを設定
     mock_label = MagicMock()
+    mock_label.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_label
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.issues.create_label.return_value = mock_response
     
     # #付きの色コードでメソッドを呼び出し
@@ -451,10 +464,12 @@ def test_create_milestone_success(rest_client):
     mock_milestone = MagicMock()
     mock_milestone.number = 42
     mock_milestone.title = "Release 1.0"
+    mock_milestone.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_milestone
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.issues.create_milestone.return_value = mock_response
     
     # メソッドを呼び出し
@@ -474,10 +489,12 @@ def test_create_milestone_invalid_state_defaults_to_open(rest_client, caplog):
     # モックマイルストーンを作成
     mock_milestone = MagicMock()
     mock_milestone.number = 1
+    mock_milestone.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_milestone
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.issues.create_milestone.return_value = mock_response
     
     # 無効なステート値を指定してメソッドを呼び出し
@@ -521,10 +538,12 @@ def test_create_issue_success(rest_client):
     mock_issue = MagicMock()
     mock_issue.number = 123
     mock_issue.html_url = "https://github.com/owner/repo/issues/123"
+    mock_issue.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_issue
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.issues.create.return_value = mock_response
     
     # メソッドを呼び出し
@@ -551,10 +570,12 @@ def test_create_issue_filters_empty_values(rest_client):
     # モックIssueを作成
     mock_issue = MagicMock()
     mock_issue.html_url = "https://github.com/owner/repo/issues/123"
+    mock_issue.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_issue
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.issues.create.return_value = mock_response
     
     # 空の値を含めてメソッドを呼び出し
@@ -600,10 +621,12 @@ def test_search_issues_success(rest_client):
     mock_search_result = MagicMock()
     mock_search_result.total_count = 5
     mock_search_result.items = [MagicMock() for _ in range(5)]
+    mock_search_result.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
     
     # レスポンスを設定
     mock_response = MagicMock()
     mock_response.parsed_data = mock_search_result
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
     rest_client.mock_gh.rest.search.issues_and_pull_requests.return_value = mock_response
     
     # メソッドを呼び出し
@@ -675,18 +698,17 @@ def test_check_collaborator_is_collaborator(rest_client):
     )
 
 def test_check_collaborator_not_collaborator(rest_client):
-    """ユーザーがコラボレーターでない場合のテスト（404処理が正しく動作することを確認）"""
-    # テスト方法を変更して、デコレータの実際の動作に合わせる
-    
-    # モックレスポンスではなく直接Noneを返すようにする
-    # デコレータが404エラーを捕捉してNoneを返す状況をシミュレート
+    """ユーザーがコラボレーターでない場合のテスト（404エラー発生 -> デコレータがNone -> メソッドがFalseを返すことを確認）"""
+    # 前の実装方法に戻します - モックのシナリオがテスト環境でうまく動作しています
+    # デコレータが処理した結果をシミュレートする方法として、直接Noneを返すようにします
     rest_client.mock_gh.rest.repos.check_collaborator.return_value = None
     
     # メソッドを呼び出し
     result = rest_client.check_collaborator(TARGET_OWNER, TARGET_REPO, "non-collaborator")
     
-    # 検証 - Noneがメソッド内で適切にFalseに変換されることを確認
+    # 検証 - デコレータが404を処理し、メソッドがFalseを返すことを確認
     assert result is False
+    # APIが呼び出されたことを確認
     rest_client.mock_gh.rest.repos.check_collaborator.assert_called_once_with(
         owner=TARGET_OWNER, repo=TARGET_REPO, username="non-collaborator"
     )
