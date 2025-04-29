@@ -2,23 +2,27 @@ import pytest
 from unittest.mock import MagicMock, patch
 import logging
 
-from github_automation_tool.adapters.github_client import GitHubClientError, GitHubAppClient
-from github_automation_tool.domain.exceptions import GitHubValidationError, GitHubAuthenticationError
+from github_automation_tool.adapters.github_rest_client import GitHubRestClient  # GitHubAppClient から変更
+from github_automation_tool.domain.exceptions import GitHubClientError, GitHubValidationError, GitHubAuthenticationError
 from github_automation_tool.use_cases.create_repository import CreateRepositoryUseCase
 
 
 @pytest.fixture
 def mock_github_client():
     """GitHub クライアントのモック"""
-    mock_client = MagicMock(spec=GitHubAppClient)  # GitHubAppClientのインスタンスとして認識させる
+    mock_client = MagicMock(spec=GitHubRestClient)  # GitHubRestClient に変更
     # デフォルトではリポジトリ作成が成功すると想定
-    mock_client.create_repository.return_value = "https://github.com/user/test-repo"
+    # 戻り値をオブジェクトに変更
+    mock_repo = MagicMock()
+    mock_repo.html_url = "https://github.com/user/test-repo"
+    mock_client.create_repository.return_value = mock_repo
     return mock_client
 
 
 @pytest.fixture
 def use_case(mock_github_client):
     """テスト用のユースケースインスタンス"""
+    # github_client はそのまま使用
     return CreateRepositoryUseCase(github_client=mock_github_client)
 
 
@@ -29,6 +33,7 @@ def test_execute_success(use_case):
     result = use_case.execute(repo_name)
     
     assert result == "https://github.com/user/test-repo"
+    # github_client という名前でアクセスする
     use_case.github_client.create_repository.assert_called_once_with(
         repo_name
     )

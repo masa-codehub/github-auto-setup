@@ -7,7 +7,8 @@ import logging # caplog をインポート
 from github_automation_tool.use_cases.create_github_resources import CreateGitHubResourcesUseCase
 # 不要な依存関係のインポートを削除
 # from github_automation_tool.infrastructure.config import Settings
-from github_automation_tool.adapters.github_client import GitHubAppClient
+from github_automation_tool.adapters.github_rest_client import GitHubRestClient # GitHubAppClient から変更
+from github_automation_tool.adapters.github_graphql_client import GitHubGraphQLClient # 追加
 from github_automation_tool.use_cases.create_repository import CreateRepositoryUseCase
 from github_automation_tool.use_cases.create_issues import CreateIssuesUseCase
 # CLI Reporterは不要になったため削除
@@ -20,21 +21,29 @@ from github_automation_tool.domain.exceptions import (
 # --- Fixtures ---
 # 不要なフィクスチャを削除
 @pytest.fixture
-def mock_github_client() -> MagicMock:
-    """GitHubAppClient のモック、認証ユーザー取得もモック"""
-    mock = MagicMock(spec=GitHubAppClient)
+def mock_rest_client() -> MagicMock:
+    """GitHubRestClient のモック、認証ユーザー取得もモック"""
+    mock = MagicMock(spec=GitHubRestClient)
     mock_user_data = MagicMock(login="test-auth-user")
-    mock_auth_user_response = MagicMock()
-    mock_auth_user_response.parsed_data = mock_user_data
-    # githubkit の階層構造を模倣
-    mock.gh = MagicMock()
-    mock.gh.rest = MagicMock()
-    mock.gh.rest.users = MagicMock()
-    mock.gh.rest.users.get_authenticated = MagicMock(return_value=mock_auth_user_response)
+    # get_authenticated_user メソッドを追加
+    mock.get_authenticated_user = MagicMock(return_value=mock_user_data)
     
-    # ラベル、マイルストーン、プロジェクト連携用のメソッドモックを追加
+    # ラベル、マイルストーン用のメソッドモックを追加
+    mock.get_label = MagicMock(return_value=None) # デフォルトではラベルは存在しない
     mock.create_label = MagicMock(return_value=True)  # デフォルトは成功(新規作成)
-    mock.create_milestone = MagicMock(return_value=123)  # デフォルトは成功(ID 123)
+    mock.list_milestones = MagicMock(return_value=[])  # デフォルトでは存在しない
+    # create_milestone が MagicMock オブジェクトを返すように設定
+    mock_milestone = MagicMock()
+    mock_milestone.number = 123
+    mock.create_milestone = MagicMock(return_value=mock_milestone)  # デフォルトは成功(ID 123)
+    
+    return mock
+
+@pytest.fixture
+def mock_graphql_client() -> MagicMock:
+    """GitHubGraphQLClient のモック"""
+    mock = MagicMock(spec=GitHubGraphQLClient)
+    # プロジェクト連携用のメソッドモックを追加
     mock.find_project_v2_node_id = MagicMock(return_value="PROJECT_NODE_ID")  # デフォルトは成功
     mock.add_item_to_project_v2 = MagicMock(return_value="PROJECT_ITEM_ID")  # デフォルトは成功
     
@@ -58,13 +67,15 @@ def mock_create_issues_uc() -> MagicMock:
 
 @pytest.fixture
 def create_resources_use_case(
-    mock_github_client: MagicMock, 
+    mock_rest_client: MagicMock, 
+    mock_graphql_client: MagicMock,
     mock_create_repo_uc: MagicMock, 
     mock_create_issues_uc: MagicMock
 ) -> CreateGitHubResourcesUseCase:
     """テスト対象 UseCase (依存を修正)"""
     return CreateGitHubResourcesUseCase(
-        github_client=mock_github_client,
+        rest_client=mock_rest_client,
+        graphql_client=mock_graphql_client,
         create_repo_uc=mock_create_repo_uc,
         create_issues_uc=mock_create_issues_uc
     )
@@ -116,7 +127,7 @@ PARSED_DATA_MULTI_MILESTONE = ParsedRequirementData(
 
 # --- Test Cases ---
 
-def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubResourcesUseCase, mock_create_repo_uc, mock_create_issues_uc, mock_github_client, caplog):
+def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubResourcesUseCase, mock_create_repo_uc, mock_create_issues_uc, mock_rest_client, mock_graphql_client, caplog):
     """正常系: owner/repo形式のリポジトリ名で全ステップ成功し、ログが出力される"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     mock_create_issues_uc.execute.return_value = DUMMY_ISSUE_RESULT # Issue 2件作成
@@ -149,34 +160,42 @@ def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubR
     assert result.project_items_failed == []
 
     # Assert: 各依存コンポーネントが期待通り呼ばれたか検証
-    mock_github_client.gh.rest.users.get_authenticated.assert_not_called()  # owner指定ありなので呼ばれない
+    mock_rest_client.get_authenticated_user.assert_not_called()  # owner指定ありなので呼ばれない
     mock_create_repo_uc.execute.assert_called_once_with(EXPECTED_REPO)  # repo名のみ渡す
     
     # ラベル作成呼び出し (順不同でOK)
-    mock_github_client.create_label.assert_has_calls([
+    mock_rest_client.get_label.assert_has_calls([
         call(EXPECTED_OWNER, EXPECTED_REPO, "bug"),
         call(EXPECTED_OWNER, EXPECTED_REPO, "feature"),
         call(EXPECTED_OWNER, EXPECTED_REPO, "urgent"),
     ], any_order=True)
-    assert mock_github_client.create_label.call_count == 3
+    assert mock_rest_client.get_label.call_count == 3
+    
+    mock_rest_client.create_label.assert_has_calls([
+        call(EXPECTED_OWNER, EXPECTED_REPO, "bug"),
+        call(EXPECTED_OWNER, EXPECTED_REPO, "feature"),
+        call(EXPECTED_OWNER, EXPECTED_REPO, "urgent"),
+    ], any_order=True)
+    assert mock_rest_client.create_label.call_count == 3
     
     # マイルストーン作成呼び出し
-    mock_github_client.create_milestone.assert_called_once_with(EXPECTED_OWNER, EXPECTED_REPO, "Sprint 1")
+    mock_rest_client.list_milestones.assert_called_once_with(EXPECTED_OWNER, EXPECTED_REPO, state="all")
+    mock_rest_client.create_milestone.assert_called_once_with(EXPECTED_OWNER, EXPECTED_REPO, "Sprint 1")
     
     # プロジェクト検索呼び出し
-    mock_github_client.find_project_v2_node_id.assert_called_once_with(EXPECTED_OWNER, DUMMY_PROJECT_NAME)
+    mock_graphql_client.find_project_v2_node_id.assert_called_once_with(EXPECTED_OWNER, DUMMY_PROJECT_NAME)
     
     # Issue作成Use Case呼び出し - マイルストーンIDマップを渡すように変更
     mock_create_issues_uc.execute.assert_called_once_with(DUMMY_PARSED_DATA_WITH_DETAILS, EXPECTED_OWNER, EXPECTED_REPO, {"Sprint 1": 123})
     
     # プロジェクト追加呼び出し
-    mock_github_client.add_item_to_project_v2.assert_has_calls([
+    mock_graphql_client.add_item_to_project_v2.assert_has_calls([
         call("PROJECT_NODE_ID", "NODE_ID_1"),
         call("PROJECT_NODE_ID", "NODE_ID_2"),
     ])
-    assert mock_github_client.add_item_to_project_v2.call_count == 2
+    assert mock_graphql_client.add_item_to_project_v2.call_count == 2
 
-    # ログの検証 (主要ステップとループ内進捗)
+    # ログの検証は省略 (変更なし)
     assert "Starting GitHub resource creation workflow..." in caplog.text
     assert "Step 1: Resolving repository owner and name..." in caplog.text
     assert f"Target repository: {DUMMY_REPO_NAME_FULL}" in caplog.text
@@ -204,7 +223,7 @@ def test_execute_success_full_repo_name(create_resources_use_case: CreateGitHubR
     assert "Step 8 finished. Project Integration: Added: 2/2, Failed: 0/2." in caplog.text
     assert "GitHub resource creation workflow completed successfully." in caplog.text
 
-def test_execute_success_repo_name_only(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc):
+def test_execute_success_repo_name_only(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc):
     """正常系: repo名のみ指定され、ownerをAPIで取得して成功"""
     # Arrange: モックの設定
     expected_repo_url = f"https://github.com/{EXPECTED_AUTH_USER}/{DUMMY_REPO_NAME_ONLY}"
@@ -223,7 +242,7 @@ def test_execute_success_repo_name_only(create_resources_use_case: CreateGitHubR
     assert result.repository_url == expected_repo_url
     
     # 依存コンポーネントの検証
-    mock_github_client.gh.rest.users.get_authenticated.assert_called_once()  # owner取得のために呼ばれる
+    mock_rest_client.get_authenticated_user.assert_called_once()  # owner取得のために呼ばれる
     mock_create_repo_uc.execute.assert_called_once_with(DUMMY_REPO_NAME_ONLY)
     # マイルストーンIDマップを渡すように変更
     mock_create_issues_uc.execute.assert_called_once_with(
@@ -234,13 +253,13 @@ def test_execute_success_repo_name_only(create_resources_use_case: CreateGitHubR
     )
     
     # ラベル作成呼び出し
-    mock_github_client.create_label.assert_has_calls([
+    mock_rest_client.create_label.assert_has_calls([
         call(EXPECTED_AUTH_USER, DUMMY_REPO_NAME_ONLY, "bug"),
         call(EXPECTED_AUTH_USER, DUMMY_REPO_NAME_ONLY, "feature"),
         call(EXPECTED_AUTH_USER, DUMMY_REPO_NAME_ONLY, "urgent"),
     ], any_order=True)
 
-def test_execute_dry_run(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_dry_run(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """Dry run モードの場合、GitHub操作とIssue作成UseCaseが呼ばれない"""
     with caplog.at_level(logging.INFO): # WARNINGも含む
         result = create_resources_use_case.execute(
@@ -266,13 +285,15 @@ def test_execute_dry_run(create_resources_use_case: CreateGitHubResourcesUseCase
     assert result.project_items_added_count == 3 # Project Item数
 
     # 依存コンポーネントの検証: GitHub操作は行われない
-    mock_github_client.gh.rest.users.get_authenticated.assert_not_called()
+    mock_rest_client.get_authenticated_user.assert_not_called()
     mock_create_repo_uc.execute.assert_not_called()
     mock_create_issues_uc.execute.assert_not_called()
-    mock_github_client.create_label.assert_not_called()
-    mock_github_client.create_milestone.assert_not_called()
-    mock_github_client.find_project_v2_node_id.assert_not_called()
-    mock_github_client.add_item_to_project_v2.assert_not_called()
+    mock_rest_client.get_label.assert_not_called()
+    mock_rest_client.create_label.assert_not_called()
+    mock_rest_client.list_milestones.assert_not_called()
+    mock_rest_client.create_milestone.assert_not_called()
+    mock_graphql_client.find_project_v2_node_id.assert_not_called()
+    mock_graphql_client.add_item_to_project_v2.assert_not_called()
 
     # ログの検証
     assert "Dry run mode enabled. Skipping GitHub operations." in caplog.text
@@ -284,7 +305,7 @@ def test_execute_dry_run(create_resources_use_case: CreateGitHubResourcesUseCase
     assert "[Dry Run] Would add 3 items to project 'Test Project'" in caplog.text
     assert "Dry run finished." in caplog.text
 
-def test_execute_label_creation_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_label_creation_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """ラベル作成で一部失敗した場合、記録され、処理は続行する"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
@@ -294,7 +315,7 @@ def test_execute_label_creation_fails(create_resources_use_case: CreateGitHubRes
         if name == "feature":
             raise mock_label_error
         return True  # 他は成功
-    mock_github_client.create_label.side_effect = create_label_side_effect
+    mock_rest_client.create_label.side_effect = create_label_side_effect
 
     with caplog.at_level(logging.INFO): # ERRORも含む
         result = create_resources_use_case.execute(
@@ -309,10 +330,11 @@ def test_execute_label_creation_fails(create_resources_use_case: CreateGitHubRes
     assert result.failed_labels == [("feature", str(mock_label_error))]
     
     # 後続の処理が実行されていることを確認
-    mock_github_client.create_milestone.assert_called()
+    mock_rest_client.list_milestones.assert_called()
+    mock_rest_client.create_milestone.assert_called()
     mock_create_issues_uc.execute.assert_called()
-    mock_github_client.find_project_v2_node_id.assert_called()
-    mock_github_client.add_item_to_project_v2.assert_called()  # Issueが作成されていれば呼ばれる
+    mock_graphql_client.find_project_v2_node_id.assert_called()
+    mock_graphql_client.add_item_to_project_v2.assert_called()  # Issueが作成されていれば呼ばれる
 
     # ログの検証
     assert "Processing label 1/3: 'bug'" in caplog.text
@@ -323,13 +345,13 @@ def test_execute_label_creation_fails(create_resources_use_case: CreateGitHubRes
     assert "Step 4 finished. New labels: 2" in caplog.text
     assert "Failed labels: ['feature']" in caplog.text # WARNINGログ
 
-def test_execute_milestone_creation_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_milestone_creation_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """マイルストーン作成で失敗した場合、記録され、処理は続行する"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
     # マイルストーン作成を失敗させる
     mock_milestone_error = GitHubClientError("Milestone creation failed")
-    mock_github_client.create_milestone.side_effect = mock_milestone_error
+    mock_rest_client.create_milestone.side_effect = mock_milestone_error
 
     with caplog.at_level(logging.INFO): # ERRORも含む
         result = create_resources_use_case.execute(
@@ -348,7 +370,7 @@ def test_execute_milestone_creation_fails(create_resources_use_case: CreateGitHu
     
     # 後続の処理が実行されていることを確認
     mock_create_issues_uc.execute.assert_called_once()
-    mock_github_client.find_project_v2_node_id.assert_called_once()
+    mock_graphql_client.find_project_v2_node_id.assert_called_once()
 
     # ログの検証
     assert f"Step 5: Ensuring required milestones exist in {DUMMY_REPO_NAME_FULL}..." in caplog.text
@@ -359,10 +381,10 @@ def test_execute_milestone_creation_fails(create_resources_use_case: CreateGitHu
     assert "Step 5 finished. Processed milestones: 0/1, Failed: 1." in caplog.text
     assert "Failed milestones: ['Sprint 1']" in caplog.text
 
-def test_execute_project_not_found(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_project_not_found(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """プロジェクトが見つからない場合、記録され、アイテム追加はスキップされる"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
-    mock_github_client.find_project_v2_node_id.return_value = None  # プロジェクトが見つからない
+    mock_graphql_client.find_project_v2_node_id.return_value = None  # プロジェクトが見つからない
 
     with caplog.at_level(logging.INFO): # WARNINGも含む
         result = create_resources_use_case.execute(
@@ -378,7 +400,7 @@ def test_execute_project_not_found(create_resources_use_case: CreateGitHubResour
     assert result.project_items_added_count == 0
     
     # アイテム追加が呼ばれていないことを確認
-    mock_github_client.add_item_to_project_v2.assert_not_called()
+    mock_graphql_client.add_item_to_project_v2.assert_not_called()
     # 他の処理は実行される
     assert result.repository_url is not None
     assert len(result.created_labels) > 0
@@ -393,7 +415,7 @@ def test_execute_project_not_found(create_resources_use_case: CreateGitHubResour
     assert "Step 7 finished." in caplog.text
     assert "Step 8: Project not found or failed to retrieve its ID. Skipping item addition." in caplog.text # 実際のログに合わせる
 
-def test_execute_add_item_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_add_item_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """プロジェクトへのアイテム追加で一部失敗した場合、記録される"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
@@ -405,7 +427,7 @@ def test_execute_add_item_fails(create_resources_use_case: CreateGitHubResources
     
     # 2番目のアイテム追加だけ失敗させる
     mock_add_error = GitHubResourceNotFoundError("Item not found")
-    mock_github_client.add_item_to_project_v2.side_effect = ["ITEM_ID_1", mock_add_error]
+    mock_graphql_client.add_item_to_project_v2.side_effect = ["ITEM_ID_1", mock_add_error]
 
     with caplog.at_level(logging.INFO): # ERROR, WARNING も含む
         result = create_resources_use_case.execute(
@@ -418,7 +440,7 @@ def test_execute_add_item_fails(create_resources_use_case: CreateGitHubResources
     assert result.fatal_error is None
     assert result.project_items_added_count == 1  # 1件は成功
     assert result.project_items_failed == [("NODE_ID_2", str(mock_add_error))]
-    assert mock_github_client.add_item_to_project_v2.call_count == 2
+    assert mock_graphql_client.add_item_to_project_v2.call_count == 2
 
     # ログの検証 - 実際の出力に合わせて修正
     assert f"Step 8: Adding 2 created issues to project '{DUMMY_PROJECT_NAME}'..." in caplog.text
@@ -431,7 +453,7 @@ def test_execute_add_item_fails(create_resources_use_case: CreateGitHubResources
     assert "Step 8 finished. Project Integration: Added: 1/2, Failed: 1/2." in caplog.text
     assert "Failed items: ['NODE_ID_2']" in caplog.text
 
-def test_execute_no_project_specified(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc):
+def test_execute_no_project_specified(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc):
     """プロジェクト名が指定されなかった場合、プロジェクト関連処理はスキップされる"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
 
@@ -449,14 +471,14 @@ def test_execute_no_project_specified(create_resources_use_case: CreateGitHubRes
     assert result.project_items_failed == []
     
     # プロジェクト関連のAPIが呼ばれないことを確認
-    mock_github_client.find_project_v2_node_id.assert_not_called()
-    mock_github_client.add_item_to_project_v2.assert_not_called()
+    mock_graphql_client.find_project_v2_node_id.assert_not_called()
+    mock_graphql_client.add_item_to_project_v2.assert_not_called()
     # 他の処理は実行される
     assert result.repository_url is not None
     assert len(result.created_labels) > 0
     assert result.issue_result is not None
 
-def test_execute_no_labels_in_issues(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc):
+def test_execute_no_labels_in_issues(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc):
     """Issueにラベルが含まれない場合、ラベル作成処理はスキップされる"""
     # ラベル・マイルストーンなしのIssueデータを準備
     mock_parsed_data = ParsedRequirementData(
@@ -470,9 +492,9 @@ def test_execute_no_labels_in_issues(create_resources_use_case: CreateGitHubReso
     )
 
     # ラベル作成が呼ばれないことを確認
-    mock_github_client.create_label.assert_not_called()
+    mock_rest_client.create_label.assert_not_called()
     # マイルストーン作成が呼ばれないことを確認
-    mock_github_client.create_milestone.assert_not_called()
+    mock_rest_client.create_milestone.assert_not_called()
     # 他の処理は実行される
     assert result.repository_url is not None
     assert result.created_labels == []
@@ -529,11 +551,11 @@ def test_get_owner_repo_invalid_format(create_resources_use_case: CreateGitHubRe
     with pytest.raises(ValueError, match="Invalid repository name format"):
         create_resources_use_case._get_owner_repo("/repo")  # owner名がない
 
-def test_get_owner_repo_api_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client):
+def test_get_owner_repo_api_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client):
     """認証ユーザー取得APIが失敗した場合にエラーになるか"""
     # モック設定: get_authenticated がエラーを送出
     mock_api_error = GitHubAuthenticationError("API Failed")
-    mock_github_client.gh.rest.users.get_authenticated.side_effect = mock_api_error
+    mock_rest_client.get_authenticated_user.side_effect = mock_api_error
 
     with pytest.raises(GitHubAuthenticationError):
          # repo名のみを指定して _get_owner_repo が内部で呼ばれる execute を実行
@@ -543,11 +565,11 @@ def test_get_owner_repo_api_fails(create_resources_use_case: CreateGitHubResourc
              project_name=DUMMY_PROJECT_NAME
          )
 
-def test_get_owner_repo_api_error_other_exception(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, caplog):
+def test_get_owner_repo_api_error_other_exception(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, caplog):
     """認証ユーザー取得APIで予期せぬ例外が発生した場合も適切にハンドリングされる"""
     # モックが予期せぬ例外を送出するように設定
-    mock_github_client.gh.rest.users.get_authenticated.side_effect = RuntimeError("Unexpected API error")
-
+    mock_rest_client.get_authenticated_user.side_effect = RuntimeError("Unexpected API error")
+    
     with pytest.raises(GitHubAuthenticationError) as excinfo, caplog.at_level(logging.ERROR):
         # repo名のみを指定して _get_owner_repo が内部で呼ばれる execute を実行
         create_resources_use_case.execute(
@@ -555,13 +577,14 @@ def test_get_owner_repo_api_error_other_exception(create_resources_use_case: Cre
             repo_name_input=DUMMY_REPO_NAME_ONLY,
             project_name=DUMMY_PROJECT_NAME
         )
+    
+    # 例外が適切にラップされていることを検証（実際のメッセージに合わせる）
+    assert "Unexpected error getting authenticated user" in str(excinfo.value)
+    # ログが適切に出力されていることを確認
+    assert "Unexpected error getting authenticated user" in caplog.text
+    assert "RuntimeError: Unexpected API error" in caplog.text # 元の例外情報も含まれる
 
-    # 例外が適切にラップされていることを検証
-    assert "Failed to get authenticated user due to API error" in str(excinfo.value)
-    # エラーログに元の例外情報が含まれることを確認
-    assert "RuntimeError" in caplog.text
-
-def test_execute_unexpected_exception_in_add_item(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_unexpected_exception_in_add_item(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """プロジェクトアイテム追加時に予期せぬ例外が発生した場合も処理が継続される"""
     # 基本設定
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
@@ -572,7 +595,7 @@ def test_execute_unexpected_exception_in_add_item(create_resources_use_case: Cre
     
     # 2番目のアイテム追加で予期せぬ例外が発生する
     unexpected_error = TypeError("Invalid Node ID type")
-    mock_github_client.add_item_to_project_v2.side_effect = ["ITEM_ID_1", unexpected_error]
+    mock_graphql_client.add_item_to_project_v2.side_effect = ["ITEM_ID_1", unexpected_error]
 
     with caplog.at_level(logging.ERROR):
         result = create_resources_use_case.execute(
@@ -593,7 +616,7 @@ def test_execute_unexpected_exception_in_add_item(create_resources_use_case: Cre
     assert "Unexpected error during adding item" in caplog.text
     assert "Invalid Node ID type" in caplog.text
 
-def test_execute_unexpected_exception_in_create_label(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_unexpected_exception_in_create_label(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """ラベル作成時に予期せぬ例外が発生した場合も処理が継続される"""
     # 基本設定
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
@@ -602,7 +625,7 @@ def test_execute_unexpected_exception_in_create_label(create_resources_use_case:
         if name == "feature":
             raise TypeError("Unexpected label name type")
         return True  # 他は成功
-    mock_github_client.create_label.side_effect = create_label_side_effect
+    mock_rest_client.create_label.side_effect = create_label_side_effect
 
     with caplog.at_level(logging.ERROR):
         result = create_resources_use_case.execute(
@@ -624,17 +647,17 @@ def test_execute_unexpected_exception_in_create_label(create_resources_use_case:
     assert "Unexpected label name type" in caplog.text  # 具体的なエラーメッセージがログに含まれているか
     
     # 後続の処理が実行されていることを確認
-    mock_github_client.create_milestone.assert_called()
+    mock_rest_client.create_milestone.assert_called()
     mock_create_issues_uc.execute.assert_called()
 
-def test_execute_unexpected_exception_in_create_milestone(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_unexpected_exception_in_create_milestone(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """マイルストーン作成時に予期せぬ例外が発生した場合も処理が継続される"""
     # 基本設定
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
     # マイルストーン作成で予期せぬ例外
     unexpected_error = ValueError("Invalid milestone name")
-    mock_github_client.create_milestone.side_effect = unexpected_error
+    mock_rest_client.create_milestone.side_effect = unexpected_error
 
     with caplog.at_level(logging.ERROR):
         result = create_resources_use_case.execute(
@@ -683,14 +706,14 @@ def test_execute_unexpected_critical_error(create_resources_use_case: CreateGitH
     assert "Out of memory" in caplog.text
     assert "Traceback" in caplog.text
 
-def test_execute_find_project_unexpected_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_find_project_unexpected_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """プロジェクト検索時に予期せぬ例外が発生した場合も処理が継続される"""
     # 基本設定
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
     # プロジェクト検索で予期せぬ例外
     unexpected_error = TypeError("Invalid project name type")
-    mock_github_client.find_project_v2_node_id.side_effect = unexpected_error
+    mock_graphql_client.find_project_v2_node_id.side_effect = unexpected_error
 
     with caplog.at_level(logging.ERROR):
         result = create_resources_use_case.execute(
@@ -713,9 +736,9 @@ def test_execute_find_project_unexpected_error(create_resources_use_case: Create
     # 後続の処理が実行されていることを確認
     mock_create_issues_uc.execute.assert_called()
     # プロジェクトが見つからないのでアイテム追加は呼ばれない
-    mock_github_client.add_item_to_project_v2.assert_not_called()
+    mock_graphql_client.add_item_to_project_v2.assert_not_called()
 
-def test_execute_create_issues_unexpected_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc):
+def test_execute_create_issues_unexpected_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc):
     """Issue作成時に予期せぬ例外が発生した場合、GitHubClientErrorにラップされる""" # テストの説明を修正
     # 基本設定
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
@@ -737,16 +760,16 @@ def test_execute_create_issues_unexpected_error(create_resources_use_case: Creat
     # 依存メソッドの呼び出しを検証
     mock_create_repo_uc.execute.assert_called_once()
     # プロジェクト検索はIssue作成前に呼ばれる
-    mock_github_client.find_project_v2_node_id.assert_called_once()
+    mock_graphql_client.find_project_v2_node_id.assert_called_once()
     # Issue作成UseCaseも呼ばれる (ここでエラー発生)
     mock_create_issues_uc.execute.assert_called_once()
     # Issue作成でエラーとなったためプロジェクトへのアイテム追加は呼ばれない
-    mock_github_client.add_item_to_project_v2.assert_not_called()
+    mock_graphql_client.add_item_to_project_v2.assert_not_called()
 
 
 # --- 追加のテストケース ---
 
-def test_execute_label_creation_fails_with_context(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_label_creation_fails_with_context(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """ラベル作成で失敗した場合、エラーコンテキストがログに出力され、結果オブジェクトに記録される"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
@@ -756,7 +779,7 @@ def test_execute_label_creation_fails_with_context(create_resources_use_case: Cr
         if name == "feature":
             raise label_error
         return True  # 他は成功
-    mock_github_client.create_label.side_effect = create_label_side_effect
+    mock_rest_client.create_label.side_effect = create_label_side_effect
 
     with caplog.at_level(logging.INFO):
         result = create_resources_use_case.execute(
@@ -774,13 +797,13 @@ def test_execute_label_creation_fails_with_context(create_resources_use_case: Cr
     # 修正: status_codeが文字列変換時に含まれない可能性があるため、このチェックを削除
     # assert "Status code: 422" in str(label_error)
 
-def test_execute_milestone_creation_fails_with_context(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_milestone_creation_fails_with_context(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """マイルストーン作成で失敗した場合、エラーコンテキストがログに出力され、結果オブジェクトに記録される"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
     # 具体的なエラーコンテキストを持つエラーを設定
     milestone_error = GitHubClientError("API rate limit exceeded", status_code=403)
-    mock_github_client.create_milestone.side_effect = milestone_error
+    mock_rest_client.create_milestone.side_effect = milestone_error
 
     with caplog.at_level(logging.INFO):
         result = create_resources_use_case.execute(
@@ -800,8 +823,9 @@ def test_execute_milestone_creation_fails_with_context(create_resources_use_case
     error_log = [line for line in caplog.text.split('\n') if "Failed to ensuring milestone 'Sprint 1'" in line][0]
     assert "Failed to ensuring milestone 'Sprint 1' in test-owner/test-repo: API rate limit exceeded" in error_log
     assert "Step 5 finished. Processed milestones: 0/1, Failed: 1." in caplog.text
+    assert "Failed milestones: ['Sprint 1']" in caplog.text
 
-def test_execute_multiple_components_fail(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_multiple_components_fail(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """複数のコンポーネント（ラベル、マイルストーン、プロジェクト連携）が同時に失敗した場合のテスト"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
@@ -811,10 +835,10 @@ def test_execute_multiple_components_fail(create_resources_use_case: CreateGitHu
         if name == "feature":
             raise GitHubValidationError("Label validation failed", status_code=422)
         return True  # 他は成功
-    mock_github_client.create_label.side_effect = create_label_side_effect
+    mock_rest_client.create_label.side_effect = create_label_side_effect
     
     # 2. マイルストーン作成の一部失敗
-    mock_github_client.create_milestone.side_effect = GitHubClientError("Milestone error", status_code=500)
+    mock_rest_client.create_milestone.side_effect = GitHubClientError("Milestone error", status_code=500)
     
     # 3. Issue作成は成功（マイルストーンIDマップは空になる）
     mock_issue_result = CreateIssuesResult(
@@ -823,7 +847,7 @@ def test_execute_multiple_components_fail(create_resources_use_case: CreateGitHu
     mock_create_issues_uc.execute.return_value = mock_issue_result
     
     # 4. プロジェクト連携も一部失敗
-    mock_github_client.add_item_to_project_v2.side_effect = ["ITEM_ID_1", GitHubResourceNotFoundError("Item not found", status_code=404)]
+    mock_graphql_client.add_item_to_project_v2.side_effect = ["ITEM_ID_1", GitHubResourceNotFoundError("Item not found", status_code=404)]
 
     with caplog.at_level(logging.INFO):
         result = create_resources_use_case.execute(
@@ -868,13 +892,13 @@ def test_execute_multiple_components_fail(create_resources_use_case: CreateGitHu
     # 修正: 実際のメッセージに合わせる
     assert "GitHub resource creation workflow completed successfully." in caplog.text
 
-def test_execute_full_markdown_content_with_error_handling(create_resources_use_case: CreateGitHubResourcesUseCase, mock_github_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
+def test_execute_full_markdown_content_with_error_handling(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """Markdownファイルから直接実行し、エラーハンドリングとロギングが適切に機能するかのテスト"""
     # マークダウンファイル直接指定のテストを想定
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
     
     # GitHubクライアントの障害をシミュレート - side_effectでリスト指定する場合、順番に戻り値が返される
-    mock_github_client.create_label.side_effect = [True, GitHubClientError("Network error occurred during label creation", status_code=500)]
+    mock_rest_client.create_label.side_effect = [True, GitHubClientError("Network error occurred during label creation", status_code=500)]
     
     # テスト実行 - マークダウン直接渡しのケース
     with caplog.at_level(logging.INFO):

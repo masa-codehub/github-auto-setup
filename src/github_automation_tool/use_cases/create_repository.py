@@ -1,6 +1,6 @@
 import logging
-# 依存する Adapter (GitHubクライアント) と Domain (例外) をインポート
-from github_automation_tool.adapters.github_client import GitHubAppClient
+# 依存を GitHubRestClient に変更
+from github_automation_tool.adapters.github_rest_client import GitHubRestClient
 from github_automation_tool.domain.exceptions import (
     GitHubClientError, GitHubValidationError, GitHubAuthenticationError
 )
@@ -13,7 +13,8 @@ class CreateRepositoryUseCase:
     指定された情報に基づいて新しいGitHubリポジトリを作成するユースケース。
     """
 
-    def __init__(self, github_client: GitHubAppClient):
+    # 型ヒントを GitHubRestClient に変更
+    def __init__(self, github_client: GitHubRestClient):
         """
         UseCaseを初期化します。
 
@@ -21,11 +22,11 @@ class CreateRepositoryUseCase:
             github_client: GitHub APIと対話するためのクライアントインスタンス。
                            依存性注入により外部から渡されます。
         """
-        # 型チェックで注入されるオブジェクトが正しいか確認 (より安全に)
-        if not isinstance(github_client, GitHubAppClient):
+        # 型チェックも GitHubRestClient に変更
+        if not isinstance(github_client, GitHubRestClient):
             # このエラーは通常、開発中の設定ミスで発生する
             raise TypeError(
-                "github_client must be an instance of GitHubAppClient")
+                "github_client must be an instance of GitHubRestClient") # エラーメッセージも修正
         self.github_client = github_client
 
     def execute(self, repo_name: str) -> str:
@@ -56,12 +57,15 @@ class CreateRepositoryUseCase:
 
         # --- 2. 依存コンポーネント (Adapter) のメソッド呼び出し ---
         try:
-            # GitHubクライアントにリポジトリ作成を依頼
-            repo_url = self.github_client.create_repository(repo_name)
+            # GitHubRestClient の create_repository を呼び出す
+            repo_data = self.github_client.create_repository(repo_name)
+            # URL を返すように修正
+            if not repo_data or not repo_data.html_url:
+                raise GitHubClientError(f"Repository '{repo_name}' created but URL is missing in response.")
             logger.info(
-                f"Repository successfully created by client: {repo_url}")
+                f"Repository successfully created by client: {repo_data.html_url}")
             # --- 3. 結果を返す ---
-            return repo_url
+            return repo_data.html_url # URL を返す
         except (GitHubValidationError, GitHubAuthenticationError, GitHubClientError) as e:
             # GitHubクライアントから送出されたカスタム例外はログに記録し、そのまま再送出
             # 必要なら exc_info=True

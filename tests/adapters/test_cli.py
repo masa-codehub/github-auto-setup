@@ -17,7 +17,7 @@ from github_automation_tool.infrastructure.config import Settings
 # UseCaseや他のコンポーネントもモックするのでインポート
 from github_automation_tool.infrastructure.file_reader import read_markdown_file # 例外用
 from github_automation_tool.adapters.ai_parser import AIParser
-from github_automation_tool.adapters.github_client import GitHubAppClient
+from github_automation_tool.adapters.github_rest_client import GitHubRestClient # GitHubAppClientからGitHubRestClientに修正
 from github_automation_tool.use_cases.create_github_resources import CreateGitHubResourcesUseCase
 from github_automation_tool.domain.models import ParsedRequirementData, IssueData, CreateGitHubResourcesResult # モデルもインポート
 from github_automation_tool.domain.exceptions import (
@@ -93,7 +93,7 @@ def mock_dependencies(dummy_md_file):
     logging_settings_mock.log_level = "INFO"
     mock_settings.logging = logging_settings_mock
 
-    mock_gh_client_instance = MagicMock(spec=GitHubAppClient)
+    mock_gh_client_instance = MagicMock(spec=GitHubRestClient) # GitHubAppClientからGitHubRestClientに修正
     # オーナー推測用のモック設定
     mock_user_data = MagicMock(login="test-auth-user")
     mock_auth_user_response = MagicMock()
@@ -123,7 +123,7 @@ def mock_dependencies(dummy_md_file):
         'load_settings': patch('github_automation_tool.main.load_settings', return_value=mock_settings),
         'read_markdown_file': patch('github_automation_tool.main.read_markdown_file', return_value="## Mock Content"),
         'AIParser': patch('github_automation_tool.main.AIParser', return_value=mock_ai_parser_instance),
-        'GitHubAppClient': patch('github_automation_tool.main.GitHubAppClient', return_value=mock_gh_client_instance),
+        'GitHubRestClient': patch('github_automation_tool.main.GitHubRestClient', return_value=mock_gh_client_instance), # GitHubAppClientからGitHubRestClientに修正
         'CreateGitHubResourcesUseCase': patch('github_automation_tool.main.CreateGitHubResourcesUseCase', return_value=mock_main_uc_instance),
         'CliReporter': patch('github_automation_tool.main.CliReporter', return_value=mock_reporter_instance),
         # CreateRepositoryUseCase と CreateIssuesUseCase も main.py で import されているため、モックしておく
