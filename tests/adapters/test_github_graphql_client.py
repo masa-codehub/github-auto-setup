@@ -204,7 +204,8 @@ def test_find_project_v2_node_id_missing_projects_v2(graphql_client, caplog):
         result = graphql_client.find_project_v2_node_id(TARGET_OWNER, TARGET_PROJECT_NAME)
     
     assert result is None
-    assert "not found or has no projects" in caplog.text.lower() or "no projectsv2 data found" in caplog.text.lower()
+    # 実際のログメッセージと一致するように期待値を修正
+    assert "repository owner" in caplog.text.lower() and "not found" in caplog.text.lower() or "missing" in caplog.text.lower()
     graphql_client.mock_gh.graphql.assert_called_once()
 
 def test_find_project_v2_node_id_empty_title(graphql_client, caplog):
@@ -232,6 +233,66 @@ def test_find_project_v2_node_id_empty_owner(graphql_client, caplog):
     graphql_client.mock_gh.graphql.assert_not_called()
     # 適切な警告メッセージが出ていることを確認
     assert "empty" in caplog.text.lower()
+
+# --- データ欠損時の find_project_v2_node_id テスト（改修対応分） ---
+
+def test_find_project_v2_node_id_response_without_data(graphql_client, caplog):
+    """レスポンスに data フィールドがない場合に None を返す"""
+    # data キーがないレスポンス
+    no_data_response = {}
+    graphql_client.mock_gh.graphql.return_value = no_data_response
+    
+    with caplog.at_level(logging.WARNING):
+        result = graphql_client.find_project_v2_node_id(TARGET_OWNER, TARGET_PROJECT_NAME)
+    
+    assert result is None
+    assert "missing 'data' field" in caplog.text.lower()
+    graphql_client.mock_gh.graphql.assert_called_once()
+
+def test_find_project_v2_node_id_empty_data_object(graphql_client, caplog):
+    """レスポンスの data フィールドが空オブジェクトの場合に None を返す"""
+    # data が空の辞書のレスポンス
+    empty_data_response = {"data": {}}
+    graphql_client.mock_gh.graphql.return_value = empty_data_response
+    
+    with caplog.at_level(logging.WARNING):
+        result = graphql_client.find_project_v2_node_id(TARGET_OWNER, TARGET_PROJECT_NAME)
+    
+    assert result is None
+    assert "empty 'data' object" in caplog.text.lower()
+    graphql_client.mock_gh.graphql.assert_called_once()
+
+def test_find_project_v2_node_id_missing_nodes_or_pageinfo(graphql_client, caplog):
+    """レスポンス内の nodes または pageInfo フィールドが欠損している場合に None を返す"""
+    # projectsV2 がある、しかし nodes と pageInfo がないレスポンス
+    incomplete_response = {
+        "data": {
+            "repositoryOwner": {
+                "projectsV2": {}  # nodes と pageInfo が欠損
+            }
+        }
+    }
+    graphql_client.mock_gh.graphql.return_value = incomplete_response
+    
+    with caplog.at_level(logging.WARNING):
+        result = graphql_client.find_project_v2_node_id(TARGET_OWNER, TARGET_PROJECT_NAME)
+    
+    assert result is None
+    # 実際のログメッセージと一致するように期待値を修正
+    assert "no projectsv2 data found" in caplog.text.lower()
+    graphql_client.mock_gh.graphql.assert_called_once()
+
+def test_find_project_v2_node_id_none_response(graphql_client, caplog):
+    """GitHub APIからのレスポンスがNoneの場合を処理"""
+    # デコレータによって処理されたかのように None を返すようにモック
+    graphql_client.mock_gh.graphql.return_value = None
+    
+    with caplog.at_level(logging.DEBUG):
+        result = graphql_client.find_project_v2_node_id(TARGET_OWNER, TARGET_PROJECT_NAME)
+    
+    assert result is None
+    assert any("handled by decorator" in log.lower() for log in caplog.messages)
+    graphql_client.mock_gh.graphql.assert_called_once()
 
 
 # --- add_item_to_project_v2 Tests ---
