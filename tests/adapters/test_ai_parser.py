@@ -303,7 +303,7 @@ def test_initialize_llm_gemini_with_max_tokens(mock_settings, mock_api_clients):
     # 期待される max_output_tokens が kwargs に含まれているか確認
     _, kwargs = mock_api_clients['chat_gemini'].call_args
     assert "max_output_tokens" in kwargs
-    assert kwargs["max_output_tokens"] == 8192  # 設定した値
+    assert kwargs["max_output_tokens"] == 262144  # 設定した値に更新
 
 def test_initialize_llm_openai(mock_settings, mock_api_clients):
     """OpenAIクライアント初期化時のパラメータ確認"""
