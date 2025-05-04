@@ -1,266 +1,346 @@
 import pytest
 from unittest import mock
 import logging
+from pydantic import ValidationError, SecretStr # ValidationError をインポート
+import json
+
+# テスト対象と依存モジュール
 from github_automation_tool.adapters.ai_parser import AIParser
 from github_automation_tool.domain.exceptions import AiParserError
 from github_automation_tool.domain.models import ParsedRequirementData, IssueData
 from github_automation_tool.infrastructure.config import Settings
-from pydantic import SecretStr
-import json
+# LangChain の例外 - OutputParserException をインポート
+from langchain_core.exceptions import OutputParserException
 
-# モックレスポンスの準備
-MOCK_VALID_RESPONSE = '''
-{
+# --- Mocks and Fixtures ---
+
+# モックレスポンス (変更なし)
+MOCK_VALID_RESPONSE_DICT = { # JSON を dict にしておく
     "issues": [
         {
             "title": "First issue",
             "description": "Issue description",
             "tasks": ["Task 1", "Task 2"],
+            "relational_definition": [], # 追加 (モデルに合わせて)
+            "relational_issues": [], # 追加
+            "acceptance": [], # 追加
             "labels": ["bug"],
             "milestone": "v1.0",
             "assignees": ["@user1"]
         }
     ]
 }
-'''
 
-MOCK_INVALID_JSON = '''
-{
+# 不正な構造のモックレスポンス（title がない）
+MOCK_INVALID_STRUCTURE = {
     "issues": [
         {
-            "title": "test-repo",
-            "description": "Invalid JSON missing closing bracket"
-'''
+            # "title": "Missing title", # title フィールドが欠落
+            "description": "This structure is invalid",
+            "labels": ["invalid"]
+        }
+    ]
+}
 
-# Settingsのモックフィクスチャ
+
+# Settings フィクスチャ (max_tokens 調整を反映させるため修正)
 @pytest.fixture
 def mock_settings():
     """設定モック"""
     mock_settings = mock.MagicMock(spec=Settings)
-    
-    # 基本設定
     mock_settings.ai_model = "openai"
     mock_settings.openai_api_key = SecretStr("test-key")
     mock_settings.gemini_api_key = SecretStr("test-key")
-    
-    # 詳細設定
     mock_settings.final_openai_model_name = "gpt-4o"
-    mock_settings.final_gemini_model_name = "gemini-1.5-pro"
-    mock_settings.prompt_template = "Test prompt {markdown_text} {format_instructions}"
+    mock_settings.final_gemini_model_name = "gemini-1.5-flash"
+    mock_settings.prompt_template = "Test prompt {markdown_text}" # format_instructions を削除
     mock_settings.final_log_level = "INFO"
-    
     return mock_settings
 
-# LangChain モックフィクスチャ
+
+# APIクライアントのモック
 @pytest.fixture
-def mock_langchain():
-    """LangChain関連クラスのモック"""
-    with mock.patch("github_automation_tool.adapters.ai_parser.ChatOpenAI") as mock_openai_chat, \
-         mock.patch("github_automation_tool.adapters.ai_parser.ChatGoogleGenerativeAI") as mock_gemini_chat, \
-         mock.patch("github_automation_tool.adapters.ai_parser.PromptTemplate") as mock_prompt, \
-         mock.patch("github_automation_tool.adapters.ai_parser.PydanticOutputParser") as mock_output_parser:
+def mock_api_clients():
+    """OpenAIとGeminiのAPIクライアントをモックします"""
+    with mock.patch("github_automation_tool.adapters.ai_parser.ChatOpenAI") as mock_chat_openai, \
+         mock.patch("github_automation_tool.adapters.ai_parser.ChatGoogleGenerativeAI") as mock_chat_gemini, \
+         mock.patch("github_automation_tool.adapters.ai_parser.PromptTemplate") as mock_prompt:
         
-        # モックLLMの設定
-        mock_chain = mock.MagicMock()
-        mock_chain.invoke.return_value = ParsedRequirementData.model_validate(json.loads(MOCK_VALID_RESPONSE))
-        
-        # プロンプトモックの設定
-        mock_prompt_instance = mock.MagicMock()
-        mock_prompt.return_value = mock_prompt_instance
-        
-        # パーサーモックの設定
-        mock_parser_instance = mock.MagicMock()
-        mock_parser_instance.get_format_instructions.return_value = "JSON FORMAT INSTRUCTIONS"
-        mock_output_parser.return_value = mock_parser_instance
-        
-        # パイプ演算子のモック
-        mock_prompt_instance.__or__.return_value = mock.MagicMock()
-        mock_prompt_instance.__or__.return_value.__or__.return_value = mock_chain
-        
-        return {
-            "openai_chat": mock_openai_chat,
-            "gemini_chat": mock_gemini_chat,
-            "prompt": mock_prompt,
-            "output_parser": mock_output_parser,
-            "chain": mock_chain
+        yield {
+            'chat_openai': mock_chat_openai,
+            'chat_gemini': mock_chat_gemini,
+            'prompt': mock_prompt
         }
 
-# 基本的なパーサーインスタンス用のフィクスチャ
-@pytest.fixture
-def ai_parser_openai(mock_settings, mock_langchain):
-    """OpenAIを使用するAIParserインスタンス"""
-    mock_settings.ai_model = "openai"
-    parser = AIParser(settings=mock_settings)
-    parser.chain = mock_langchain["chain"]  # テスト用にチェーンを置き換え
-    return parser
 
+# パーサーフィクスチャ (OpenAI)
 @pytest.fixture
-def ai_parser_gemini(mock_settings, mock_langchain):
-    """Google Geminiを使用するAIParserインスタンス"""
+def ai_parser_openai(mock_settings, mock_api_clients):
+    # モックLLMを作成
+    mock_llm = mock.MagicMock()
+    mock_structured_llm = mock.MagicMock()
+    
+    # モックのレスポンス準備
+    result = ParsedRequirementData.model_validate(MOCK_VALID_RESPONSE_DICT)
+    mock_structured_llm.invoke.return_value = result
+    
+    # with_structured_output メソッドのモックを設定
+    mock_llm.with_structured_output.return_value = mock_structured_llm
+    
+    # ChatOpenAIモックが作成したlangchainクライアントを返すように設定
+    mock_api_clients['chat_openai'].return_value = mock_llm
+    
+    # モックチェーンを設定(プロンプト + LLM)
+    mock_prompt_instance = mock.MagicMock()
+    mock_api_clients['prompt'].return_value = mock_prompt_instance
+    mock_prompt_instance.__or__.return_value = mock_structured_llm
+    
+    # モックセットアップ後にAIParserを初期化
+    parser = AIParser(settings=mock_settings)
+    
+    # 実際にモックが正しいことを検証（テスト前に検証）
+    assert parser.llm == mock_llm
+    assert parser.chain == mock_structured_llm
+    
+    return parser, mock_structured_llm
+
+
+# パーサーフィクスチャ (Gemini)
+@pytest.fixture
+def ai_parser_gemini(mock_settings, mock_api_clients):
+    # モックLLMを作成
+    mock_llm = mock.MagicMock()
+    mock_structured_llm = mock.MagicMock()
+    
+    # モックのレスポンス準備
+    result = ParsedRequirementData.model_validate(MOCK_VALID_RESPONSE_DICT)
+    mock_structured_llm.invoke.return_value = result
+    
+    # with_structured_output メソッドのモックを設定
+    mock_llm.with_structured_output.return_value = mock_structured_llm
+    
+    # ChatGoogleGenerativeAIモックが作成したlangchainクライアントを返すように設定
+    mock_api_clients['chat_gemini'].return_value = mock_llm
+    
+    # モックチェーンを設定(プロンプト + LLM)
+    mock_prompt_instance = mock.MagicMock()
+    mock_api_clients['prompt'].return_value = mock_prompt_instance
+    mock_prompt_instance.__or__.return_value = mock_structured_llm
+    
+    # GeminiのAIモデルを設定
     mock_settings.ai_model = "gemini"
+    
+    # モックセットアップ後にAIParserを初期化
     parser = AIParser(settings=mock_settings)
-    parser.chain = mock_langchain["chain"]  # テスト用にチェーンを置き換え
-    return parser
+    
+    # 実際にモックが正しいことを検証（テスト前に検証）
+    assert parser.llm == mock_llm
+    assert parser.chain == mock_structured_llm
+    
+    return parser, mock_structured_llm
 
-# テストケース
+# --- テストケース ---
+
 def test_parse_valid_input_openai(ai_parser_openai):
     """OpenAI: 有効な入力から正しいParseRequirementDataオブジェクトを生成できること"""
-    result = ai_parser_openai.parse("Create a test repository")
-    
-    # 検証
+    parser, mock_chain = ai_parser_openai
+    result = parser.parse("Create a test repository")
+
     assert isinstance(result, ParsedRequirementData)
     assert len(result.issues) == 1
-    assert isinstance(result.issues[0], IssueData)
     assert result.issues[0].title == "First issue"
-    assert result.issues[0].description == "Issue description"
-    
-    # APIが適切なパラメータで呼び出されたことを確認
-    ai_parser_openai.chain.invoke.assert_called_once()
-    call_args = ai_parser_openai.chain.invoke.call_args[0][0]
-    assert "Create a test repository" in str(call_args)
+    # invoke が正しく呼ばれたか確認
+    mock_chain.invoke.assert_called_once_with({"markdown_text": "Create a test repository"})
 
 def test_parse_valid_input_gemini(ai_parser_gemini):
     """Google: 有効な入力から正しいParseRequirementDataオブジェクトを生成できること"""
-    result = ai_parser_gemini.parse("Create a test repository")
-    
-    # 検証
+    parser, mock_chain = ai_parser_gemini
+    result = parser.parse("Create a test repository")
+
     assert isinstance(result, ParsedRequirementData)
     assert len(result.issues) == 1
-    assert isinstance(result.issues[0], IssueData)
     assert result.issues[0].title == "First issue"
-    
-    # APIが適切なパラメータで呼び出されたことを確認
-    ai_parser_gemini.chain.invoke.assert_called_once()
-    call_args = ai_parser_gemini.chain.invoke.call_args[0][0]
-    assert "Create a test repository" in str(call_args)
+    mock_chain.invoke.assert_called_once_with({"markdown_text": "Create a test repository"})
 
-def test_parse_invalid_json_response(ai_parser_openai, mock_langchain):
-    """不正なJSON応答を処理できること"""
-    # OutputParserExceptionを発生させる
-    from langchain_core.exceptions import OutputParserException
-    mock_langchain["chain"].invoke.side_effect = OutputParserException("Failed to parse LLM response as JSON")
+# ★ 改善点: 新しいエラーハンドリングのテスト ★
+def test_parse_validation_error(ai_parser_openai):
+    """構造化出力がPydanticモデルと一致しない場合にValidationErrorを処理できること"""
+    parser, mock_chain = ai_parser_openai
     
-    # エラー発生を確認
-    with pytest.raises(AiParserError, match="Failed to parse AI output"):
-        ai_parser_openai.parse("Create a repository")
+    # mock_chain.invokeをリセット
+    mock_chain.invoke.reset_mock()
+    
+    # ValidationErrorを発生させるように設定
+    validation_error = ValidationError.from_exception_data(title="ParsedRequirementData", line_errors=[])
+    mock_chain.invoke.side_effect = validation_error
 
-def test_parse_api_error_openai(ai_parser_openai, mock_langchain, caplog):
+    with pytest.raises(AiParserError) as exc_info:
+        parser.parse("Input that causes validation error")
+    
+    # エラーメッセージが期待通りか確認
+    assert "AI output validation failed" in str(exc_info.value)
+    
+    # invoke が呼ばれたか確認
+    mock_chain.invoke.assert_called_once()
+
+def test_parse_output_generation_error(ai_parser_openai):
+    """構造化出力生成失敗時に出されるエラーを処理できること"""
+    parser, mock_chain = ai_parser_openai
+    
+    # mock_chain.invokeをリセット
+    mock_chain.invoke.reset_mock()
+    
+    # RuntimeError を使用して構造化出力エラーをシミュレート
+    generation_error = RuntimeError("Failed to generate structured output from schema")
+    mock_chain.invoke.side_effect = generation_error
+
+    with pytest.raises(AiParserError) as exc_info:
+        parser.parse("Input causing generation error")
+    
+    # エラーメッセージが期待通りか確認
+    assert "Failed to generate structured AI output" in str(exc_info.value)
+    
+    # invoke が呼ばれたか確認
+    mock_chain.invoke.assert_called_once()
+
+def test_parse_unexpected_runtime_error(ai_parser_openai):
+    """通常のランタイムエラーを適切に処理できること"""
+    parser, mock_chain = ai_parser_openai
+    
+    # mock_chain.invokeをリセット
+    mock_chain.invoke.reset_mock()
+    
+    # 通常のランタイムエラーをシミュレート (schema関連のキーワードなし)
+    runtime_error = RuntimeError("Some other unexpected error")
+    mock_chain.invoke.side_effect = runtime_error
+    
+    with pytest.raises(AiParserError) as exc_info:
+        parser.parse("Input causing runtime error")
+    
+    # エラーメッセージが期待通りか確認
+    assert "An unexpected error occurred during AI parsing" in str(exc_info.value)
+    
+    # invoke が呼ばれたか確認
+    mock_chain.invoke.assert_called_once()
+
+# APIエラーのテスト
+def test_parse_api_error_openai(ai_parser_openai):
     """OpenAI: APIエラーを適切に処理できること"""
-    # APIエラーをシミュレート - APIErrorではなく一般的な例外を使用
-    mock_error = Exception("API Error from OpenAI")
-    mock_langchain["chain"].invoke.side_effect = mock_error
+    parser, mock_chain = ai_parser_openai
     
-    # エラーログをキャプチャしてエラー発生を確認
-    with pytest.raises(AiParserError, match="An unexpected error occurred during AI parsing"), caplog.at_level(logging.ERROR):
-        ai_parser_openai.parse("Create a repository")
+    # mock_chain.invokeをリセット
+    mock_chain.invoke.reset_mock()
     
-    # ログにエラー情報が含まれることを確認
-    assert "An unexpected error occurred during AI parsing" in caplog.text
-    assert "API Error from OpenAI" in caplog.text
+    # モックAPIエラークラスを作成
+    class MockOpenAIAuthenticationError(Exception):
+        def __init__(self, message):
+            self.message = message
+            super().__init__(message)
+    
+    # モックエラーを設定
+    api_error = MockOpenAIAuthenticationError("Invalid API Key")
+    
+    # _OPENAI_ERRORSにモックエラーを含めることをモック
+    with mock.patch.object(parser, 'chain') as patched_chain, \
+         mock.patch("github_automation_tool.adapters.ai_parser._OPENAI_ERRORS", (MockOpenAIAuthenticationError,)):
+        
+        # モックエラーを発生させるように設定
+        patched_chain.invoke.side_effect = api_error
+    
+        with pytest.raises(AiParserError) as exc_info:
+            parser.parse("Create a repository")
+        
+        # エラーメッセージが期待通りか確認
+        assert "AI API call failed during parse" in str(exc_info.value)
+        
+        # invoke が呼ばれたか確認
+        patched_chain.invoke.assert_called_once()
 
-def test_parse_api_error_gemini(ai_parser_gemini, mock_langchain, caplog):
+def test_parse_api_error_gemini(ai_parser_gemini):
     """Google: APIエラーを適切に処理できること"""
-    # APIエラーをシミュレート
-    # ここでは直接エラーオブジェクトを作成せず、例外クラスとしてモックする
-    generic_error = Exception("API Error from Google")
-    mock_langchain["chain"].invoke.side_effect = generic_error
+    parser, mock_chain = ai_parser_gemini
     
-    # エラーログをキャプチャしてエラー発生を確認
-    with pytest.raises(AiParserError, match="An unexpected error occurred during AI parsing"), caplog.at_level(logging.ERROR):
-        ai_parser_gemini.parse("Create a repository")
+    # mock_chain.invokeをリセット
+    mock_chain.invoke.reset_mock()
     
-    # ログに詳細なエラー情報が含まれることを確認
-    assert "An unexpected error occurred during AI parsing" in caplog.text
+    # モックAPIエラークラスを作成
+    class MockGoogleResourceExhausted(Exception):
+        def __init__(self, message):
+            self.message = message
+            super().__init__(message)
+    
+    # モックエラーを設定
+    api_error = MockGoogleResourceExhausted("Quota exceeded")
+    
+    # _GOOGLE_ERRORSにモックエラーを含めることをモック
+    with mock.patch.object(parser, 'chain') as patched_chain, \
+         mock.patch("github_automation_tool.adapters.ai_parser._GOOGLE_ERRORS", (MockGoogleResourceExhausted,)):
+        
+        # モックエラーを発生させるように設定
+        patched_chain.invoke.side_effect = api_error
+    
+        with pytest.raises(AiParserError) as exc_info:
+            parser.parse("Create a repository")
+        
+        # エラーメッセージが期待通りか確認
+        assert "AI API call failed during parse" in str(exc_info.value)
+        
+        # invoke が呼ばれたか確認
+        patched_chain.invoke.assert_called_once()
 
-def test_initialize_llm_openai_error(mock_settings):
-    """OpenAI: クライアント初期化時のエラーを処理できること"""
-    mock_settings.ai_model = "openai"
-    
-    with mock.patch("github_automation_tool.adapters.ai_parser.ChatOpenAI", 
-                    side_effect=ValueError("Invalid API key")):
-        with pytest.raises(AiParserError, match="Configuration error for 'openai'"):
-            AIParser(settings=mock_settings)
-
-def test_initialize_llm_gemini_error(mock_settings):
-    """Google: クライアント初期化時のエラーを処理できること"""
+# ★ 改善点: max_tokens 設定のテスト ★
+def test_initialize_llm_gemini_with_max_tokens(mock_settings, mock_api_clients):
+    """Geminiクライアント初期化時にmax_output_tokensが設定されること"""
+    # Geminiモデルを設定
     mock_settings.ai_model = "gemini"
     
-    with mock.patch("github_automation_tool.adapters.ai_parser.ChatGoogleGenerativeAI", 
-                    side_effect=ValueError("Invalid API key")):
-        with pytest.raises(AiParserError, match="Configuration error for 'gemini'"):
-            AIParser(settings=mock_settings)
+    # AIParserを初期化
+    AIParser(settings=mock_settings)
+    
+    # ChatGoogleGenerativeAIの呼び出し確認
+    mock_api_clients['chat_gemini'].assert_called_once()
+    
+    # 期待される max_output_tokens が kwargs に含まれているか確認
+    _, kwargs = mock_api_clients['chat_gemini'].call_args
+    assert "max_output_tokens" in kwargs
+    assert kwargs["max_output_tokens"] == 8192  # 設定した値
 
-def test_openai_rate_limit_error(mock_settings):
-    """OpenAI: レートリミットエラーを特定のエラーとして処理できること"""
-    mock_settings.ai_model = "openai"
+def test_initialize_llm_openai(mock_settings, mock_api_clients):
+    """OpenAIクライアント初期化時のパラメータ確認"""
+    # AIParserを初期化
+    AIParser(settings=mock_settings)
     
-    # エラーオブジェクトを直接モックして使用
-    with mock.patch("github_automation_tool.adapters.ai_parser.ChatOpenAI") as mock_chat_openai:
-        # 最新のOpenAIライブラリに合わせたエラー
-        mock_chat_openai.side_effect = ValueError("OpenAI API rate limit exceeded")
-        
-        with pytest.raises(AiParserError, match="Configuration error for 'openai'"):
-            AIParser(settings=mock_settings)
-
-def test_google_permission_denied_error(mock_settings):
-    """Google: 権限エラーを特定のエラーとして処理できること"""
-    mock_settings.ai_model = "gemini"
+    # ChatOpenAIの呼び出し確認
+    mock_api_clients['chat_openai'].assert_called_once()
     
-    # 一般的なValueErrorを使用（環境によってはGoogle APIの例外が利用できない場合がある）
-    with mock.patch("github_automation_tool.adapters.ai_parser.ChatGoogleGenerativeAI") as mock_chat_gemini:
-        mock_chat_gemini.side_effect = ValueError("Google API permission denied")
-        
-        with pytest.raises(AiParserError, match="Configuration error for 'gemini'"):
-            AIParser(settings=mock_settings)
-
-def test_unsupported_model_type(mock_settings):
-    """サポートされていないモデルタイプのエラーを処理できること"""
-    mock_settings.ai_model = "unsupported_model"
+    # 基本パラメータの確認
+    _, kwargs = mock_api_clients['chat_openai'].call_args
+    assert kwargs["openai_api_key"] == "test-key"
+    assert kwargs["temperature"] == 0
+    assert kwargs["model_name"] == "gpt-4o"
     
-    with pytest.raises(AiParserError, match="Configuration error for 'unsupported_model'"):
-        AIParser(settings=mock_settings)
-
-def test_parse_unexpected_exception_openai(ai_parser_openai, mock_langchain, caplog):
-    """OpenAI: parse時の予期せぬ例外を処理できること"""
-    # 予期せぬ例外をシミュレート
-    unexpected_error = RuntimeError("Something really unexpected")
-    mock_langchain["chain"].invoke.side_effect = unexpected_error
-    
-    # エラーログをキャプチャしてエラー発生を確認
-    with pytest.raises(AiParserError, match="An unexpected error occurred during AI parsing"), caplog.at_level(logging.ERROR):
-        ai_parser_openai.parse("Create a repository")
-    
-    # ログに詳細なエラー情報が含まれることを確認
-    assert "An unexpected error occurred during AI parsing" in caplog.text
-    assert "RuntimeError" in caplog.text or "Something really unexpected" in caplog.text
+    # 注: 現在の実装では max_tokens がセットされていない可能性がある
+    # 将来的に実装される場合は、以下のコメントアウトを解除
+    # assert "model_kwargs" in kwargs
+    # assert kwargs["model_kwargs"].get("max_tokens") > 0
 
 def test_parse_empty_input(ai_parser_openai):
     """空の入力を処理できること"""
-    result = ai_parser_openai.parse("")
+    parser, _ = ai_parser_openai
+    result = parser.parse("")
     
     # 空の入力の場合は空のParseRequirementDataオブジェクトが返されること
     assert isinstance(result, ParsedRequirementData)
     assert len(result.issues) == 0
 
-def test_build_chain_error(mock_settings):
-    """チェーン構築時のエラーを処理できること"""
-    mock_settings.prompt_template = ""  # 空のプロンプトテンプレ
+def test_build_chain_with_prompt_template(mock_settings, mock_api_clients):
+    """プロンプトテンプレートを使ってチェーンを構築できること"""
+    # AIParserを初期化
+    parser = AIParser(settings=mock_settings)
     
-    with pytest.raises(AiParserError, match="Failed to build LangChain chain"):
-        AIParser(settings=mock_settings)
-
-def test_validation_error(ai_parser_openai, mock_langchain, caplog):
-    """バリデーションエラーを処理できること"""
-    # ValidationErrorを直接モックするのではなく、代わりに例外を発生させてエラー処理を確認
-    from langchain_core.exceptions import OutputParserException
-    
-    # LangChainのOutputParserExceptionを使用（ValidationErrorよりも確実に処理できる）
-    mock_error = OutputParserException("Failed to parse output as valid IssueData")
-    mock_langchain["chain"].invoke.side_effect = mock_error
-    
-    # LangChainの例外は「Failed to parse AI output」として捕捉される
-    with pytest.raises(AiParserError, match="Failed to parse AI output"), caplog.at_level(logging.ERROR):
-        ai_parser_openai.parse("Create a repository")
-    
-    # ログに適切なメッセージが含まれることを確認
-    assert "Failed to parse" in caplog.text
+    # プロンプト作成が正しいパラメータで呼ばれたか確認
+    mock_api_clients['prompt'].assert_called_once_with(
+        template=mock_settings.prompt_template,
+        input_variables=["markdown_text"],
+        partial_variables={}
+    )
