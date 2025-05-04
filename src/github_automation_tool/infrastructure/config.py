@@ -16,7 +16,7 @@ class AiSettings(BaseModel):
     openai_model_name: str = Field("gpt-4o", description="Default OpenAI model name if not set by env var")
     gemini_model_name: str = Field("gemini-1.5-flash", description="Default Gemini model name if not set by env var")
     prompt_template: str = Field(
-        default="Default prompt template {markdown_text} {format_instructions}",
+        default="Default prompt template {markdown_text}",
         description="Prompt template for AI parser"
     )  # デフォルト値を提供
 
