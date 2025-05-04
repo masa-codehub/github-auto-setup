@@ -8,7 +8,7 @@ class IssueData(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     title: str = Field(description="抽出されたGitHub issueのタイトル")
     description: str = Field(alias="body", description="抽出されたGitHub issueの説明（概要、目的、背景など）")
-    tasks: list = Field(
+    tasks: list[str] = Field(
         default_factory=list,
         description="抽出されたGitHub issueのタスク（例: 'タスク1', 'タスク2'など）"
     )

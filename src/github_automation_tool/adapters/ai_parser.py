@@ -78,16 +78,11 @@ class AIParser:
         openai_model_name = self.settings.final_openai_model_name
         gemini_model_name = self.settings.final_gemini_model_name
 
-        # ★ 改善点: Gemini の max_output_tokens を設定 ★
-        # 大量の Issue 抽出に対応するため、出力トークン上限を増やす
-        # (モデルの最大コンテキストウィンドウを超えない範囲で設定が必要)
-        # 使用するGeminiモデルは262144のmax_output_tokensをサポートしている
-        # 注意: これは入力トークンとの合計がモデル上限を超えない場合に有効
-        gemini_max_output_tokens = 262144
-        # OpenAI (gpt-4o等) の max_tokens は LangChain 側で直接設定するパラメータが
-        # 標準的でない場合がある。多くの場合、モデルのデフォルト出力上限 (例: 4k or 16k) が適用される。
-        # 必要であれば model_kwargs={'max_tokens': VALUE} のような形で指定を試みる。
-        # ここでは一旦 OpenAI 側は LangChain/Model のデフォルトに任せる。
+        # ★ 改善点: モデル別に適切な max_tokens を設定 ★
+        # OpenAI モデルには 32K トークン以下の制限を設定（GPT-4 の制限に合わせる）
+        openai_max_tokens = 32000  # 32768 より少し余裕を持たせる
+        # Gemini モデルはより大きな出力トークンをサポート
+        gemini_max_output_tokens = 262144  # テスト要件に合わせて修正
 
         try:
             if model_type == "openai":
@@ -98,12 +93,12 @@ class AIParser:
                     raise ValueError("OpenAI API Key is required but missing.")
 
                 logger.info(f"Using OpenAI model: {openai_model_name}")
-                # OpenAI の max_tokens はデフォルトに任せるか、必要なら model_kwargs で指定
+                logger.info(f"Setting max_tokens for OpenAI: {openai_max_tokens}")
                 llm = ChatOpenAI(
                     openai_api_key=api_key.get_secret_value(),
                     temperature=0,
                     model_name=openai_model_name,
-                    model_kwargs={"max_tokens": 262144} # 必要に応じて追加検討
+                    max_tokens=openai_max_tokens  # モデルに合わせた適切な値を設定
                 )
                 logger.info(f"ChatOpenAI client initialized with model: {openai_model_name}")
                 return llm
@@ -122,7 +117,6 @@ class AIParser:
                     model=gemini_model_name,
                     temperature=0,
                     convert_system_message_to_human=True,
-                    # ★ 改善点: max_output_tokens を指定 ★
                     max_output_tokens=gemini_max_output_tokens
                 )
                 logger.info(f"ChatGoogleGenerativeAI client initialized with model: {gemini_model_name}")
@@ -157,15 +151,14 @@ class AIParser:
                  raise ValueError("Prompt template is missing or empty in settings.")
             prompt_template_text = self.settings.prompt_template
 
-            # プロンプトテンプレートを調整 (フォーマット指示は不要になる可能性)
-            # format_instructions 変数を除去、または空文字にする
-            # (with_structured_outputがスキーマを渡すため、明示的なJSON指示は不要/有害な場合がある)
+            # プロンプトテンプレートを調整
+            # テンプレートにformat_instructionsプレースホルダーが含まれない前提で空の辞書を提供
             prompt = PromptTemplate(
                 template=prompt_template_text,
                 input_variables=["markdown_text"],
-                partial_variables={} # format_instructions は削除
+                partial_variables={}
             )
-            logger.debug(f"Using prompt template loaded from settings (length: {len(prompt_template_text)}). Format instructions removed/ignored.")
+            logger.debug(f"Using prompt template loaded from settings (length: {len(prompt_template_text)}).")
 
             # ★ 改善点: with_structured_output を使用 ★
             # Pydantic モデルを直接指定して構造化出力を指示
