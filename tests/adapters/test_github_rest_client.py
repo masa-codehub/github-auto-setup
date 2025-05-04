@@ -731,3 +731,69 @@ def test_check_collaborator_other_error(rest_client):
     # エラーメッセージにコンテキスト情報が含まれることを確認
     error_msg = str(excinfo.value)
     assert f"checking collaborator status for 'any-user' in {TARGET_OWNER}/{TARGET_REPO}" in error_msg
+
+
+# get_repository テスト
+
+def test_get_repository_success(rest_client):
+    """リポジトリ情報が正常に取得される場合のテスト"""
+    # モックリポジトリを作成
+    mock_repo = MagicMock()
+    mock_repo.html_url = "https://github.com/owner/repo"
+    mock_repo.name = "repo"
+    mock_repo.errors = None  # GraphQLエラー検出を防止するため明示的にNoneに設定
+    
+    # レスポンスを設定
+    mock_response = MagicMock()
+    mock_response.parsed_data = mock_repo
+    mock_response.errors = None  # GraphQLエラー検出を防止するため明示的に設定
+    rest_client.mock_gh.rest.repos.get.return_value = mock_response
+    
+    # メソッドを呼び出し
+    result = rest_client.get_repository(TARGET_OWNER, TARGET_REPO)
+    
+    # 検証
+    assert result is mock_repo
+    assert result.html_url == "https://github.com/owner/repo"
+    rest_client.mock_gh.rest.repos.get.assert_called_once_with(
+        owner=TARGET_OWNER, repo=TARGET_REPO
+    )
+
+def test_get_repository_not_found(rest_client):
+    """存在しないリポジトリを取得しようとした場合のテスト"""
+    # 404 Not Foundエラーをシミュレート
+    mock_error = create_mock_request_failed(
+        status_code=404,
+        content=b'{"message":"Not Found"}'
+    )
+    
+    # APIリクエストがエラーを発生させるように設定
+    rest_client.mock_gh.rest.repos.get.side_effect = mock_error
+    
+    # メソッド呼び出しでNotFoundエラーが発生することを確認
+    with pytest.raises(GitHubResourceNotFoundError) as excinfo:
+        rest_client.get_repository(TARGET_OWNER, TARGET_REPO)
+    
+    # エラーメッセージにコンテキスト情報が含まれることを確認
+    error_msg = str(excinfo.value)
+    assert f"getting repository '{TARGET_OWNER}/{TARGET_REPO}'" in error_msg
+    assert "404" in error_msg
+
+def test_get_repository_invalid_response(rest_client):
+    """不完全なレスポンスデータが適切に処理されることを確認"""
+    # parsed_data がNoneのレスポンスをシミュレート
+    mock_response = MagicMock()
+    mock_response.parsed_data = None
+    mock_response.status_code = 200  # 正常に完了したように見せる
+    
+    # リポジトリ取得メソッドのレスポンスを設定
+    rest_client.mock_gh.rest.repos.get.return_value = mock_response
+    
+    # メソッド呼び出しでエラーが発生することを確認
+    with pytest.raises(GitHubClientError) as excinfo:
+        rest_client.get_repository(TARGET_OWNER, TARGET_REPO)
+    
+    # エラーメッセージにコンテキスト情報が含まれることを確認
+    error_msg = str(excinfo.value)
+    assert f"Successfully fetched repository {TARGET_OWNER}/{TARGET_REPO}" in error_msg
+    assert "but response data is missing" in error_msg
