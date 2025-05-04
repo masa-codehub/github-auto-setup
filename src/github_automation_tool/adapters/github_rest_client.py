@@ -40,6 +40,9 @@ class GitHubRestClient:
     def _create_repo_context(self, repo_name: str) -> str:
         return f"creating repository '{repo_name}'"
     
+    def _get_repo_context(self, owner: str, repo: str) -> str: # コンテキスト生成用ヘルパー
+        return f"getting repository '{owner}/{repo}'"
+    
     def _get_auth_user_context(self) -> str:
         return "getting authenticated user"
     
@@ -83,6 +86,36 @@ class GitHubRestClient:
             # 通常、APIが201を返せばparsed_dataは存在するはず
             raise GitHubClientError(f"Repository creation for '{repo_name}' seemed successful but response data is missing.")
         logger.debug(f"Successfully created repository: {response.parsed_data.html_url}") # INFO -> DEBUG
+        return response.parsed_data
+
+    @github_api_error_handler(lambda self, owner, repo: f"getting repository '{owner}/{repo}'")
+    def get_repository(self, owner: str, repo: str):
+        """
+        指定されたリポジトリの情報を取得します。
+        404エラー（存在しないリポジトリ）はResourceNotFoundErrorとして送出します。
+
+        Args:
+            owner: リポジトリのオーナー（ユーザーまたは組織名）
+            repo: リポジトリ名
+
+        Returns:
+            Repository: リポジトリ情報
+
+        Raises:
+            GitHubAuthenticationError: 認証エラー（401, 403）
+            GitHubResourceNotFoundError: リポジトリが見つからない場合（404）
+            GitHubClientError: その他のAPI呼び出しエラー
+        """
+        logger.info(f"Retrieving repository information for {owner}/{repo}")
+        
+        response = self.gh.rest.repos.get(owner=owner, repo=repo)
+        
+        if not response.parsed_data:
+            error_msg = f"Successfully fetched repository {owner}/{repo}, but response data is missing"
+            logger.error(error_msg)
+            raise GitHubClientError(error_msg)
+        
+        logger.debug(f"Successfully retrieved repository: {response.parsed_data.html_url}")
         return response.parsed_data
 
     # --- Authenticated User ---

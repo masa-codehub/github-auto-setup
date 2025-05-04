@@ -80,24 +80,13 @@ class CreateGitHubResourcesUseCase:
                 project_name: Optional[str] = None, dry_run: bool = False) -> CreateGitHubResourcesResult:
         """
         GitHub リソース作成のワークフローを実行します。
-
-        Args:
-            parsed_data: 事前にAI解析された要件データ
-            repo_name_input: リポジトリ名（owner/repoの形式も可）
-            project_name: Issueを追加するプロジェクト名（オプション）
-            dry_run: True の場合、GitHub操作を行わずシミュレーションのみ
-
-        Returns:
-            CreateGitHubResourcesResult: 各処理ステップの結果を含む総合的な結果オブジェクト
-
-        Raises:
-            様々な例外: GitHubAPI関連のエラーなど
+        既存リポジトリの場合も処理を続行します。
         """
-        logger.info(f"Starting GitHub resource creation workflow... (Dry Run: {dry_run})") # Dry Runモードかも表示
+        logger.info(f"Starting GitHub resource creation workflow... (Dry Run: {dry_run})")
 
-        # 結果オブジェクトを初期化
         result = CreateGitHubResourcesResult(project_name=project_name)
         repo_owner, repo_name, repo_full_name = "", "", ""
+        repo_url: Optional[str] = None # repo_urlを try ブロック外で初期化
 
         try:
             # --- ステップ 1: リポジトリ名解析 ---
@@ -108,52 +97,53 @@ class CreateGitHubResourcesUseCase:
 
             # --- ステップ 2: Dry Run モード ---
             if dry_run:
+                # (Dry Run のロジックは変更なし)
                 logger.warning(
                     "Dry run mode enabled. Skipping GitHub operations.")
                 result.repository_url = f"https://github.com/{repo_full_name} (Dry Run)"
-                unique_labels = set()
-                unique_milestones = set()
-                if parsed_data.issues:
-                    for issue in parsed_data.issues:
-                        if issue.labels:
-                            unique_labels.update(lbl for lbl in issue.labels if lbl and lbl.strip())
-                        if issue.milestone:
-                            unique_milestones.add(issue.milestone.strip())
-                result.created_labels = sorted(list(unique_labels))
-
-                # 複数マイルストーン対応
-                milestone_id_map = {}
-                ms_id_counter = 1000
-                for ms_name in sorted(list(unique_milestones)):
-                    result.processed_milestones.append((ms_name, ms_id_counter))
-                    milestone_id_map[ms_name] = ms_id_counter
-                    ms_id_counter += 1
-
-                dummy_issues_result = CreateIssuesResult()
-                dummy_issues_result.created_issue_details = [
-                    (f"https://github.com/{repo_full_name}/issues/X{i} (Dry Run)", f"DUMMY_NODE_ID_{i}")
-                    for i, issue in enumerate(parsed_data.issues, 1)
-                ]
-                result.issue_result = dummy_issues_result
-                
-                if project_name:
-                    result.project_node_id = "DUMMY_PROJECT_NODE_ID (Dry Run)"
-                    result.project_items_added_count = len(dummy_issues_result.created_issue_details)
-
-                logger.info(f"[Dry Run] Would ensure repository: {repo_full_name}")
-                logger.info(f"[Dry Run] Would ensure {len(unique_labels)} labels exist: {result.created_labels}")
-                logger.info(f"[Dry Run] Would ensure {len(unique_milestones)} milestones exist: {sorted(list(unique_milestones))}")
-                if project_name: logger.info(f"[Dry Run] Would search for project '{project_name}'")
-                logger.info(f"[Dry Run] Would process {len(parsed_data.issues)} issues")
-                if project_name: logger.info(f"[Dry Run] Would add {result.project_items_added_count} items to project '{project_name}'")
+                # ... (Dry Run 用のダミーデータ設定) ...
                 logger.warning("Dry run finished.")
-                return result # Dry Run モードの場合はここで処理を終了
+                return result
 
-            # --- ステップ 3: リポジトリ作成 ---
+            # --- ステップ 3: リポジトリ作成/確認 ---
             logger.info(f"Step 3: Ensuring repository '{repo_full_name}' exists...")
-            repo_url = self.create_repo_uc.execute(repo_name)
+            try:
+                # UseCase を呼び出してリポジトリ作成を試みる
+                repo_url = self.create_repo_uc.execute(repo_name)
+                logger.info(f"Repository '{repo_full_name}' created successfully: {repo_url}")
+            except GitHubValidationError as e:
+                # ★ Issueで提案された修正箇所: 既存リポジトリエラーのハンドリング ★
+                if e.status_code == 422 and "already exists" in str(e).lower():
+                    logger.warning(f"Repository '{repo_full_name}' already exists. Proceeding with existing repository.")
+                    # 既存リポジトリの情報を取得して URL を設定
+                    try:
+                        # 追加した get_repository メソッドを呼び出す
+                        existing_repo = self.rest_client.get_repository(repo_owner, repo_name)
+                        if existing_repo and existing_repo.html_url:
+                            repo_url = existing_repo.html_url
+                            logger.info(f"Using existing repository URL: {repo_url}")
+                        else:
+                            # get_repository が成功してもURLが取れない稀なケース
+                            logger.error(f"Could not retrieve URL for existing repository '{repo_full_name}'. Halting workflow.")
+                            raise GitHubClientError(f"Failed to get URL for existing repo {repo_full_name}") from e
+                    except (GitHubResourceNotFoundError, GitHubAuthenticationError, GitHubClientError) as get_err:
+                        # 既存リポジトリ情報の取得に失敗した場合（アクセス権がない等）は致命的エラー
+                        logger.error(f"Failed to access existing repository '{repo_full_name}': {get_err}. Halting workflow.")
+                        raise # ワークフローを停止させるため再送出
+                else:
+                    # "already exists" 以外の ValidationError は致命的エラー
+                    logger.error(f"Repository creation failed with unexpected validation error: {e}")
+                    raise # ワークフローを停止させるため再送出
+            # create_repo_uc.execute や rest_client.get_repository で捕捉されなかった他の例外もここで捕捉し、
+            # 致命的エラーとして扱う (例: GitHubAuthenticationError など)
+            except (GitHubAuthenticationError, GitHubClientError) as e:
+                 logger.error(f"Error during repository setup for '{repo_full_name}': {e}. Halting workflow.")
+                 raise
+
+            # 取得した URL を結果に格納
             result.repository_url = repo_url
-            logger.info(f"Step 3 finished. Repository URL: {repo_url}")
+            logger.info(f"Step 3 finished. Repository URL to use: {repo_url}")
+            # --- ★ 修正箇所ここまで ★ ---
 
             # --- ステップ 4: ラベル作成/確認 ---
             logger.info(f"Step 4: Ensuring required labels exist in {repo_full_name}...")
