@@ -102,7 +102,7 @@ class AIParser:
                 llm = ChatOpenAI(
                     openai_api_key=api_key.get_secret_value(),
                     temperature=0,
-                    model_name=openai_model_name
+                    model_name=openai_model_name,
                     model_kwargs={"max_tokens": 262144} # 必要に応じて追加検討
                 )
                 logger.info(f"ChatOpenAI client initialized with model: {openai_model_name}")
