@@ -12,9 +12,8 @@ langchain-community
 langchain-openai        # LangChain用 OpenAI (ChatGPT) 連携ライブラリ
 langchain-google-genai  # LangChain用 Google Generative AI (Gemini) 連携ライブラリ
 pydantic-settings       # Pydanticを利用した設定管理 (環境変数/.env読み込み, 型検証)
-
-django                  # 
 python-dotenv           # .env ファイルから環境変数を読み込む (pydantic-settingsが内部で利用)
+django                  # 
 
 
 # --- Development Dependencies ---
@@ -23,7 +22,7 @@ python-dotenv           # .env ファイルから環境変数を読み込む (py
 
 pip-tools               # requirements.in から requirements.txt を生成するツール
 pytest                  # テストフレームワーク
-pytest-cov            # pytest 用のカバレッジ測定ツール
+pytest-cov              # pytest 用のカバレッジ測定ツール
 ruff                    # 高速な Linter & Formatter
 mypy                    # 静的型チェッカー
 
