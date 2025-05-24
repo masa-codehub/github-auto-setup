@@ -32,12 +32,23 @@
                 </div>
             </div>
             <!-- アップロードセクションここから -->
-            <div id="upload-section" class="card mb-4">
-                <div class="card-header"><h5>1. Upload Issue File</h5></div>
-                <div class="card-body">
-                    <!-- ファイルアップロードUI要素をここに実装 -->
+            <section id="upload-section" class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">1. Upload Issue File</h5>
                 </div>
-            </div>
+                <div class="card-body">
+                    <form id="upload-form" method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="input-group">
+                            <input type="file" class="form-control" id="issue-file-input" name="issue_file" required>
+                            <button class="btn btn-primary" id="upload-button" type="submit">Upload & Preview</button>
+                        </div>
+                        <div class="form-text" id="fileHelp">
+                            Upload a Markdown, YAML, or JSON file containing issue definitions.
+                        </div>
+                    </form>
+                </div>
+            </section>
             <!-- アップロードセクションここまで -->
             <!-- Issue一覧セクションここから -->
             <div id="issue-list-section" class="card">
