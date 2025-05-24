@@ -66,3 +66,10 @@ class TopPageViewTest(TestCase):
                             msg_prefix="Local path input not found")
         self.assertContains(response, 'id="local-save-button"',
                             msg_prefix="Local save button not found")
+
+    def test_notification_area_exists(self):
+        """結果表示用の通知エリアが存在することを検証"""
+        response = self.client.get(reverse('app:top_page'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="result-notification-area"',
+                            msg_prefix="Result notification area not found")
