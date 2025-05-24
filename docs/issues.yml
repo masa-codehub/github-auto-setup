@@ -1,0 +1,766 @@
+# GitHub Automation Tool - Agile Requirements (as GitHub Issues)
+# Version 2.3 - Based on user feedback and previous iteration.
+
+document_info:
+  title: "GitHub Automation Tool - Agile Requirements (GitHub Issues Format)"
+  version: "2.3"
+  last_updated: "2025-05-24 (JST)" # Assuming current date for this output
+  status: "Ready for Sprint Planning"
+  original_requirements_doc_ref: "masa-codehub/github-auto-setup/github-auto-setup-687f29b0f6546c0e3834343e6186a60f9a1d8f40/docs/requirements.md" #
+
+milestones:
+  - id: "M1"
+    title: "Web UI基礎とファイル処理基盤"
+    description: "Django + Bootstrap5での基本的なUIシェル完成。ファイルアップロード機能と、主要な入力形式（例: YAML）に対する初期パーサーおよびデータマッピングロジックの実装。Issue一覧表示機能の基礎。"
+    related_epics: ["EPIC-WEBUI-CORE", "EPIC-DATAPARSING"]
+  - id: "M2"
+    title: "データマッピングとAI連携"
+    description: "AIを活用した高度なデータマッピング機能（キーの揺らぎ吸収など）の実装。設定ファイルによるマッピングルールのサポート。全指定ファイル形式（.md, .yml, .json）への対応。"
+    related_epics: ["EPIC-DATAPARSING"]
+  - id: "M3"
+    title: "GitHub連携機能MVP"
+    description: "Web UIからの選択的Issue GitHub登録機能（リポジトリ、ラベル、マイルストーン、Issue作成）の主要パス実装。担当者検証機能の実装。Dry RunモードのUI対応。"
+    related_epics: ["EPIC-GITHUB-INTEGRATION"]
+  - id: "M4"
+    title: "ローカルファイル管理と補助機能"
+    description: "ローカルへのファイル分割・保存機能（YAML形式、index.html生成）の実装。プロジェクト連携機能。"
+    related_epics: ["EPIC-WEBUI-CORE"]
+  - id: "M5"
+    title: "CLI機能同期と全体最適化"
+    description: "CLI機能のWeb UIバックエンドロジックへの追従。テストカバレッジ向上、ロギング・レポーティング改善、非機能要件の最終確認。"
+    related_epics: ["EPIC-CLI-MAINTENANCE", "EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION", "EPIC-DATAPARSING", "EPIC-INFRA-CONFIG"]
+
+default_labels:
+  types:
+    - "type:user-story"
+    - "type:technical-task"
+    - "type:bug"
+    - "type:chore"
+    - "type:refactoring"
+    - "type:test"
+    - "type:documentation"
+    - "type:spike"
+  layers:
+    - "layer:domain"
+    - "layer:usecase"
+    - "layer:adapter-ui"
+    - "layer:adapter-input-parser"
+    - "layer:adapter-ai"
+    - "layer:adapter-github"
+    - "layer:adapter-filesystem"
+    - "layer:infrastructure"
+  epics:
+    - "epic:webui-core"
+    - "epic:data-parsing"
+    - "epic:github-integration"
+    - "epic:cli-maintenance"
+    - "epic:infra-config"
+  principles_practices:
+    - "TDD"
+    - "DDD"
+    - "CleanArchitecture"
+  priorities: # To be set by Product Owner
+    - "priority:high"
+    - "priority:medium"
+    - "priority:low"
+  statuses: # Team workflow dependent
+    - "status:todo"
+    - "status:in-progress"
+    - "status:review"
+    - "status:done"
+    - "status:blocked"
+    - "status:needs-discussion"
+
+issues:
+  # User Stories
+  - title: "[UserStory] Web UI: Issue情報ファイルのアップロードとIssue一覧表示 (US-001)"
+    body: |
+      **User Story:**
+      開発者として、ブラウザでアクセス可能なWeb UIを通じてIssue情報ファイル（.md, .yml, .json）をアップロードし、内容をIssue単位で一覧表示したい。それは、手作業でのファイル確認や分割の手間を省き、効率的にIssue情報を把握するためだ。
+
+      **Implementation Tasks:**
+      - **Djangoバックエンド:**
+        - [ ] ファイルアップロード処理用APIエンドポイント（Django View）作成
+        - [ ] アップロードされたファイルのバリデーション（ファイル形式、サイズ上限など）実装
+        - [ ] `FileReader`コンポーネント呼び出しによるファイル内容読み込み
+        - [ ] `IssueFileParser` / `AIParser` (データマッピングロジック) 呼び出しによるIssueデータへの変換
+        - [ ] 変換されたIssueデータリストをフロントエンドに返すAPIエンドポイント作成
+      - **Djangoフロントエンド (Templates + Bootstrap5):**
+        - [ ] ファイルアップロード用フォームコンポーネント作成
+        - [ ] Issue一覧表示用テーブル/リストコンポーネント作成
+        - [ ] バックエンドAPI呼び出しと結果表示（一覧、エラーメッセージ）ロジック実装
+      - **テスト:**
+        - [ ] （TDD）ファイルアップロードAPIの単体テスト (正常系、異常系:不正形式、サイズ超過等)
+        - [ ] （TDD）Issueデータ変換ロジック（パーサー/マッパー部分）のユニットテスト (各形式ごと)
+        - [ ] （TDD）Issue一覧表示APIの単体テスト
+        - [ ] UIコンポーネントのE2Eテストまたは手動テストケース作成
+
+      **Acceptance Criteria:**
+      - AC-001-01: Web UIにファイルアップロード機能があり、`.md`, `.yml`, `.json` ファイルを1つ以上選択してアップロードできる。
+      - AC-001-02: アップロードされたファイルがバックエンドで読み込まれ、Issue単位に分割・解釈（データマッピング）される。
+      - AC-001-03: 解釈された各Issueの主要情報（例: タイトル、ID、概要）がWeb UIの一覧形式で表示される。
+      - AC-001-04: ファイル読み込みエラーや形式不正時には、UI上に適切なエラーメッセージが表示される。
+      - AC-001-05: 一覧表示された各Issueは、後続の操作（選択、GitHub登録など）のために識別可能である。
+    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+    labels:
+      - "type:user-story"
+      - "epic:webui-core"
+      - "epic:data-parsing"
+      - "layer:adapter-ui"
+      - "layer:usecase"
+      - "layer:adapter-input-parser"
+      - "layer:adapter-ai"
+      - "layer:domain"
+      - "TDD"
+      - "priority:high"
+    assignees: [] # To be assigned
+    referenced_requirements_ids: ["US-001", "UC-Web-001 (フロー1-6)", "FR-WebUI-001", "FR-File-001", "FR-Parse-001", "FR-Display-001"]
+    dependencies_guessed: ["TASK-DJANGO-SETUP", "TASK-FILEPARSE-IMPL", "TASK-DATAMAP-IMPL"]
+    size_guessed: "[SP: 8]"
+    notes: "[分割案あり] ファイル形式ごとのパーサー実装 (US-PARSE-MD, US-PARSE-YAML, US-PARSE-JSON) に分割可能かもしれません。"
+
+  - title: "[UserStory] Web UI: Issue選択機能の実装 (US-002)"
+    body: |
+      **User Story:**
+      開発者として、Web UIに表示されたIssue一覧から、GitHubに登録したいIssueを個別にまたは一括で選択したい。それは、必要なIssueだけを効率的にGitHubに反映させるためだ。
+
+      **Implementation Tasks:**
+      - **Djangoフロントエンド (Templates + Bootstrap5 + JavaScript(最小限)):**
+        - [ ] Issue一覧の各行にチェックボックスを追加
+        - [ ] 「すべて選択」「すべて解除」ボタン/チェックボックスを実装
+        - [ ] 選択状態を管理するフロントエンドロジック（例: JavaScriptまたはDjangoフォームセット活用）実装
+        - [ ] 選択されたIssueのIDリストをバックエンドに送信する仕組みを実装
+      - **テスト:**
+        - [ ] UI上での個別選択、全選択、全解除が正しく動作することを確認するE2Eテストまたは手動テストケース作成
+        - [ ] 選択されたIssue IDがバックエンドに正しく送信されることを確認するテスト
+
+      **Acceptance Criteria:**
+      - AC-002-01: Web UIのIssue一覧で、各Issueにチェックボックス等の選択手段が提供される。
+      - AC-002-02: 「すべて選択」「すべて解除」のような一括選択機能が提供される。
+      - AC-002-03: ユーザーがIssueを選択すると、選択状態がUI上で視覚的に確認できる。
+      - AC-002-04: 選択されたIssueの情報は、後続のGitHub登録処理のためにバックエンドに送信可能である。
+    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+    labels:
+      - "type:user-story"
+      - "epic:webui-core"
+      - "layer:adapter-ui"
+      - "priority:medium"
+    assignees: []
+    referenced_requirements_ids: ["US-002", "UC-Web-001 (フロー7)", "FR-Select-001"]
+    dependencies_guessed: ["US-001"]
+    size_guessed: "[SP: 3]"
+    notes: ""
+
+  - title: "[UserStory] Web UI: 選択したIssueのGitHubへの一括登録 (US-003)"
+    body: |
+      **User Story:**
+      開発者として、Web UIで選択したIssue群を、指定したGitHubリポジトリに一括で登録したい。それは、プロジェクトの初期セットアップを迅速に行うためだ。
+
+      **Implementation Tasks:**
+      - **Djangoバックエンド:**
+        - [ ] GitHub登録指示を受け付けるAPIエンドポイント（Django View）作成
+          - 入力: 選択されたIssueデータ（またはIDリスト）、対象リポジトリ名、プロジェクト名（任意）、DryRunフラグ
+        - [ ] 受け取った情報を`CreateGitHubResourcesUseCase`に渡して実行する処理を実装
+        - [ ] `CreateGitHubResourcesUseCase`の実行結果を整形し、フロントエンドに返す処理を実装
+      - **Djangoフロントエンド (Templates + Bootstrap5):**
+        - [ ] GitHubリポジトリ名、プロジェクト名（任意）入力フォーム、DryRun選択UI、実行ボタンを配置
+        - [ ] フォーム送信時にバックエンドAPIを呼び出し、結果（成功、エラー、スキップ情報など）をUIに分かりやすく表示する処理を実装
+      - **UseCase/Adapter層:**
+        - [ ] `CreateGitHubResourcesUseCase`がWeb UIからの呼び出しに対応できるようにインターフェースを確認・調整（必要であれば）
+        - [ ] 担当者検証ロジック (`AssigneeValidator`) が`CreateGitHubResourcesUseCase`から適切に呼び出されることを確認
+      - **テスト:**
+        - [ ] （TDD）GitHub登録APIエンドポイントの単体テスト（正常系、PATエラー系、リポジトリ名不正系など）
+        - [ ] `CreateGitHubResourcesUseCase`のユニットテストが、Web UIからのデータフローをカバーしていることを確認・拡充
+        - [ ] UIからの一連の登録フロー（選択→情報入力→実行→結果表示）のE2Eテストまたは手動テストケース作成
+
+      **Acceptance Criteria:**
+      - AC-003-01: Web UI上に、対象GitHubリポジトリ名（例: `owner/repo`）と、任意でプロジェクト名を入力または選択するフィールドがある。
+      - AC-003-02: 「GitHubへ登録」ボタンを押下すると、選択されたIssueとリポジトリ情報がバックエンドに送信される。
+      - AC-003-03: バックエンドで`CreateGitHubResourcesUseCase`が呼び出され、リポジトリ作成（存在しない場合）、ラベル・マイルストーン作成（存在しない場合）、担当者検証、Issue作成、プロジェクト連携（指定時）が実行される。
+      - AC-003-04: 処理結果（成功、失敗、スキップ、エラー詳細）がUI上にフィードバックされる。
+      - AC-003-05: GitHub PATが無効な場合や権限不足の場合、適切な認証エラーがUIに表示される。
+      - AC-003-06: 同名のOpen Issueが既に存在する場合、該当Issueはスキップされ、その旨がUIに表示される。
+    milestone: "M3" # M3: GitHub連携機能MVP
+    labels:
+      - "type:user-story"
+      - "epic:github-integration"
+      - "epic:webui-core"
+      - "layer:adapter-ui"
+      - "layer:usecase"
+      - "layer:adapter-github"
+      - "layer:domain"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["US-003", "UC-Web-001 (フロー7, 9-11)", "FR-GitHub-Register-001", "FR-Feedback-001", "システムが満たすべき主要な成功基準 (機能: UI, GitHub連携, 担当者検証, プロジェクト連携)"]
+    dependencies_guessed: ["US-001", "US-002", "TASK-DATAMAP-IMPL", "TASK-GITHUB-CLIENTS-SETUP", "CreateGitHubResourcesUseCase"] #
+    size_guessed: "[SP: 13]"
+    notes: "[分割案あり] 各GitHubリソース作成（Repo, Label, Milestone, Issue本体, Project連携）を独立したバックエンド処理＋UIフィードバックとして細分化可能。"
+
+  - title: "[UserStory] Web UI: ローカルへのIssueファイル分割・保存機能 (US-004)"
+    body: |
+      **User Story:**
+      開発者として、Web UIで読み込んだIssue群（または選択したIssue群）を、指定したローカルディレクトリにIssueごとのYAMLファイルとして分割・保存したい。それは、ローカル環境でのIssueデータの整理と再利用を容易にするためだ。
+
+      **Implementation Tasks:**
+      - **Djangoバックエンド:**
+        - [ ] ローカルファイル保存指示を受け付けるAPIエンドポイント（Django View）作成
+          - 入力: 保存対象Issueデータ（またはIDリスト）、保存先ディレクトリパス
+        - [ ] `LocalFileStorageUseCase`（新設または既存UseCaseへの機能追加）呼び出し処理を実装
+        - [ ] 保存結果（成功、失敗、パス情報）をフロントエンドに返す処理を実装
+      - **Djangoフロントエンド (Templates + Bootstrap5):**
+        - [ ] ローカル保存先ディレクトリパス入力/選択UIと実行ボタンを配置
+        - [ ] フォーム送信時にバックエンドAPIを呼び出し、結果（成功、エラー、保存パスなど）をUIに表示する処理を実装
+      - **UseCase/Adapter層:**
+        - [ ] `IssueFileSplitter`（または`LocalFileStorageUseCase`）コンポーネントの設計・実装
+          - 指定ディレクトリへの書き込み権限チェック
+          - `issues/`サブディレクトリ作成
+          - 各IssueデータをYAML形式に変換
+          - Issue IDとタイトルに基づいたファイル名生成ロジック
+          - YAMLファイル書き込み処理
+          - `index.html`（目次ファイル）生成ロジック（Issueタイトルと相対リンク）
+      - **ドメインモデル:**
+        - [ ] `LocalFileSplitResult`モデルの定義（保存パスリスト、index.htmlパス、成功/失敗カウント等）
+      - **テスト:**
+        - [ ] （TDD）`IssueFileSplitter`（または`LocalFileStorageUseCase`）のユニットテスト (正常系、ディレクトリ作成失敗、書き込みエラー、ファイル名衝突考慮など)
+        - [ ] （TDD）ローカルファイル保存APIエンドポイントの単体テスト
+        - [ ] UIからの一連のローカル保存フローのE2Eテストまたは手動テストケース作成
+
+      **Acceptance Criteria:**
+      - AC-004-01: Web UI上に、ローカル保存先のディレクトリパスを指定する機能がある。
+      - AC-004-02: 「ローカルに分割保存」ボタンを押下すると、現在UIに表示されている（または選択されている）Issueデータと保存先パスがバックエンドに送信される。
+      - AC-004-03: バックエンドで、指定されたディレクトリ直下に`issues/`サブディレクトリと`index.html`ファイルが生成される。
+      - AC-004-04: 各Issueデータは、`issues/`ディレクトリ内に個別のYAMLファイルとして保存される。
+      - AC-004-05: Issueファイル名は、Issue IDとタイトルを元にした安全なファイル名（例: `ISSUE-001_ユーザー登録機能.yaml`）である。
+      - AC-004-06: `index.html`には、保存された全Issueのタイトルと、対応するYAMLファイルへの相対リンクがリスト形式で記述される。
+      - AC-004-07: ファイル保存処理の結果（成功、失敗、保存パスなど）がUI上にフィードバックされる。
+      - AC-004-08: 指定された保存先ディレクトリが存在しない、または書き込み権限がない場合、適切なエラーがUIに表示される。
+    milestone: "M4" # M4: ローカルファイル管理と補助機能
+    labels:
+      - "type:user-story"
+      - "epic:webui-core"
+      - "layer:adapter-ui"
+      - "layer:usecase"
+      - "layer:adapter-filesystem"
+      - "layer:domain"
+      - "priority:medium"
+    assignees: []
+    referenced_requirements_ids: ["US-004", "UC-Web-001 (フロー8, 10-11)", "FR-SplitStore-001", "システムが満たすべき主要な成功基準 (機能: ローカルファイル分割)"]
+    dependencies_guessed: ["US-001", "TASK-DATAMAP-IMPL"]
+    size_guessed: "[SP: 5]"
+    notes: ""
+
+  - title: "[UserStory] CLI: Issue情報ファイルからのGitHubリソース一括登録 (US-005)"
+    body: |
+      **User Story:**
+      開発者として、既存のCLIコマンド (`main.py`) を使用して、Issue情報ファイルからGitHubリソースを一括で登録したい。それは、自動化スクリプトや既存のワークフローでツールを利用し続けたいからだ。
+
+      **Implementation Tasks:**
+      - **CLI (`main.py`の改修):**
+        - [ ] `main.py`が新しいIssue解釈・データマッピングロジック（`AIParser`/`IssueFileInterpreter`）を呼び出すように修正
+        - [ ] `CreateGitHubResourcesUseCase`への入力データ形式が新しいマッピングロジックの出力と整合するように調整
+      - **テスト:**
+        - [ ] 既存のCLI向けテストケース (`tests/adapters/test_cli.py`など) を新しいロジックに合わせて更新し、パスすることを確認
+        - [ ] Web UI経由での実行結果とCLI経由での実行結果が（同等の入力に対し）一致することを確認する比較テストまたは手動検証
+
+      **Acceptance Criteria:**
+      - AC-005-01: `python -m github_automation_tool.main --file <filepath> --repo <repo_name>` コマンドが正常に実行できる。
+      - AC-005-02: CLI実行時、Web UIと同様のIssue解釈・データマッピングロジックが使用される。
+      - AC-005-03: GitHubへのリソース作成（リポジトリ、ラベル、マイルストーン、Issue、プロジェクト連携）が、Web UIからの実行と同等に行われる。
+      - AC-005-04: 処理結果は、`CliReporter` を通じてコンソールに出力される。
+    milestone: "M5" # M5: CLI機能同期と全体最適化
+    labels:
+      - "type:user-story"
+      - "epic:cli-maintenance"
+      - "epic:github-integration"
+      - "layer:adapter-cli"
+      - "layer:usecase"
+      - "layer:adapter-input-parser"
+      - "layer:adapter-github"
+      - "priority:medium"
+    assignees: []
+    referenced_requirements_ids: ["US-005", "UC-CLI-001", "FR-CLI-Sync-001", "システムが満たすべき主要な成功基準 (機能: CLI)"]
+    dependencies_guessed: ["TASK-DATAMAP-IMPL", "CreateGitHubResourcesUseCase"] # (バックエンドロジック)
+    size_guessed: "[SP: 5]"
+    notes: ""
+
+  - title: "[UserStory] Dry Runモードの提供 (CLI & Web UI) (US-006)"
+    body: |
+      **User Story:**
+      開発者として、CLIコマンドまたはWeb UIで処理を実行する際に、Dry Runモードを選択したい。それは、実際にGitHubに変更を加える前に、実行される予定の操作内容を確認し、意図しない変更を防ぐためだ。
+
+      **Implementation Tasks:**
+      - **CLI:**
+        - [ ] `main.py`の`--dry-run`オプションが`CreateGitHubResourcesUseCase`に正しく渡されることを確認
+      - **Web UI:**
+        - [ ] GitHub登録実行UIにDry Runモードを有効化するチェックボックス/スイッチを追加
+        - [ ] Dry Runモード選択状態をバックエンドAPIに送信する処理を実装
+        - [ ] バックエンドAPIがDry Runフラグを`CreateGitHubResourcesUseCase`に渡す処理を実装
+      - **UseCase/Reporting:**
+        - [ ] `CreateGitHubResourcesUseCase`のDry Runモード時の結果オブジェクト(`CreateGitHubResourcesResult`)の内容が、シミュレーション結果を適切に反映していることを確認
+        - [ ] Web UIでDry Run結果を分かりやすく表示する処理を実装
+      - **テスト:**
+        - [ ] CLIでのDry Runモード実行テスト
+        - [ ] Web UIでのDry Runモード実行テスト（E2Eまたは手動）
+        - [ ] `CreateGitHubResourcesUseCase`のDry Runモードに関するユニットテストを拡充
+
+      **Acceptance Criteria:**
+      - AC-006-01: CLIで`--dry-run`オプションを指定して実行した場合、GitHubへの書き込み処理は行われない。
+      - AC-006-02: Web UI上にDry Runモードを有効にするためのチェックボックスまたはスイッチがある。
+      - AC-006-03: Dry Runモード実行時、作成/設定される予定のリポジトリ名、ラベルリスト、マイルストーンリスト、Issueタイトルリスト、プロジェクト連携情報などがログまたはUI上に表示される。
+      - AC-006-04: Dry Runモードでも、ファイル読み込み、Issue解釈・データマッピング、担当者検証（モックまたは実際のAPIコール）はシミュレートされる。
+    milestone: "M3" # M3: GitHub連携機能MVP
+    labels:
+      - "type:user-story"
+      - "epic:github-integration"
+      - "epic:webui-core"
+      - "epic:cli-maintenance"
+      - "layer:usecase"
+      - "layer:adapter-ui"
+      - "layer:adapter-cli"
+      - "priority:medium"
+    assignees: []
+    referenced_requirements_ids: ["US-006", "UC-CLI-002", "3. スコープ定義 (処理: Dry Runモード)", "8. 非機能要件 (テスト容易性)"]
+    dependencies_guessed: ["CreateGitHubResourcesUseCase"] #
+    size_guessed: "[SP: 3]"
+    notes: ""
+
+  # Technical Tasks
+  - title: "[TechnicalTask] Djangoプロジェクト初期セットアップとBootstrap5導入 (TASK-DJANGO-SETUP)"
+    body: |
+      **Content:**
+      Djangoプロジェクトの初期セットアップを行い、コンテナ環境で基本的なWebページ（Bootstrap5適用済み）が表示できるようにする。
+      今後のWeb UI機能開発の基盤となる。
+
+      **Implementation Tasks:**
+      - [ ] `django-admin startproject` でDjangoプロジェクト作成
+      - [ ] `settings.py` の基本設定（`INSTALLED_APPS`, `STATIC_URL`など）
+      - [ ] Bootstrap5のCSS/JSファイルを静的ファイルとして配置、またはCDN利用設定
+      - [ ] ベースとなるHTMLテンプレート (`base.html`) にBootstrap5のヘッダー・フッター等を組み込む
+      - [ ] 簡単なトップページ用ViewとHTMLテンプレートを作成し、アクセスできることを確認
+      - [ ] Dockerコンテナ設定（`Dockerfile`, `docker-compose.yml`）にDjangoアプリケーション実行設定を追加
+      - **テスト:**
+        - [ ] Dockerコンテナ起動後、ブラウザからトップページにアクセスし、Bootstrap5のスタイルが適用されていることを目視確認
+        - [ ] Djangoのテストランナーで基本的なViewのレスポンステストを作成 (200 OKなど)
+
+      **Action/Verification:**
+      Dockerコンテナ内でDjango開発サーバーが起動し、ブラウザからアクセスしてBootstrap5のスタイルが適用されたサンプルページが表示されることを確認。
+    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+    labels:
+      - "type:technical-task"
+      - "epic:webui-core"
+      - "layer:adapter-ui"
+      - "layer:infrastructure"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["FR-WebUI-001", "8. 非機能要件 (技術スタック)"]
+    dependencies_guessed: []
+    size_guessed: "[SP: 3]"
+
+  - title: "[TechnicalTask] ファイル形式別パーサーの設計と実装 (TASK-FILEPARSE-IMPL)"
+    body: |
+      **Content:**
+      アップロードされたIssue情報ファイル（`.md`, `.yml`, `.json`）を読み込み、Issue単位のデータ構造に分割するパーサーコンポーネントを設計・実装する。
+      このパーサーは、後続のデータマッピング処理（AI支援）への入力となる中間表現を生成する。
+
+      **Implementation Tasks:**
+      - [ ] 各ファイル形式（Markdown, YAML, JSON）の典型的なIssue記述構造を分析・定義
+      - [ ] Markdownパーサー実装:
+        - [ ] Issueの区切り（例: `---` や特定ヘッダー）を認識し、個々のIssueブロックに分割するロジック
+        - [ ] 各Issueブロック内のテキストを抽出
+      - [ ] YAMLパーサー実装:
+        - [ ] `PyYAML`ライブラリを使用し、YAMLファイルをパース
+        - [ ] Issueリストのキー（例: `issues`）を特定し、各Issueオブジェクトを抽出するロジック
+      - [ ] JSONパーサー実装:
+        - [ ] Python標準の`json`ライブラリを使用し、JSONファイルをパース
+        - [ ] Issueリストのキーを特定し、各Issueオブジェクトを抽出するロジック
+      - [ ] パーサーの共通インターフェースまたは基底クラスを設計（任意）
+      - **テスト:**
+        - [ ] （TDD）各ファイル形式のパーサーに対するユニットテスト作成 (様々な構造のサンプルファイルを使用)
+          - Markdown: 単一Issue、複数Issue、区切り文字のバリエーション
+          - YAML: リスト形式、ネスト構造、キーの存在確認
+          - JSON: リスト形式、オブジェクト構造、キーの存在確認
+        - [ ] `FileReader`を利用したファイル読み込み部分のテスト (既存テストでカバーされていればOK)
+
+      **Action/Verification:**
+      各形式のサンプルファイルを用意し、パーサーが正しくIssueの塊を分離できることをユニットテストで検証。
+    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+    labels:
+      - "type:technical-task"
+      - "epic:data-parsing"
+      - "layer:adapter-input-parser"
+      - "layer:infrastructure"
+      - "TDD"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["FR-Parse-001"]
+    dependencies_guessed: []
+    size_guessed: "[SP: 8]"
+
+  - title: "[TechnicalTask] AI支援データマッピングロジックの設計と実装 (TASK-DATAMAP-IMPL)"
+    body: |
+      **Content:**
+      パーサーによって分割されたIssueデータ（中間表現）と`IssueData`モデルのフィールドを紐付けるデータマッピングロジックを設計・実装する。
+      AI (LangChain + OpenAI/Gemini) を活用し、入力ファイル内のキーの揺らぎ（例: `description` vs `summary`）を吸収し、`IssueData`オブジェクトのリストを生成する。
+
+      **Implementation Tasks:**
+      - [ ] `AIParser`（または新設の`IssueFileInterpreter`）の設計・実装
+        - [ ] 入力データ（パーサーからの中間表現）と`IssueData`スキーマをAIに提示し、フィールドマッピングを推論させるプロンプトエンジニアリング
+        - [ ] AIからのマッピング推論結果（例: `{\"入力ファイルのキー\": \"IssueDataのフィールド名\"}`）を解釈するロジック
+        - [ ] マッピング推論結果に基づき、中間表現から`IssueData`オブジェクトを生成する処理
+        - [ ] `config.yaml`からのマッピングルールをAIへの指示や後処理に組み込む
+      - **テスト:**
+        - [ ] （TDD）データマッピングロジックのユニットテスト
+          - 様々なキーの揺らぎを持つ入力データに対するマッピング精度を検証
+          - `config.yaml`のルールが正しく適用されることを検証
+          - AIがマッピングに失敗した場合や、必須フィールド（例: title）がマッピングできなかった場合のフォールバック処理やエラーハンドリングを検証
+        - [ ] （TDD）`IssueData`モデルのバリデーション（例: titleが空でない）が機能することを確認するテスト (既存テストでカバーされていればOK)
+
+      **Action/Verification:**
+      多様なキーを持つサンプルファイル（提供されたYAML Issue例など）に対し、AIが正しくフィールドマッピングを推論し、`IssueData`オブジェクトが生成されることをユニットテストで検証。AIへのプロンプト設計とチューニングを含む。
+    milestone: "M2" # M2: データマッピングとAI連携
+    labels:
+      - "type:technical-task"
+      - "epic:data-parsing"
+      - "layer:adapter-ai"
+      - "layer:domain"
+      - "TDD"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["FR-Map-002", "11. 制約条件・前提条件 (AIとパーサーの役割)"]
+    dependencies_guessed: ["TASK-FILEPARSE-IMPL", "TASK-CONFIG-DATAMAP-RULES"] # (一部並行可)
+    size_guessed: "[SP: 13]"
+
+  - title: "[TechnicalTask] config.yaml: データマッピングルール設定機能の実装 (TASK-CONFIG-DATAMAP-RULES)"
+    body: |
+      **Content:**
+      `config.yaml`に、ユーザーがAIのデータマッピングを補助するためのルールを記述できるセクションを追加し、その設定を読み込んでマッピング処理に反映させる機能を実装する。
+      ルール形式の例:
+      ```yaml
+      data_mapping_rules:
+        common: # 全ファイル形式共通のヒント
+          title_keys: ["title", "Subject", "件名"]
+          description_keys: ["description", "body", "詳細", "内容"]
+        yaml: # YAML特有のルール
+          issues_list_path: "issues" # ルートからのJMESPath/JSONPath類似表現
+          field_mappings: # issues_list_path内の各要素からの相対パス
+            title: "title"
+            description: "details.summary" # ネストされたキーにも対応
+            labels: "metadata.tags"
+      ```
+     
+
+      **Implementation Tasks:**
+      - [ ] `config.yaml`のスキーマ（Pydanticモデル `Settings`）に`data_mapping_rules`セクションを追加
+      - [ ] 設定読み込み処理 (`config.py`)でマッピングルールをパースし、`Settings`オブジェクト経由で利用可能にする
+      - [ ] `AIParser`（または`IssueFileInterpreter`）が、これらのルールをAIへのプロンプト生成時のヒントとして利用する、またはAIの推論結果をルールに基づいて上書き/補正するロジックを実装
+      - **テスト:**
+        - [ ] （TDD）マッピングルール設定の読み込みとパース処理のユニットテスト
+        - [ ] （TDD）AIマッピングロジックが、設定されたルールを正しく解釈し、マッピング結果に反映することを検証するユニットテスト (TASK-DATAMAP-IMPLのテストと連携)
+
+      **Action/Verification:**
+      設計したルールフォーマットで`config.yaml`にルールを記述し、それがAIマッピング処理に正しく反映されることをユニットテストで確認。
+    milestone: "M2" # M2: データマッピングとAI連携
+    labels:
+      - "type:technical-task"
+      - "epic:data-parsing"
+      - "epic:infra-config"
+      - "layer:infrastructure"
+      - "layer:adapter-ai"
+      - "priority:medium"
+    assignees: []
+    referenced_requirements_ids: ["11. 制約条件・前提条件 (データマッピングルールの設定)", "2. システムが満たすべき主要な成功基準 (機能: 柔軟性)"]
+    dependencies_guessed: ["TASK-DATAMAP-IMPL"] # (AIマッピングロジックの基本実装が必要)
+    size_guessed: "[SP: 5]"
+
+  - title: "[TechnicalTask] Web UI: ファイルアップロード機能実装 (TASK-WEBUI-FILEUPLOAD)"
+    body: |
+      **Content:**
+      DjangoとBootstrap5を使用し、Web UIにIssue情報ファイル（単一または複数ファイル、`.md`, `.yml`, `.json`）をアップロードする機能を実装する。
+      アップロードされたファイルはバックエンドの処理（パーシング、マッピング）に渡せるようにする。
+
+      **Implementation Tasks:**
+      - **Djangoバックエンド:**
+        - [ ] ファイルアップロードを受け付けるDjangoフォーム (`forms.py`) とビュー (`views.py`) を作成
+        - [ ] アップロードされたファイルを一時的に保存するか、メモリ上で処理するロジックを実装
+        - [ ] ファイル形式（拡張子）のチェックと、許可された形式以外のファイルに対するエラーハンドリング
+      - **Djangoフロントエンド (Templates + Bootstrap5):**
+        - [ ] ファイル選択フィールド（`<input type="file">`）と送信ボタンを持つHTMLフォームをDjangoテンプレートで作成
+        - [ ] Bootstrap5のスタイルを適用し、ユーザーフレンドリーな見た目にする
+        - [ ] アップロード処理中や完了後のフィードバックメッセージ表示エリアを確保
+      - **テスト:**
+        - [ ] （TDD）ファイルアップロードビューのユニットテスト（正常なアップロード、不正なファイル形式、ファイルなしでの送信など）
+        - [ ] 複数のファイルを一度にアップロードできることのテスト
+
+      **Action/Verification:**
+      UIからファイルをアップロードし、バックエンドの指定の場所にファイルが保存される（またはメモリ上で処理される）ことを確認。
+    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+    labels:
+      - "type:technical-task"
+      - "epic:webui-core"
+      - "layer:adapter-ui"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["FR-File-001"]
+    dependencies_guessed: ["TASK-DJANGO-SETUP"]
+    size_guessed: "[SP: 3]"
+
+  - title: "[TechnicalTask] Web UI: Issue一覧表示と選択機能の実装 (TASK-WEBUI-ISSUE-DISPLAY)"
+    body: |
+      **Content:**
+      バックエンドで解釈・マッピングされたIssue情報（`List[IssueData]`など）を、DjangoとBootstrap5を用いてWeb UI上に一覧表示する。
+      各Issueを選択するためのUI（チェックボックス等）も実装する。
+
+      **Implementation Tasks:**
+      - **Djangoバックエンド:**
+        - [ ] Issueリストデータを取得し、テンプレートに渡すビュー (`views.py`) を作成/更新
+      - **Djangoフロントエンド (Templates + Bootstrap5):**
+        - [ ] Issue一覧を表示するためのDjangoテンプレート (`issue_list.html`など) を作成
+        - [ ] 各Issueの主要情報（例: ID、タイトル、概要の一部）を表形式またはリスト形式で表示
+        - [ ] 各Issue行に選択用のチェックボックスを配置
+        - [ ] 「すべて選択」「すべて解除」のためのチェックボックスと、それに応じた動作をJavaScript（またはHTMXなど）で実装
+        - [ ] 選択されたIssueの情報を後続処理（GitHub登録、ローカル保存）のためにフォーム等で保持する仕組み
+      - **テスト:**
+        - [ ] （TDD）Issueリスト表示ビューのユニットテスト（データなし、単一データ、複数データの場合）
+        - [ ] UI上での選択/全選択/全解除が視覚的に反映され、選択されたIssueの情報が正しく保持されることを確認するE2Eテストまたは手動テスト
+
+      **Action/Verification:**
+      モックデータを使用してIssue一覧が正しく表示され、選択操作が可能であることを確認。
+    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+    labels:
+      - "type:technical-task"
+      - "epic:webui-core"
+      - "layer:adapter-ui"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["FR-Display-001", "FR-Select-001"]
+    dependencies_guessed: ["TASK-DJANGO-SETUP", "US-001"] # (Issueデータを生成する機能が必要)
+    size_guessed: "[SP: 5]"
+
+  - title: "[TechnicalTask] Web UI: GitHubリソース登録アクション実装 (TASK-WEBUI-GITHUB-ACTION)"
+    body: |
+      **Content:**
+      Web UI上に、選択されたIssue群をGitHubへ登録するためのアクション（フォームと実行ボタン）を実装する。
+      バックエンドでは`CreateGitHubResourcesUseCase`を呼び出し、その結果をUIにフィードバックする。
+
+      **Implementation Tasks:**
+      - **Djangoバックエンド:**
+        - [ ] GitHub登録指示を受け付けるAPIエンドポイント（Django View）作成
+          - 入力パラメータ: 選択されたIssueデータ（`List[IssueData]`またはそのID）、対象リポジトリ名、プロジェクト名（任意）、DryRunフラグ
+        - [ ] `CreateGitHubResourcesUseCase`のインスタンス化と実行
+        - [ ] UseCaseの実行結果（`CreateGitHubResourcesResult`）をJSONレスポンス等でフロントエンドに返す
+      - **Djangoフロントエンド (Templates + Bootstrap5):**
+        - [ ] GitHubリポジトリ名入力フィールド、プロジェクト名入力フィールド（任意）、DryRunモード選択チェックボックス、実行ボタンを含むフォームを実装
+        - [ ] フォーム送信時に、選択されたIssue情報と共にバックエンドAPIを非同期で呼び出すJavaScriptロジック（またはHTMX）を実装
+        - [ ] APIからのレスポンス（成功、失敗、スキップ、エラー詳細など）をモーダルや通知エリア等でユーザーに分かりやすく表示
+      - **テスト:**
+        - [ ] （TDD）GitHub登録APIエンドポイントのユニットテスト（モックしたUseCaseが正しい引数で呼び出されること、正常/異常レスポンスの確認）
+        - [ ] UIからGitHub登録を実行し、一連のフロー（フォーム入力→実行→結果表示）が期待通り動作することをE2Eテストまたは手動テストで確認
+
+      **Action/Verification:**
+      UIからGitHub登録を実行し、モックされたUseCaseが適切な引数で呼び出されること、および処理結果がUIに表示されることを確認。
+    milestone: "M3" # M3: GitHub連携機能MVP
+    labels:
+      - "type:technical-task"
+      - "epic:webui-core"
+      - "epic:github-integration"
+      - "layer:adapter-ui"
+      - "layer:usecase"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["FR-GitHub-Register-001", "UC-Web-001 (フロー7, 9-11)"]
+    dependencies_guessed: ["US-003", "TASK-WEBUI-ISSUE-DISPLAY", "CreateGitHubResourcesUseCase"] #
+    size_guessed: "[SP: 8]"
+
+  - title: "[TechnicalTask] ローカルファイル分割・保存機能の実装 (TASK-FILESPLIT-IMPL)"
+    body: |
+      **Content:**
+      Web UIからの指示に基づき、解釈・マッピング済みの`IssueData`を個別のYAMLファイルとしてローカルに保存し、`index.html`（目次ファイル）を生成する`IssueFileSplitter`コンポーネント（または`LocalFileStorageUseCase`）を設計・実装する。
+
+      **Implementation Tasks:**
+      - **UseCase/Service層の設計・実装:**
+        - [ ] `LocalFileStorageUseCase`（または同様の責務を持つサービス）のインターフェース定義と実装
+          - 入力: `List[IssueData]`, 保存先ルートディレクトリパス
+          - 出力: `LocalFileSplitResult`
+      - **Adapter-FileSystem層の設計・実装:**
+        - [ ] 指定ディレクトリの存在確認と作成（`issues/` サブディレクトリ含む）ロジック
+        - [ ] `IssueData`オブジェクトをYAML文字列にシリアライズする処理
+        - [ ] Issue IDとタイトルから安全なファイル名を生成するユーティリティ関数
+        - [ ] YAMLファイル書き込み処理（エラーハンドリング含む）
+        - [ ] `index.html`生成ロジック: Issueリストからタイトルと相対パスを抽出し、HTMLリストを生成
+      - **ドメインモデル:**
+        - [ ] `LocalFileSplitResult`モデルのPydantic定義
+      - **Djangoバックエンド (APIエンドポイント):**
+        - [ ] ローカルファイル保存指示を受け付けるAPIエンドポイントと、上記UseCaseを呼び出すビューを実装
+      - **テスト:**
+        - [ ] （TDD）`IssueFileSplitter`/`LocalFileStorageUseCase` のユニットテスト
+          - 正常なファイル分割・保存、index.html生成
+          - 保存先ディレクトリ作成失敗、ファイル書き込み失敗時のエラーハンドリング
+          - ファイル名生成ロジックのテスト
+        - [ ] （TDD）ファイルシステム操作アダプタのユニットテスト（モック使用）
+
+      **Action/Verification:**
+      モックのIssueDataリストと保存先パスを指定し、期待されるディレクトリ構造とYAMLファイル群、`index.html`が生成されることをユニットテストで検証。
+    milestone: "M4" # M4: ローカルファイル管理と補助機能
+    labels:
+      - "type:technical-task"
+      - "epic:webui-core"
+      - "layer:usecase"
+      - "layer:adapter-filesystem"
+      - "layer:domain"
+      - "priority:medium"
+    assignees: []
+    referenced_requirements_ids: ["FR-SplitStore-001"]
+    dependencies_guessed: ["TASK-DATAMAP-IMPL"] # (保存するIssueDataが必要)
+    size_guessed: "[SP: 5]"
+
+  - title: "[TechnicalTask] GitHub APIクライアントセットアップと認証確認 (TASK-GITHUB-CLIENTS-SETUP)"
+    body: |
+      **Content:**
+      `GitHubRestClient`, `GitHubGraphQLClient`, `AssigneeValidator` の初期化ロジックを整備し、アプリケーション起動時（または初回APIコール時）にGitHub PATを環境変数/設定ファイルから正しく読み込み、認証できることを保証する。
+
+      **Implementation Tasks:**
+      - [ ] `Settings`モデルでのGitHub PAT (`github_pat`) の読み込みと検証ロジックを確認・強化
+      - [ ] `main.py` (CLI) およびDjangoアプリケーション起動時に、`githubkit.GitHub`インスタンスがPATで正しく初期化されることを確認
+      - [ ] `GitHubRestClient`, `GitHubGraphQLClient`, `AssigneeValidator` が、この初期化された`GitHub`インスタンスをコンストラクタで受け取るようにする（現状確認と必要なら修正）
+      - **テスト:**
+        - [ ] `scripts/test_github_connection.py` を実行し、PAT認証、スコープ確認、レート制限確認がパスすることを確認
+        - [ ] GitHub PATが未設定または無効な場合に、アプリケーション（CLI/Web UI）が早期に適切なエラー（例: `GitHubAuthenticationError`）をスローし、ユーザーに通知することをテストで確認
+
+      **Action/Verification:**
+      設定ファイル/環境変数からPATを読み込み、各クライアントが初期化できることを確認。`test_github_connection.py` スクリプトなどを活用。
+    milestone: "M1" # M1: Web UI基礎とファイル処理基盤 (初期設定として重要)
+    labels:
+      - "type:technical-task"
+      - "epic:github-integration"
+      - "epic:infra-config"
+      - "layer:adapter-github"
+      - "layer:infrastructure"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["3. スコープ定義 (入力: 環境変数)", "11. 制約条件・前提条件 (認証・設定)"]
+    dependencies_guessed: []
+    size_guessed: "[SP: 2]"
+
+  - title: "[TechnicalTask] ドメインモデルのレビューと最終化 (TASK-DOMAIN-MODEL-REVIEW)"
+    body: |
+      **Content:**
+      現在の`IssueData`、`ParsedSourceFileContent`（旧`ParsedRequirementData`）、新規提案の`LocalFileSplitResult`などのドメインモデルについて、新しいワークフロー（ファイル解釈・マッピング、ローカル保存、GitHub連携）との整合性を確認し、必要に応じて名称、フィールド、責務を見直し、最終的な定義を固める。
+
+      **Implementation Tasks:**
+      - [ ] `IssueData`モデル:
+        - [ ] AIによるデータマッピングの対象として、現在のフィールドが適切か再検証
+        - [ ] ファイル形式ごとのパーサーからの入力と、GitHub APIへの出力の両方に対応できるか確認
+      - [ ] `ParsedSourceFileContent`モデル (旧`ParsedRequirementData`):
+        - [ ] 名称を`ParsedSourceFileContent`に正式に変更するか、より適切な名称を検討
+        - [ ] ファイル全体のメタ情報（例: Issue例の`project_name`, `proposed_milestones`, `proposed_labels`）を保持するためのフィールド設計
+      - [ ] `LocalFileSplitResult`モデル:
+        - [ ] ローカルファイル保存処理の結果を保持するために必要なフィールド（保存パスリスト、index.htmlパス、成功/失敗カウント、エラー情報など）を定義
+      - [ ] `CreateIssuesResult` と `CreateGitHubResourcesResult` モデル:
+        - [ ] GitHub連携機能に変更がないため、大きな変更は不要と思われるが、念のため確認
+      - **テスト:**
+        - [ ] 更新された各Pydanticモデルに対するユニットテストを作成・更新 (バリデーション、デフォルト値、エイリアスなど) (既存テスト `test_models.py` を拡充)
+
+      **Action/Verification:**
+      開発チーム内でモデル定義について合意形成する。
+    milestone: "M2" # M2: データマッピングとAI連携 (主要モデルの確定) / M4 (LocalFileSplitResultの確定)
+    labels:
+      - "type:technical-task"
+      - "epic:data-parsing"
+      - "layer:domain"
+      - "DDD"
+      - "priority:medium"
+    assignees: []
+    referenced_requirements_ids: ["6. ドメインモデル"]
+    dependencies_guessed: ["TASK-DATAMAP-IMPL", "TASK-FILESPLIT-IMPL"] # (これらのタスクの進行と並行して、またはフィードバックを受けて実施)
+    size_guessed: "[SP: 1]"
+
+  - title: "[TechnicalTask] Web UI向けロギングとフィードバック機構の設計・実装 (TASK-LOGGING-REPORTING-WEBUI)"
+    body: |
+      **Content:**
+      Djangoアプリケーションのサーバーサイドでの適切なロギング設定と、Web UI上でのユーザーへの処理結果（成功、エラー、進捗など）のフィードバック機構を設計・実装する。
+      `CliReporter` はCLI専用とし、Web UIではDjangoの機能を活用する。
+
+      **Implementation Tasks:**
+      - **サーバーサイドロギング (Django):**
+        - [ ] Djangoの`LOGGING`設定 (`settings.py`) を構成し、ファイル出力やコンソール出力、ログレベルなどを適切に設定
+        - [ ] UseCase層やAdapter層からのログメッセージが、設定通りに出力されることを確認
+      - **Web UIフィードバック:**
+        - [ ] Djangoのメッセージフレームワーク (`django.contrib.messages`) を利用した一時的な通知（例: 「ファイルが正常にアップロードされました」）の実装を検討
+        - [ ] 非同期処理（GitHub登録など時間のかかる処理）の進捗や結果をUIに表示する方法を検討・実装（例: ポーリング、WebSocket、または処理完了後のリダイレクトとメッセージ表示）
+        - [ ] APIエンドポイントからのエラーレスポンス（JSON形式など）をフロントエンドで解釈し、ユーザーフレンドリーなエラーメッセージとして表示する仕組み
+        - [ ] Bootstrap5のアラートコンポーネントなどを活用して、メッセージをスタイリング
+      - **テスト:**
+        - [ ] （TDD）主要な処理（ファイルアップロード、GitHub登録）実行時に、期待されるサーバーログが出力されることのテスト
+        - [ ] UI上で、成功時、エラー時、処理中などに適切なフィードバックメッセージが表示されることをE2Eテストまたは手動テストで確認
+
+      **Action/Verification:**
+      処理の各段階で適切なログが出力され、UIにユーザーフレンドリーなメッセージが表示されることを確認。
+    milestone: "M1 (基本フィードバック), M3 (GitHub連携結果フィードバック)"
+    labels:
+      - "type:technical-task"
+      - "epic:webui-core"
+      - "layer:adapter-ui"
+      - "layer:infrastructure"
+      - "priority:medium"
+    assignees: []
+    referenced_requirements_ids: ["8. 非機能要件 (レポーティング)", "FR-Feedback-001"]
+    dependencies_guessed: ["TASK-DJANGO-SETUP", "主要なWeb UI機能の実装がある程度進んでいること"]
+    size_guessed: "[SP: 3]"
+
+  - title: "[TechnicalTask] CLI機能リファクタリングとWeb UIロジック連携 (TASK-CLI-REFACTOR)"
+    body: |
+      **Content:**
+      既存のCLI機能 (`main.py` および関連ロジック) を、Web UIのバックエンドとして実装される新しいIssue解釈・データマッピングロジックおよび`CreateGitHubResourcesUseCase` を利用するようにリファクタリングする。
+      これにより、CLIとWeb UIでコアとなるビジネスロジックの共通化を図る。
+
+      **Implementation Tasks:**
+      - [ ] `main.py`内での`AIParser`（または後継の`IssueFileInterpreter`）の呼び出し方を、Web UIバックエンドでの利用方法と共通化または整合性を取る
+      - [ ] `main.py`が`CreateGitHubResourcesUseCase`を呼び出す際の引数や処理フローが、Web UIバックエンドからの呼び出しと（可能な範囲で）共通のインターフェースやロジックを通過するように調整
+      - [ ] `CliReporter` が、更新されたUseCaseからの結果オブジェクト（`CreateGitHubResourcesResult`）を正しく処理し、コンソールに出力できるようにする
+      - **テスト:**
+        - [ ] 既存のCLI向けユニットテスト（`tests/adapters/test_cli.py`）をリファクタリング後のコードに合わせて修正し、全てパスすることを確認
+        - [ ] 必要に応じて、コアロジックの共通化部分に対するテストを追加
+
+      **Action/Verification:**
+      既存のCLIテストケースが、新しいロジックベースで引き続きパスすることを確認。
+    milestone: "M5" # M5: CLI機能同期と全体最適化
+    labels:
+      - "type:technical-task"
+      - "epic:cli-maintenance"
+      - "layer:adapter-cli"
+      - "layer:usecase"
+      - "priority:low"
+    assignees: []
+    referenced_requirements_ids: ["FR-CLI-Sync-001", "UC-CLI-001"]
+    dependencies_guessed: ["TASK-DATAMAP-IMPL", "CreateGitHubResourcesUseCase (改修など)"] #
+    size_guessed: "[SP: 5]"
+
+  - title: "[TechnicalTask] 継続的なテスト実装とカバレッジ90%維持 (TASK-TESTING-COVERAGE)"
+    body: |
+      **Content:**
+      開発される全ての主要機能コンポーネント（Domainモデル, UseCase, Adapters, Django Views/Forms/Services）に対し、TDDの原則に従いユニットテストを実装する。
+      全体のコードカバレッジを常に90%以上に維持する。
+
+      **Implementation Tasks:**
+      - [ ] 新規機能開発時に、まずテストケースを作成（TDDの実践）
+      - [ ] 既存機能の改修時にも、関連するテストケースを更新・追加
+      - [ ] `pytest` と `pytest-cov` を使用したテスト実行とカバレッジ計測のワークフローを確立
+      - [ ] CI/CDパイプラインにテスト実行とカバレッジレポート生成を組み込む（検討）
+      - [ ] カバレッジが目標値を下回った場合の対応プロセスをチームで定義（検討）
+
+      **Action/Verification:**
+      `pytest --cov` を定期的に実行し、カバレッジレポートを確認。CIパイプラインに組み込む。
+    milestone: "" # (継続的)
+    labels:
+      - "type:chore"
+      - "TDD"
+      - "CleanArchitecture"
+      - "layer:all"
+      - "priority:high"
+    assignees: []
+    referenced_requirements_ids: ["2. システムが満たすべき主要な成功基準 (品質)"]
+    dependencies_guessed: [] # (全ての開発タスクと並行して実施)
+    size_guessed: "[SP: (継続的)]"
+
+# GitHub Automation Tool - Decomposed Sub-Issues for TASK-DJANGO-SETUP
+# Version 2.3 - Based on previous task breakdown.
