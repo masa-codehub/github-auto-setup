@@ -1,12 +1,36 @@
 {% extends "base.html" %}
-{% block page_title %}トップページ | {{ block.super }}{% endblock %}
+
+{% block page_title %}トップページ | {{ block.super }}{% endblock page_title %}
+
 {% block content %}
-<div class="text-center">
-  <h1 class="display-4 mb-4">GitHub Automation Tool トップページ</h1>
-  <p class="lead">このページは <code>base.html</code> を継承しています。</p>
-  <div class="alert alert-success" role="alert">
-    Bootstrap 5 のスタイルが正しく適用されています。
+<div class="container mt-5">
+  <div class="text-center">
+    <h1 class="display-4 mb-4">GitHub Automation Tool へようこそ！</h1>
+    <p class="lead">このツールは、GitHubの定型作業を自動化し、開発効率を向上させることを目的としています。</p>
+    <hr class="my-4">
+    <p>Bootstrap 5 のスタイルが正しく適用されています。</p>
+    <a class="btn btn-primary btn-lg" href="#" role="button">詳細はこちら (ダミー)</a>
   </div>
-  <a href="#" class="btn btn-primary btn-lg mt-3">サンプルボタン</a>
+
+  <section class="row mt-5">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">機能概要</h5>
+          <p class="card-text">Issueファイルのアップロード、GitHubへの一括登録、ローカル保存など、多彩な機能を提供します。</p>
+          <a href="#" class="btn btn-secondary">機能一覧 (ダミー)</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">利用開始</h5>
+          <p class="card-text">まずはドキュメントを確認し、必要な設定を行ってください。</p>
+          <a href="#" class="btn btn-secondary">ドキュメント (ダミー)</a>
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
-{% endblock %}
+{% endblock content %}
