@@ -39,3 +39,30 @@ class TopPageViewTest(TestCase):
                             msg_prefix="ナビゲーションバー要素が見つかりません")
         self.assertContains(response, "footer",
                             msg_prefix="フッター要素が見つかりません")
+
+    def test_action_panel_section_exists(self):
+        """アクション実行パネルのUI骨格要素が存在することを検証"""
+        response = self.client.get(reverse('app:top_page'))
+        self.assertEqual(response.status_code, 200)
+
+        # パネル全体
+        self.assertContains(response, 'id="action-panel-section"',
+                            msg_prefix="Action panel section not found")
+        self.assertContains(response, 'id="action-form"',
+                            msg_prefix="Action form not found")
+
+        # GitHub登録エリア
+        self.assertContains(response, 'name="repo_name"',
+                            msg_prefix="Repository name input not found")
+        self.assertContains(response, 'name="project_name"',
+                            msg_prefix="Project name input not found")
+        self.assertContains(response, 'id="dry-run-checkbox"',
+                            msg_prefix="Dry run checkbox not found")
+        self.assertContains(response, 'id="github-submit-button"',
+                            msg_prefix="GitHub submit button not found")
+
+        # ローカル保存エリア
+        self.assertContains(response, 'name="local_path"',
+                            msg_prefix="Local path input not found")
+        self.assertContains(response, 'id="local-save-button"',
+                            msg_prefix="Local save button not found")
