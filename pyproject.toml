@@ -17,8 +17,8 @@ Homepage = "https://github.com/your-username/github-automation-tool"
 gh-auto-tool = "github_automation_tool.main:app"
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
-testpaths = ["tests"]
+pythonpath = ["webapp/core_logic"]
+testpaths = ["webapp/core_logic/tests"]
 
 [tool.coverage.run]
 omit = [
