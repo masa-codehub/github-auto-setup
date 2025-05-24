@@ -97,11 +97,17 @@ class TopPageViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
         # セクション全体
-        self.assertContains(response, 'id="issue-list-section"', msg_prefix="Issue list section not found")
+        self.assertContains(response, 'id="issue-list-section"',
+                            msg_prefix="Issue list section not found")
 
         # 主要なUI要素
-        self.assertContains(response, 'id="select-all-button"', msg_prefix="Select all button not found")
-        self.assertContains(response, 'id="deselect-all-button"', msg_prefix="Deselect all button not found")
-        self.assertContains(response, '<table id="issue-table"', msg_prefix="Issue table not found")
-        self.assertContains(response, '<th scope="col">Title</th>', msg_prefix="Table header 'Title' not found")
-        self.assertContains(response, 'class="form-check-input issue-checkbox"', count=2, msg_prefix="Issue row checkboxes not found or not enough samples")
+        self.assertContains(response, 'id="select-all-button"',
+                            msg_prefix="Select all button not found")
+        self.assertContains(response, 'id="deselect-all-button"',
+                            msg_prefix="Deselect all button not found")
+        self.assertContains(response, '<table id="issue-table"',
+                            msg_prefix="Issue table not found")
+        self.assertContains(response, '<th scope="col">Title</th>',
+                            msg_prefix="Table header 'Title' not found")
+        self.assertContains(response, 'class="form-check-input issue-checkbox"',
+                            count=2, msg_prefix="Issue row checkboxes not found or not enough samples")
