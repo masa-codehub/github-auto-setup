@@ -263,3 +263,32 @@ sections:
       - "ローカル保存ファイルの形式: 入力ファイル形式に関わらず、ローカルに分割・保存する際のIssueファイルの形式はYAMLに統一する。"
       - "GitHub連携: 本ツールは、ローカルのIssue定義ファイルを正としてGitHubに情報を登録・更新（一方向）することを主な目的とする。GitHub上のIssueの状態をローカルに同期する機能は持たない。"
       - "`ParsedSourceFileContent`モデル (旧`ParsedRequirementData`): このモデルは、入力ファイルの種類に関わらず、ファイル全体から読み取られたIssue情報のリストと、ファイルレベルのメタデータを保持する。実装の進行に合わせて、このモデルの名称やフィールドは適宜見直す。"
+  - heading: "12. 実装タスク進捗・履歴"
+    content: |
+      ### [TechnicalTask] Djangoプロジェクト初期セットアップとBootstrap5導入 (TASK-DJANGO-SETUP)
+      - Resolved: 2025-05-24 (JST)
+      - Status: Closed
+
+      **概要**
+      Djangoアプリケーションの基本骨格を構築し、Dockerコンテナ環境での実行基盤を整備。
+      - Djangoプロジェクト・アプリ作成と基本設定
+      - `settings.py`の`INSTALLED_APPS`/静的ファイル/テンプレート設定
+      - Bootstrap5静的ファイル配置
+      - `base.html`作成とBootstrap5レイアウト組み込み
+      - トップページView/テンプレート作成
+      - Dockerコンテナ設定（`docker-compose.yml`, `Dockerfile`）
+      - トップページViewのテスト実装
+
+      **完了確認**
+      - 構成・設定・テンプレート・静的ファイル・テスト・Docker関連すべて要件通り
+      - サブタスク「初期動作確認テストの実装」も完了
+      - 受け入れ基準を満たしたため本タスクは完了
+
+      **関連ファイル**
+      - `webapp/webapp_project/settings.py`
+      - `webapp/app/views.py`
+      - `webapp/templates/base.html`
+      - `webapp/templates/top_page.html`
+      - `webapp/app/tests.py`
+      - `.build/context/docker-compose.yml`
+      - `README.md` (実行手順記載)
