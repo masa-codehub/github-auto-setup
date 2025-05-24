@@ -1,0 +1,265 @@
+document_info:
+  title: "GitHub Automation Tool (UI刷新・GitHub連携維持・ローカルファイル管理具体化・フィードバック反映版)"
+  version: "2.3"
+  last_updated: "2025-05-24 (JST)"
+  status: "仕様見直し中"
+
+sections:
+  - heading: "1. 概要と背景"
+    content: |
+      ソフトウェア開発プロジェクトにおけるローカルでのIssue管理作業（多様な形式のファイルからのIssue情報の読み込み、分割、選択的処理）および、将来的なGitHubセットアップ作業の効率化を目指します。手作業によるIssue整理の煩雑さ、ヒューマンエラー、フォーマットの不統一といった課題を、まずはローカル環境での管理支援を通じて解決することを目的とします。
+      クリーンアーキテクチャ観点: 外部システム（将来的なGitHub API連携）やUIフレームワークへの依存をAdapters層に閉じ込め、ドメインロジックやユースケースの変更容易性を確保します。
+    subsections:
+      - heading: "解決したい課題 (当面のスコープ)"
+        content: |
+          - 多様な形式（Markdown, YAML, JSON）で記述されたIssue情報を一元的に扱い、個別のIssueとして分割・管理する手間を削減。
+          - Issueファイルを手作業で分割・整理する際の入力ミスやファイル管理の煩雑さを軽減。
+          - ローカルでのIssue情報の可視性と選択的な操作性を向上。
+
+  - heading: "2. システム化の目的とゴール"
+    subsections:
+      - heading: "このシステムを導入することで達成したい具体的なビジネス目標"
+        content: |
+          - 多様な形式のIssue情報ファイルからのGitHubリソース（リポジトリ、Issue、ラベル、マイルストーン等）の一括登録作業を効率化し、プロジェクト初期セットアップのリードタイムを短縮する。
+          - Issue登録に関する手作業起因のエラー（入力ミス、設定漏れ、無効な担当者指定など）を削減する。
+          - ローカルで管理されているIssue定義ファイルの最新版を元に、GitHubへIssueを登録・更新するプロセスを支援する。
+          - 開発者が定型作業から解放され、より価値の高いタスクに集中できる環境を提供する。
+      - heading: "システムが満たすべき主要な成功基準"
+        content: |
+          - 機能:
+            - UI: 指定されたIssue情報ファイル（`.md`, `.yml`, `.json`）をWeb UIを通じて読み込み、個別のIssue情報に分割・表示できること。ユーザーがUI上でIssueを選択し、選択されたIssueのみをGitHubに登録・更新（更新機能は将来スコープの可能性あり、まずは新規登録を優先）できること。一括選択・処理も可能。
+            - CLI: 既存のCLI機能は維持し、Web UIで実現される主要なIssue登録・GitHubリソース作成フローもCLIから実行可能であること（UI実装後の展開、優先度は中）。
+            - データ解釈・マッピング: Issueファイル内のデータ構造（キーの揺らぎ等を含む）を解釈し、Pydanticの`IssueData`モデルの各要素にマッピングできること。この処理は、設定ファイルやAIによる支援を活用して行う。
+            - GitHub連携: マッピングされたIssue情報に基づき、GitHub上にリポジトリ、ラベル、マイルストーン、Issue（タイトル、本文、ラベル、マイルストーン、検証済み担当者）を冪等性を保ちつつ自動作成・設定できること。GitHub上のIssueの状態とローカルのIssue定義ファイルとの双方向同期は行わない。あくまでローカルのIssue定義ファイルを正としてGitHubへ反映する一方向の処理を基本とする。
+            - 担当者検証: AIが抽出またはマッピングした担当者は、Issue作成前にGitHub APIで有効性を検証し、無効な担当者は除外する。
+            - プロジェクト連携: 指定された場合はGitHub Projects (V2) に作成したIssueをアイテムとして追加できる。
+            - ローカルファイル分割（オプション）: UIやCLIからの指示に基づき、読み込んだIssue情報ファイルをIssue単位の個別のファイルに分割してローカルに保存できる機能を提供する（優先度は中〜低）。YAML形式で保存する。
+          - 操作性: 開発者が容易に利用できるWeb UI（Django + Bootstrap5）およびCLI（Typer）を提供すること。
+          - フィードバック: UI上およびサーバーログ（CLI実行時はコンソールログ）を通じて、処理結果（成功、失敗、スキップ件数、検証に失敗した担当者、エラー詳細）を明確にユーザーに提示すること。Dry Runモード実行時も、実行されるであろう操作のシミュレーション結果を提示すること。
+          - 品質 (TDD観点): 主要な機能コンポーネント (UseCase, Adapters, Domain Models, UIバックエンド) に対するユニットテストが実装され、テストスイートが常に成功し、コードカバレッジ目標を維持すること。
+          - 保守性/拡張性 (Clean Architecture観点): UI-UseCase-Domain-Infrastructureの各層が明確に分離され、依存関係のルールが遵守されていること。
+          - 柔軟性: 設定ファイルや環境変数により、AIモデル名、データマッピングに関するヒントやルール、ログレベルなどを構成可能であること。
+
+  - heading: "3. スコープ定義"
+    subsections:
+      - heading: "対象範囲（In Scope）"
+        items:
+          - type: "入力"
+            details:
+              - "UTF-8エンコードされたIssue情報ファイル（`.md`, `.yml`, `.json`）。ファイル内のキーや項目名には揺らぎがあることを許容する。"
+              - "Web UIを通じた対話: ファイルアップロード、Issueリストの表示、Issueの選択（個別、一括）、GitHubへの登録指示。"
+              - "CLI引数: (既存の引数は維持しつつ、Web UIの主要機能と同等の操作を提供。Web UIの機能が固まり次第、CLI引数も見直す。優先度は中)"
+              - "  --file (Markdown, YAML, JSONパス)"
+              - "  --repo (リポジトリ名)"
+              - "  (任意) --project (GitHub Project名)"
+              - "  (任意) --dry-run"
+              - "  (任意) --config-file"
+              - "設定ファイル (`config.yaml`): AIモデル名、データマッピングに関するヒントやルール（形式は別途定義、例: 特定キーからIssueDataフィールドへの強制マッピング、AIへの解釈ヒント）、ログレベルなど。"
+              - "環境変数: GitHub PAT、AI APIキー、使用するAIプロバイダー、AIモデル名、ログレベル（YAML設定を上書き）。"
+          - type: "処理"
+            details:
+              - "Web UIの提供: Django + Bootstrap5で構築。"
+              - "ファイル読み込みとIssue分割: UIまたはCLIから指定されたIssue情報ファイル（`.md`, `.yml`, `.json`）を読み込み、ファイル形式に応じたパーサーがIssue単位の情報に分割する。"
+              - "データマッピング (AI支援): 分割された各Issue情報内のデータ構造（キーの揺らぎを許容）を解釈し、Pydanticの`IssueData`モデルの各フィールドに紐付ける。生成AIはIssueファイルの内容を解釈し、`IssueData`の各要素がIssueファイルのどの項目に対応するのかを判断し、マッピング情報を生成する。"
+              - "UIでのIssue表示と選択: マッピングされたIssue情報の一覧をUIに表示し、ユーザーが個別に選択または一括選択できるようにする。"
+              - "GitHubリソース作成/確認 (Web UIおよびCLI経由): `CreateGitHubResourcesUseCase`を中心とした既存のGitHub連携機能を維持・活用する。"
+              - "  リポジトリ作成/確認"
+              - "  ラベル作成/確認"
+              - "  マイルストーン作成/確認"
+              - "  担当者有効性検証"
+              - "  Issue作成/設定（選択されたIssueのみ）"
+              - "  プロジェクト検索・Issue追加"
+              - "Dry Runモード: CLIおよびWeb UIでも同様の概念を提供。"
+              - "Issueファイルのローカル分割・保管（オプション）: ユーザーの指示に基づき、解釈・マッピング済みのIssueデータを個別のファイル（YAML形式）としてローカルに保存する（優先度中〜低）。"
+          - type: "出力"
+            details:
+              - "Web UI上での表示: Issue一覧、選択状態、GitHubへの登録処理結果。"
+              - "GitHub上のリソース: 作成・設定されたリポジトリ、ラベル、マイルストーン、Issue、プロジェクトアイテム。"
+              - "標準出力/標準エラー出力 (CLI実行時) / サーバーログ (Web UI実行時): 処理状況、エラーメッセージ、整形済み結果レポート。"
+              - "（オプション）分割されたIssueファイル群（ローカル保存時、YAML形式）。"
+          - type: "実行形態"
+            details:
+              - "コンテナ上で動作するWebアプリケーション（バックエンドはPython/Django、フロントエンドはDjangoテンプレートとBootstrap5）。"
+              - "既存のPython CLIアプリケーション（Typer）も維持し、Web UIのバックエンドロジックを再利用。"
+      - heading: "対象範囲外（Out of Scope）"
+        items:
+          - "GitHub上のIssueやリポジトリの状態を読み取り、ローカルのIssue定義ファイルと双方向で同期する機能。"
+          - "Markdownファイル自体の生成・編集支援機能。"
+          - "Pull Request の自動作成や連携。"
+          - "GitHub以外のプラットフォーム連携 (Jira, GitLab等)。"
+          - "（Web UI以外の）GUIインターフェースの提供。"
+          - "API呼び出しの高度なリトライ機構 (現状)。"
+
+  - heading: "4. 主要なステークホルダーと役割"
+    content: |
+      - 開発者 (主要ユーザー): GitHub セットアップ作業の効率化、ローカルでのIssue情報管理の簡便化を期待。ツールの日常的な利用者。
+      - プロジェクトマネージャー (PM): プロジェクト管理の効率化・標準化を期待。入力Issueファイルの記述ルール策定に関与。ツールの導入効果を測定する。
+    # (DDD観点、ユビキタス言語はバージョン1.8 から大きな変更なし、ただし新機能関連用語を追加)
+
+  - heading: "5. ユースケース定義"
+    subsections:
+      - title: "UC-Web-001: Web UIによるIssueファイルのロード、解釈、選択的GitHub登録、およびローカルファイル管理"
+        actor: "開発者"
+        preconditions:
+          - "コンテナが起動し、Djangoで構築されたWeb UIにアクセス可能である。"
+          - "処理対象のIssue情報ファイル（`.md`, `.yml`, `.json`）がローカルに準備されている。"
+        postconditions:
+          - "UIを通じてアップロードされたIssue情報ファイルが読み込まれ、Issue単位に分割・解釈（データマッピング）される。"
+          - "分割・解釈されたIssue情報がUI上にリスト表示される。"
+          - "ユーザーが選択したIssue情報に基づき、関連するGitHubリソース（リポジトリ、ラベル、マイルストーン等が必要に応じて作成・確認された上で）がGitHubに登録される。"
+          - "ユーザーがUIからローカルへのファイル分割・保存を指示した場合、指定された保存先に`index.html`を含む所定のディレクトリ構造でIssueファイル群がYAML形式で保存される。"
+          - "処理結果（成功、失敗、スキップ、検証失敗担当者、エラー詳細、ローカル保存結果）がUI上およびサーバーログに表示される。"
+        basic_flow:
+          - "1. ユーザーがWeb UI（Djangoアプリケーション）を開く。"
+          - "2. ユーザーがUIを通じてIssue情報ファイル（単一または複数）をアップロードする。"
+          - "3. バックエンド（Djangoビュー/ロジック）: アップロードされた各ファイルを`FileReader`が読み込む。"
+          - "4. バックエンド: `AIParser`（または新設の`IssueFileInterpreter`）がファイル内容を解析し、Issue単位のデータ構造（`List[IssueData]`）に変換する。この際、AIはファイル内のキーの揺らぎなどを解釈し、`IssueData`モデルのフィールドへマッピングする。"
+          - "5. バックエンド: 変換されたIssue情報リストをUI（Djangoテンプレート）に送信する。"
+          - "6. UI: Issue情報の一覧をBootstrap5でスタイリングされたページに表示。各Issueは選択可能。"
+          - "7. ユーザーがUI上でGitHubへ登録対象とするIssueを選択（個別または一括）し、「選択したIssueをGitHubへ登録」のような操作を実行する。この際、リポジトリ名やプロジェクト名などもUIから入力または選択できるようにする。"
+          - "8. (オプション) ユーザーがUIからローカルへのファイル分割・保存を指示した場合、バックエンドは選択されたIssue情報と保存先指定に基づき、`IssueFileSplitter`（新設）が各Issue情報を個別のファイル（YAML形式）としてローカルに保存し、`index.html`を生成する。"
+          - "9. バックエンド: GitHub登録指示の場合、選択されたIssue情報（`ParsedSourceFileContent`に相当する形式で）と、対象リポジトリ名、プロジェクト名などの情報を`CreateGitHubResourcesUseCase` に渡して実行する。"
+          - "10. バックエンド: `CreateGitHubResourcesUseCase`の実行結果と、ローカルファイル保存処理の結果をUIに返す。"
+          - "11. UI: 処理結果をユーザーに通知する。"
+        alternative_flows:
+          - "ファイル読み込みエラー、ファイル形式不正、データマッピングエラー、ファイル保存エラー、GitHub APIエラーなどが発生した場合、UI上およびログにエラーメッセージを表示する。処理は可能な範囲で継続する。"
+      - title: "UC-CLI-001: CLIによるGitHubリソース一括登録"
+        actor: "開発者"
+        preconditions:
+          - "Docker 実行環境が利用可能である (推奨)。"
+          - "有効な GitHub PAT と、選択された AI モデルの API キーが環境変数または `.env` ファイルに設定されている。"
+          - "処理対象のIssue情報ファイル（`.md`, `.yml`, `.json`）が存在し、読み取り可能である。"
+          - "CLI で `--file` と `--repo` が指定されている。"
+        postconditions:
+          - "指定されたリポジトリが存在しない場合、プライベートリポジトリとして作成される。"
+          - "解釈された全てのユニークなラベルとマイルストーンが、リポジトリに存在しない場合に作成される。"
+          - "解釈された各Issueが、リポジトリに同名のOpenなIssueが存在しない場合に作成される。"
+          - "`--project` が指定され、該当するProject (V2)が存在する場合、作成されたIssueがそのプロジェクトにアイテムとして追加される。"
+          - "処理結果がログおよび標準出力に表示される。"
+        basic_flow:
+          - "`main.py`をエントリーポイントとし、ファイル読み込み、Issue解釈（新しいAI/パーサーロジック）、`CreateGitHubResourcesUseCase`実行、`CliReporter`での結果表示、という流れを維持する。Web UIで実装されたIssue解釈・マッピングロジックをCLI側でも利用する。"
+      - title: "UC-CLI-002: CLIによるDry Runモード"
+        basic_flow:
+          - "UC-CLI-001のDry Run版。`CreateGitHubResourcesUseCase`のDry Run機能を活用する。デバッグ機能として維持する。"
+
+  - heading: "6. ドメインモデル"
+    subsections:
+      - title: "値オブジェクト (Value Object)"
+        items:
+          - "`IssueData`: AIまたはパーサーによって解釈された単一Issueの情報。"
+      - title: "集約 (Aggregate)"
+        items:
+          - "`ParsedSourceFileContent` (旧 `ParsedRequirementData` から改名提案): 単一の入力ファイルから解析・マッピングされた`IssueData`のリスト、およびファイル全体のメタ情報（例: プロジェクト名、提案ラベル/マイルストーン）を保持。このモデルの名称変更は、実装の進行状況や実態に合わせて適宜検討する。"
+          - "`CreateIssuesResult`: Issue作成処理のGitHub操作結果。"
+          - "`CreateGitHubResourcesResult`: GitHubリソース作成ワークフロー全体の実行結果。"
+          - "`LocalFileSplitResult` (新規提案): ローカルへのファイル分割・保存処理の結果（保存されたファイルパスのリスト、index.htmlのパス、成功数、失敗数、エラー情報など）を集約するモデル。"
+      - title: "ドメイン例外 (Domain Exception)"
+        items:
+          - "`GitHubClientError` (基底)"
+          - "`GitHubAuthenticationError`"
+          - "`GitHubRateLimitError`"
+          - "`GitHubResourceNotFoundError`"
+          - "`GitHubValidationError`"
+          - "`AiParserError`"
+          - "`FileReaderError`"
+
+  - heading: "7. 機能要件"
+    items:
+      - id: "FR-WebUI-001"
+        description: "コンテナ起動時に、ユーザーがアクセス可能なWeb UIをDjangoフレームワークとBootstrap5を用いて提供すること。"
+      - id: "FR-File-001"
+        description: "Web UIを通じて、ユーザーがIssue情報ファイル（`.md`, `.yml`, `.json`）をアップロードできること。"
+      - id: "FR-Parse-001"
+        description: "アップロードされたファイル形式（`.md`, `.yml`, `.json`）に応じて、適切なパーサーがファイル内容を読み込み、Issue単位のデータに分割すること。"
+      - id: "FR-Map-002" # 旧FR-Map-001を具体化
+        description: "アップロードされたファイル内のIssue関連情報のキーや項目名に揺らぎがあっても、AI（および設定されたルール）がそれらを解釈し、`IssueData`モデルの各フィールドに適切にマッピングすること。"
+      - id: "FR-Display-001"
+        description: "マッピングされたIssue情報の一覧を、Web UI上に表示すること。各Issueは選択可能であること。"
+      - id: "FR-Select-001"
+        description: "ユーザーがUI上で、処理対象とするIssueを個別に、または一括で選択できること。"
+      - id: "FR-GitHub-Register-001"
+        description: "Web UI上でユーザーが選択したIssue群、および関連情報（リポジトリ名、プロジェクト名等）に基づき、`CreateGitHubResourcesUseCase` を呼び出し、GitHubへのリソース作成処理を実行すること。"
+      - id: "FR-CLI-Sync-001"
+        description: "Web UIで提供される主要なIssue解釈、マッピング、GitHub登録機能は、CLIからも同等の機能として利用可能であること。ただし、実装の優先度はWeb UIの後とする。"
+      - id: "FR-Feedback-001"
+        description: "ファイルの読み込み、解析、分割、保存処理、GitHub登録処理の状況や結果（成功、エラー）をWeb UI上およびサーバーログに適切にフィードバックすること。"
+      - id: "FR-SplitStore-001"
+        description: "Web UI上でユーザーが指定したローカルディレクトリをルートとして、選択されたIssue群を個別のファイルとして保存すること。"
+        sub_requirements:
+          - id: "FR-SplitStore-001.1"
+            description: "ディレクトリ構造: ルート保存先直下に、`issues/`、`milestones/`（将来用）、`labels/`（将来用）のサブディレクトリと、`index.html`ファイルを生成する。"
+          - id: "FR-SplitStore-001.2"
+            description: "Issueファイル形式・命名規則: `issues/`ディレクトリ以下に、各Issueを個別のファイルとしてYAML形式で保存する。ファイル名は、IssueのIDとタイトルを組み合わせ、OSで安全な形式で命名する。"
+          - id: "FR-SplitStore-001.3"
+            description: "`index.html`生成: ルート保存先ディレクトリ直下に`index.html`ファイルを生成し、保存された全Issueへの目次と相対リンクを記述する。"
+          - id: "FR-SplitStore-001.4"
+            description: "保存先指定: Web UIを通じて、ユーザーがローカルファイルシステム上の任意のディレクトリを、上記ファイル群のルート保存先として指定できること。"
+
+  - heading: "8. 非機能要件"
+    subsections:
+      - title: "ユーザビリティ (Web UI)"
+        items:
+          - "直感的で分かりやすいUIデザインであること（Bootstrap5のコンポーネントを活用）。"
+          - "ファイルアップロード、Issue選択、ファイル保存操作、GitHub登録指示が容易に行えること。"
+          - "処理の進捗や結果がリアルタイムに近い形でフィードバックされること。"
+      - title: "性能 (Web UI)"
+        items:
+          - "UIのレスポンスタイムが許容範囲内であること（例: 通常操作は1秒以内）。"
+          - "数十件程度のIssueを含むファイルの処理が現実的な時間（例: 数秒～数十秒）で完了すること。"
+      - title: "セキュリティ"
+        items:
+          - "GitHub PAT および AI API キーは、`.env` ファイルまたは環境変数で管理し、コード中にハードコードしない (`pydantic-settings`, `SecretStr` を使用)。"
+          - "`.env` ファイルは `.gitignore` に追加し、リポジトリにコミットしない。"
+      - title: "保守性/拡張性"
+        items:
+          - "UI（Djangoテンプレートとビュー）とバックエンドロジック（Djangoのサービス層やビジネスロジック）が明確に分離されていること。"
+          - "新しいファイル形式のパーサーやデータマッピングルールを追加しやすい構造であること。"
+          - "レイヤー間の依存方向はClean Architectureの原則に従う。"
+      - title: "テスト容易性"
+        items:
+          - "主要な機能はユニットテストで検証可能であること。"
+          - "外部 API への依存はモック可能であること。"
+      - title: "レポーティング"
+        items:
+          - "CLI: `CliReporter` を引き続き使用し、コンソールに処理結果を出力する。"
+          - "Web UI: Djangoのテンプレートを通じて、UI上に処理結果を分かりやすく表示する。詳細ログはサーバー側のログファイルに出力する。"
+      - title: "技術スタック"
+        items:
+          - "WebフレームワークとしてDjangoを採用する。"
+          - "フロントエンドのスタイリングにはBootstrap5を利用する。"
+
+  - heading: "9. 受け入れ基準"
+    content: |
+      # (このセクションは、UIの具体的な画面遷移や操作、ファイル分割・保管機能の具体的な出力、
+      #  およびデータマッピングの成功基準などを定義する必要がある。
+      #  例: AC-WebUI-UploadFile, AC-WebUI-SelectIssues, AC-WebUI-GitHubRegister,
+      #      AC-FileSplit-YAML, AC-FileSplit-IndexHTML,
+      #      AC-DataMap-YAML-Success, AC-DataMap-MD-Success など)
+      - AC-Core-Flow (UC-Web-001 基本フロー): Web UIからIssueファイル（例: 提供されたYAML Issue例）をアップロードし、Issueが一覧表示され、選択したIssueがGitHubに正常に登録されること。
+      - AC-Local-Save (FR-SplitStore-001): Web UIからローカル保存を実行すると、指定したディレクトリに`index.html`と`issues/*.yaml`ファイル群が正しく生成されること。
+      - AC-CLI-Maintained (UC-CLI-001, UC-CLI-002): 既存の主要なCLI機能（ファイルからのGitHubリソース一括登録、DryRun）が、新しいIssue解釈・マッピングロジックを利用して引き続き動作すること。
+      - (その他、既存のAC-Error-Handling, AC-Tests-PassなどをWeb UIのコンテキストに合わせて見直す)
+
+  - heading: "10. 用語集"
+    content: |
+      # (バージョン2.1 から大きな変更なし、ただし「Django」「Bootstrap5」「YAML形式統一」「データマッピング支援」「Issueファイルインタープリター」などの用語を追加検討)
+      - Web UI: DjangoとBootstrap5で構築された、ブラウザ経由で操作可能なユーザーインターフェース。
+      - Issue情報ファイル: `.md`, `.yml`, `.json`形式で記述された、Issueの元となるデータを含むファイル。
+      - データマッピング: Issue情報ファイル内の多様なキーや構造を、`IssueData`モデルのフィールドに対応付けるプロセス。AIが支援する。
+      - ローカルファイル分割・保管: 解釈・マッピングされたIssueデータを、個別のYAMLファイルとしてローカルに保存する機能。
+      - index.html: ローカルに保存されたIssueファイル群への目次となるHTMLファイル。
+
+  - heading: "11. 制約条件・前提条件"
+    items:
+      - "開発言語: Python 3.10 以上。"
+      - "実行環境: Docker コンテナ (Linux ベース) での実行を強く推奨。"
+      - "Webフレームワーク: バックエンドAPIおよびUIの構築にはPython/Djangoを使用する。フロントエンドのスタイリングにはBootstrap5を適用する。"
+      - "外部 API 依存: GitHub API, OpenAI API または Google Generative AI API。"
+      - "主要ライブラリ依存: `typer`, `pydantic`, `pydantic-settings`, `githubkit`, `langchain` (または直接AI SDK), `PyYAML`, `django`, `bootstrap5` (Django連携ライブラリまたは手動導入)。"
+      - "認証・設定: 有効なGitHub PATとAI APIキーが環境変数または`.env`ファイル経由で設定されていること。`config.yaml` からAIモデル名、データマッピングルール、ログレベルなどが読み込まれる。"
+      - "入力ファイル構造: `.md`, `.yml`, `.json`ファイルは、Issue情報を機械的に分割・マッピング可能なある程度一貫した構造で記述されていること。キーの揺らぎはある程度許容する。"
+      - "AIとパーサーの役割: AIは主に、多様な入力ファイル形式やキーの揺らぎに対応するためのデータマッピング支援に利用される。そのマッピング情報に基づき、機械的なパーサーが実際のデータ抽出を行う。"
+      - "データマッピングルールの設定 (`config.yaml`): ユーザーがAIのマッピングを補助するためのルールやヒントを設定ファイルで定義できる。具体的なフォーマットは今後の設計で提案する。"
+      - "ローカル保存ファイルの形式: 入力ファイル形式に関わらず、ローカルに分割・保存する際のIssueファイルの形式はYAMLに統一する。"
+      - "GitHub連携: 本ツールは、ローカルのIssue定義ファイルを正としてGitHubに情報を登録・更新（一方向）することを主な目的とする。GitHub上のIssueの状態をローカルに同期する機能は持たない。"
+      - "`ParsedSourceFileContent`モデル (旧`ParsedRequirementData`): このモデルは、入力ファイルの種類に関わらず、ファイル全体から読み取られたIssue情報のリストと、ファイルレベルのメタデータを保持する。実装の進行に合わせて、このモデルの名称やフィールドは適宜見直す。"
