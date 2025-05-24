@@ -73,3 +73,20 @@ class TopPageViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="result-notification-area"',
                             msg_prefix="Result notification area not found")
+
+    def test_upload_section_exists(self):
+        """ファイルアップロードエリアのUI骨格要素が存在することを検証"""
+        response = self.client.get(reverse('app:top_page'))
+        self.assertEqual(response.status_code, 200)
+
+        # セクション全体
+        self.assertContains(response, 'id="upload-section"',
+                            msg_prefix="Upload section not found")
+        self.assertContains(response, 'id="upload-form"',
+                            msg_prefix="Upload form not found")
+
+        # 主要なUI要素
+        self.assertContains(
+            response, '<input type="file" class="form-control" id="issue-file-input"', msg_prefix="File input not found")
+        self.assertContains(
+            response, '<button class="btn btn-primary" id="upload-button"', msg_prefix="Upload button not found")
