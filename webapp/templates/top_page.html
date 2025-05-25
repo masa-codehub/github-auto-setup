@@ -5,33 +5,18 @@
 {% block content %}
 <div class="container mt-4">
     <div id="result-notification-area" class="mb-4"></div>
+
+    <!-- ウェルカムメッセージを横幅いっぱいに表示 -->
+    <div class="text-center mb-5 pt-4 pb-4 bg-light rounded">
+        <h1 class="display-4 mb-4">GitHub Automation Tool へようこそ！</h1>
+        <p class="lead">このツールは、GitHubの定型作業を自動化し、開発効率を向上させることを目的としています。</p>
+        <hr class="my-4">
+        <!-- <p>Bootstrap 5 のスタイルが正しく適用されています。</p> -->
+        <!-- <a class="btn btn-primary btn-lg" href="#" role="button">詳細はこちら (ダミー)</a> -->
+    </div>
+
     <div class="row g-4">
         <main class="col-lg-8">
-            <!-- ウェルカムメッセージ -->
-            <div class="text-center mb-4">
-                <h1 class="display-4 mb-4">GitHub Automation Tool へようこそ！</h1>
-                <p class="lead">このツールは、GitHubの定型作業を自動化し、開発効率を向上させることを目的としています。</p>
-                <hr class="my-4">
-                <p>Bootstrap 5 のスタイルが正しく適用されています。</p>
-                <a class="btn btn-primary btn-lg" href="#" role="button">詳細はこちら (ダミー)</a>
-            </div>
-            <!-- 機能概要 -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">機能概要</h5>
-                    <p class="card-text">Issueファイルのアップロード、GitHubへの一括登録、ローカル保存など、多彩な機能を提供します。</p>
-                    <a href="#" class="btn btn-secondary">機能一覧 (ダミー)</a>
-                </div>
-            </div>
-            <!-- 利用開始 -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">利用開始</h5>
-                    <p class="card-text">まずはドキュメントを確認し、必要な設定を行ってください。</p>
-                    <a href="#" class="btn btn-secondary">ドキュメント (ダミー)</a>
-                </div>
-            </div>
-            <!-- アップロードセクションここから -->
             <section id="upload-section" class="card mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">1. Upload Issue File</h5>
@@ -49,9 +34,7 @@
                     </form>
                 </div>
             </section>
-            <!-- アップロードセクションここまで -->
-            <!-- Issue一覧セクションここから -->
-            <section id="issue-list-section" class="card">
+            <section id="issue-list-section" class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">2. Preview & Select Issues</h5>
                     <div>
@@ -60,8 +43,8 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted" id="issue-count-indicator">Found 0 issues. Upload a file to see a preview.</p>
-                    <div id="issue-list-container" class="table-responsive" style="max-height: 400px; overflow-y: auto; display: none;">
+                    <p class="text-muted" id="issue-count-indicator">Showing 2 sample issues for display check. This will be updated after file upload.</p>
+                    <div id="issue-list-container" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                         <table id="issue-table" class="table table-hover table-sm">
                             <thead class="table-light sticky-top">
                                 <tr>
@@ -72,29 +55,73 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td><input type="checkbox" class="form-check-input issue-checkbox" value="dummy-issue-1"></td>
-                                    <td>[UserStory] Implement file upload feature with preview</td>
+                                <tr data-bs-toggle="collapse" data-bs-target="#issueDetail1" aria-expanded="false" aria-controls="issueDetail1" class="issue-row-item">
+                                    <td><input type="checkbox" class="form-check-input issue-checkbox" value="dummy-issue-1" onclick="event.stopPropagation();"></td>
+                                    <td class="issue-title-clickable">[UserStory] Implement file upload feature with preview <span class="ms-2 text-muted small">(Click to expand)</span></td>
                                     <td><code>user-a</code>, <code>user-c</code></td>
                                     <td><span class="badge bg-primary">feature</span> <span class="badge bg-info text-dark">ui</span></td>
                                 </tr>
                                 <tr>
-                                    <td><input type="checkbox" class="form-check-input issue-checkbox" value="dummy-issue-2"></td>
-                                    <td>[Bug] Fix login button styling on mobile</td>
+                                    <td colspan="4" class="p-0">
+                                        <div class="collapse" id="issueDetail1">
+                                            <div class="card card-body bg-light">
+                                                <strong>Description:</strong><br>
+                                                This is the detailed description for UserStory: Implement file upload feature with preview. It might contain multiple lines and <strong>markdown</strong> if rendered.<br><br>
+                                                <strong>Tasks:</strong>
+                                                <ul>
+                                                    <li>Define API endpoint</li>
+                                                    <li>Implement file parsing logic</li>
+                                                    <li>Write unit tests</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr data-bs-toggle="collapse" data-bs-target="#issueDetail2" aria-expanded="false" aria-controls="issueDetail2" class="issue-row-item">
+                                    <td><input type="checkbox" class="form-check-input issue-checkbox" value="dummy-issue-2" onclick="event.stopPropagation();"></td>
+                                    <td class="issue-title-clickable">[Bug] Fix login button styling on mobile <span class="ms-2 text-muted small">(Click to expand)</span></td>
                                     <td><code>user-b</code></td>
                                     <td><span class="badge bg-danger">bug</span> <span class="badge bg-info text-dark">ui</span> <span class="badge bg-warning text-dark">mobile</span></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="4" class="p-0">
+                                        <div class="collapse" id="issueDetail2">
+                                            <div class="card card-body bg-light">
+                                                <strong>Description:</strong><br>
+                                                The login button does not display correctly on small screens. It needs CSS adjustments for mobile responsiveness.<br><br>
+                                                <strong>Acceptance Criteria:</strong>
+                                                <ul>
+                                                    <li>Button is centered.</li>
+                                                    <li>Font size is appropriate.</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </section>
-            <!-- Issue一覧セクションここまで -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">機能概要</h5>
+                    <p class="card-text">Issueファイルのアップロード、GitHubへの一括登録、ローカル保存など、多彩な機能を提供します。</p>
+                    <a href="#" class="btn btn-secondary">機能一覧 (ダミー)</a>
+                </div>
+            </div>
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">利用開始</h5>
+                    <p class="card-text">まずはドキュメントを確認し、必要な設定を行ってください。</p>
+                    <a href="#" class="btn btn-secondary">ドキュメント (ダミー)</a>
+                </div>
+            </div>
         </main>
         <aside class="col-lg-4">
             <div id="action-panel-section" class="card sticky-top" style="top: 2rem;">
                 <div class="card-header">
-                    <h5 class="mb-0">Execute Actions</h5>
+                    <h5 class="mb-0">3. Execute Actions</h5>
                 </div>
                 <div class="card-body">
                     <form id="action-form">
@@ -115,9 +142,7 @@
                         <div class="d-grid mb-3">
                             <button type="submit" class="btn btn-success" id="github-submit-button">Create Issues on GitHub</button>
                         </div>
-
                         <hr class="my-4">
-
                         <h6 class="card-title">Local Save</h6>
                         <div class="mb-3">
                             <label for="local-path-input" class="form-label">Save Directory <span class="text-muted">(Optional)</span></label>
@@ -125,6 +150,43 @@
                         </div>
                         <div class="d-grid">
                             <button type="button" class="btn btn-secondary" id="local-save-button">Save Issues Locally</button>
+                        </div>
+                        <hr class="my-4">
+                        <h6 class="card-title mt-4">AI Configuration</h6>
+                        <div class="mb-3">
+                            <label class="form-label d-block">AI Provider:</label>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="ai_provider" id="ai_provider_openai" value="openai" checked>
+                                <label class="form-check-label" for="ai_provider_openai">OpenAI</label>
+                            </div>
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="radio" name="ai_provider" id="ai_provider_gemini" value="gemini">
+                                <label class="form-check-label" for="ai_provider_gemini">Google Gemini</label>
+                            </div>
+                        </div>
+                        <div class="mb-3" id="openai-model-selection-area">
+                            <label for="openai-model-select" class="form-label">OpenAI Model:</label>
+                            <select class="form-select form-select-sm" id="openai-model-select" name="openai_model_name">
+                                <option value="gpt-4o" selected>gpt-4o (Default)</option>
+                                <option value="gpt-4">gpt-4</option>
+                                <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="gemini-model-selection-area" style="display: none;">
+                            <label for="gemini-model-select" class="form-label">Gemini Model:</label>
+                            <select class="form-select form-select-sm" id="gemini-model-select" name="gemini_model_name">
+                                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                                <option value="gemini-1.5-flash" selected>gemini-1.5-flash (Default)</option>
+                                <option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
+                                <option value="gemini-1.0-pro">gemini-1.0-pro</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="api-key-input" class="form-label">API Key</label>
+                            <input type="password" class="form-control" id="api-key-input" name="api_key" placeholder="Enter API Key for selected provider" aria-describedby="apiKeyHelp">
+                            <div id="apiKeyHelp" class="form-text">
+                                Enter the API key corresponding to the selected AI Provider above.
+                            </div>
                         </div>
                     </form>
                 </div>
