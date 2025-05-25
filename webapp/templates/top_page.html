@@ -4,7 +4,9 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div id="result-notification-area" class="mb-4"></div>
+    <div id="result-notification-area" class="mb-4">
+        {# メッセージ表示ロジックを削除し、元の状態に戻す #}
+    </div>
 
     <!-- ウェルカムメッセージを横幅いっぱいに表示 -->
     <div class="text-center mb-5 pt-4 pb-4 bg-light rounded">
@@ -22,14 +24,14 @@
                     <h5 class="mb-0">1. Upload Issue File</h5>
                 </div>
                 <div class="card-body">
-                    <form id="upload-form" method="post" enctype="multipart/form-data">
+                    <form method="post" enctype="multipart/form-data" id="upload-form">
                         {% csrf_token %}
                         <div class="input-group">
-                            <input type="file" class="form-control" id="issue-file-input" name="issue_file" required>
+                            {{ upload_form.issue_file }}
                             <button class="btn btn-primary" id="upload-button" type="submit">Upload & Preview</button>
                         </div>
                         <div class="form-text" id="fileHelp">
-                            Upload a Markdown, YAML, or JSON file containing issue definitions.
+                            {{ upload_form.issue_file.help_text|default:"Upload a Markdown, YAML, or JSON file containing issue definitions." }}
                         </div>
                     </form>
                 </div>
