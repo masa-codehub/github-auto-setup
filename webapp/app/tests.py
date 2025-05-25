@@ -81,16 +81,51 @@ class TopPageViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
         # セクション全体
-        self.assertContains(response, 'id="upload-section"',
-                            msg_prefix="Upload section not found")
-        self.assertContains(response, 'id="upload-form"',
-                            msg_prefix="Upload form not found")
+        self.assertContains(
+            response, 'id="upload-section"',
+            msg_prefix="Upload section not found"
+        )
+        self.assertContains(
+            response, 'id="upload-form"',
+            msg_prefix="Upload form not found"
+        )
 
-        # 主要なUI要素
+        # フォーム属性の厳密な検証
+        html = response.content.decode()
+        self.assertRegex(
+            html,
+            r'<form[^>]*method="post"[^>]*>',
+            msg="formタグにmethod='post'が設定されていません"
+        )
+        self.assertRegex(
+            html,
+            r'<form[^>]*enctype="multipart/form-data"[^>]*>',
+            msg="formタグにenctype='multipart/form-data'が設定されていません"
+        )
+        self.assertRegex(
+            html,
+            r'<input[^>]*name="csrfmiddlewaretoken"[^>]*>',
+            msg="CSRFトークンが含まれていません"
+        )
+        # ファイル入力フィールドの厳密な検証（長い行をさらに分割）
+        self.assertRegex(
+            html,
+            r'<input[^>]*type="file"[^>]*class="form-control"[^>]*'
+            r'id="issue-file-input"[^>]*>',
+            msg="ファイル入力フィールドの属性が正しくありません"
+        )
         self.assertContains(
-            response, '<input type="file" class="form-control" id="issue-file-input"', msg_prefix="File input not found")
-        self.assertContains(
-            response, '<button class="btn btn-primary" id="upload-button"', msg_prefix="Upload button not found")
+            response, '<button class="btn btn-primary" id="upload-button"',
+            msg_prefix="Upload button not found"
+        )
+
+    def test_upload_section_message_area(self):
+        """通知エリアのHTML構造が存在することのみを検証（メッセージ内容やalertクラスは検証しない）"""
+        response = self.client.get(reverse('app:top_page'))
+        html = response.content.decode()
+        self.assertIn('id="result-notification-area"', html)
+        # メッセージブロックの構造が空でも存在することを確認
+        # メッセージ内容やalertクラスは検証しない
 
     def test_issue_list_section_exists(self):
         """Issue一覧表示エリアのUI骨格要素が存在することを検証"""
