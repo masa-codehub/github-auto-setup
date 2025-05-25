@@ -174,7 +174,7 @@ sections:
       - id: "FR-WebUI-001"
         description: "コンテナ起動時に、ユーザーがアクセス可能なWeb UIをDjangoフレームワークとBootstrap5を用いて提供すること。"
       - id: "FR-File-001"
-        description: "Web UIを通じて、ユーザーがIssue情報ファイル（`.md`, `.yml`, `.json`）をアップロードできること。"
+        description: "Web UIを通じて、ユーザーがIssue情報ファイル（`.md`, `.yml`, `.json`）をアップロードできること。\n(実装状況: 2025-05-25 TASK-WEBUI-FILEUPLOAD-VIEW 完了。\n Web UIからのファイルPOSTリクエスト受信、フォームバリデーション、\n メモリへのファイル読み込み、ユーザーへのメッセージ通知機能が実装されました。\n ファイル内容の解析・マッピングは後続タスクで対応します。)"
       - id: "FR-Parse-001"
         description: "アップロードされたファイル形式（`.md`, `.yml`, `.json`）に応じて、適切なパーサーがファイル内容を読み込み、Issue単位のデータに分割すること。"
       - id: "FR-Map-002" # 旧FR-Map-001を具体化
@@ -262,7 +262,7 @@ sections:
       - "Webフレームワーク: バックエンドAPIおよびUIの構築にはPython/Djangoを使用する。フロントエンドのスタイリングにはBootstrap5を適用する。"
       - "外部 API 依存: GitHub API, OpenAI API または Google Generative AI API。"
       - "主要ライブラリ依存: `typer`, `pydantic`, `pydantic-settings`, `githubkit`, `langchain` (または直接AI SDK), `PyYAML`, `django`, `bootstrap5` (Django連携ライブラリまたは手動導入)。"
-      - "認証・設定: 有効なGitHub PATとAI APIキーが環境変数または`.env`ファイル経由で設定されていること。`config.yaml` からAIモデル名、データマッピングルール、ログレベルなどが読み込まれる。"
+      - "認証・設定: 有効なGitHub PATとAI APIキーが環境変数または`.env`ファイルに設定されていること。`config.yaml` からAIモデル名、データマッピングルール、ログレベルなどが読み込まれる。"
       - "入力ファイル構造: `.md`, `.yml`, `.json`ファイルは、Issue情報を機械的に分割・マッピング可能なある程度一貫した構造で記述されていること。キーの揺らぎはある程度許容する。"
       - "AIとパーサーの役割: AIは主に、多様な入力ファイル形式やキーの揺らぎに対応するためのデータマッピング支援に利用される。そのマッピング情報に基づき、機械的なパーサーが実際のデータ抽出を行う。"
       - "データマッピングルールの設定 (`config.yaml`): ユーザーがAIのマッピングを補助するためのルールやヒントを設定ファイルで定義できる。具体的なフォーマットは今後の設計で提案する。"
