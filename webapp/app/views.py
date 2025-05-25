@@ -24,6 +24,12 @@ def top_page(request):
                     )
                     messages.success(
                         request, f"File '{uploaded_file.name}' uploaded successfully. Content ready for parsing.")
+                    # Store file content and name in session to pass to the next step (parsing)
+                    # Note: Storing large file content in session is not recommended for production.
+                    # This is a temporary measure for demonstration or small files.
+                    # Consider alternative ways to pass data for larger files (e.g., temp storage, cache).
+                    request.session['uploaded_file_content'] = uploaded_file_content
+                    request.session['uploaded_file_name'] = uploaded_file.name
                     return redirect('app:top_page')
                 except UnicodeDecodeError:
                     logger.error(
@@ -42,8 +48,20 @@ def top_page(request):
                 request, "File upload failed. Please check the errors below.")
     else:
         form = FileUploadForm()
+        # Retrieve and clear file content from session if it exists (e.g., after a redirect)
+        # This is for demonstration; actual display logic might be different.
+        if 'uploaded_file_name' in request.session:
+            uploaded_file_name = request.session.pop('uploaded_file_name')
+            uploaded_file_content = request.session.pop('uploaded_file_content', None) # Content might be large
+            # For demonstration, we might add a message or pass this to context
+            # if we intend to display something about the previously uploaded file.
+            # messages.info(request, f"Ready to process: {uploaded_file_name}")
+
 
     context = {
         'upload_form': form,
+        # Optionally pass uploaded file info to template for display, if needed
+        # 'uploaded_file_name': uploaded_file_name,
+        # 'uploaded_file_content_preview': uploaded_file_content[:200] if uploaded_file_content else None, # Preview
     }
     return render(request, "top_page.html", context)
