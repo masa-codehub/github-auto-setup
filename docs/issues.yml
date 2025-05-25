@@ -4,7 +4,7 @@
 document_info:
   title: "GitHub Automation Tool - Agile Requirements (GitHub Issues Format)"
   version: "2.3"
-  last_updated: "2025-05-24 (JST)" # Assuming current date for this output
+  last_updated: "2025-05-25 (JST)" # Updated with US-WEBUI-SKELETON completion
   status: "Ready for Sprint Planning"
   original_requirements_doc_ref: "masa-codehub/github-auto-setup/github-auto-setup-687f29b0f6546c0e3834343e6186a60f9a1d8f40/docs/requirements.md" #
 
@@ -573,8 +573,13 @@ issues:
         - [ ] （TDD）GitHub登録APIエンドポイントのユニットテスト（モックしたUseCaseが正しい引数で呼び出されること、正常/異常レスポンスの確認）
         - [ ] UIからGitHub登録を実行し、一連のフロー（フォーム入力→実行→結果表示）が期待通り動作することをE2Eテストまたは手動テストで確認
 
-      **Action/Verification:**
-      UIからGitHub登録を実行し、モックされたUseCaseが適切な引数で呼び出されること、および処理結果がUIに表示されることを確認。
+      **Acceptance Criteria:**
+      - AC-003-01: Web UI上に、対象GitHubリポジトリ名（例: `owner/repo`）と、任意でプロジェクト名を入力または選択するフィールドがある。
+      - AC-003-02: 「GitHubへ登録」ボタンを押下すると、選択されたIssueとリポジトリ情報がバックエンドに送信される。
+      - AC-003-03: バックエンドで`CreateGitHubResourcesUseCase`が呼び出され、リポジトリ作成（存在しない場合）、ラベル・マイルストーン作成（存在しない場合）、担当者検証、Issue作成、プロジェクト連携（指定時）が実行される。
+      - AC-003-04: 処理結果（成功、失敗、スキップ、エラー詳細）がUI上にフィードバックされる。
+      - AC-003-05: GitHub PATが無効な場合や権限不足の場合、適切な認証エラーがUIに表示される。
+      - AC-003-06: 同名のOpen Issueが既に存在する場合、該当Issueはスキップされ、その旨がUIに表示される。
     milestone: "M3" # M3: GitHub連携機能MVP
     labels:
       - "type:technical-task"
@@ -582,6 +587,8 @@ issues:
       - "epic:github-integration"
       - "layer:adapter-ui"
       - "layer:usecase"
+      - "layer:adapter-github"
+      - "layer:domain"
       - "priority:high"
     assignees: []
     referenced_requirements_ids: ["FR-GitHub-Register-001", "UC-Web-001 (フロー7, 9-11)"]
@@ -778,6 +785,67 @@ issues:
     referenced_requirements_ids: ["2. システムが満たすべき主要な成功基準 (品質)"]
     dependencies_guessed: [] # (全ての開発タスクと並行して実施)
     size_guessed: "[SP: (継続的)]"
+
+  - title: "[UserStory] Web UI: 主要機能のためのフロントエンド骨格構築 (US-WEBUI-SKELETON)"
+    body: |
+      **User Story:**
+      開発者として、主要な機能（ファイルアップロード、Issue一覧表示・選択、GitHub登録、ローカル保存、DryRunモード、AI設定）を実現するための基本的なUI要素をWebページの骨格として配置・整備したい。それは、今後のバックエンド機能開発およびフロントエンドの動的機能実装の強固な基盤を整えるためだ。
+
+      **Implementation Tasks:**
+      - [x] 結果通知エリア (`id="result-notification-area"`) の配置
+      - [x] ウェルカムメッセージエリアの全幅レイアウト実装
+      - [x] メインコンテンツエリア (2カラムレイアウト) の構築
+        - [x] 左カラム: ファイルアップロードエリア (`id="upload-section"`)
+        - [x] 左カラム: Issue一覧表示エリア (`id="issue-list-section"`)
+        - [x] 左カラム: 情報カード (機能概要・利用開始)
+        - [x] 右カラム: アクション実行パネル (`id="action-panel-section"`)
+      - [x] Issue一覧での詳細表示機能（アコーディオンUI）の骨格実装
+      - [x] AI設定UIの骨格実装 (プロバイダー選択、モデル名ドロップダウン、APIキー入力)
+      - [x] 関連テストの実装・拡張 (計9つのテストメソッド)
+      - [x] README.md のユーザーマニュアル更新
+
+      **Acceptance Criteria:**
+      - AC-WEBUI-SKELETON-01: 主要UIコンポーネント（アップロード、一覧、アクション実行、通知エリア）が`top_page.html`に配置されている
+      - AC-WEBUI-SKELETON-02: 2カラムレイアウトでユーザー導線に沿った論理的な配置となっている
+      - AC-WEBUI-SKELETON-03: Issue一覧でのアコーディオン形式の詳細表示UI骨格が実装されている
+      - AC-WEBUI-SKELETON-04: AI設定UI（プロバイダー選択、モデル選択、APIキー入力）の骨格が実装されている
+      - AC-WEBUI-SKELETON-05: 全てのUIコンポーネントの存在を検証するテストがパスする
+
+      **実装された主要UIコンポーネント:**
+      1. 結果通知エリア (`id="result-notification-area"`)
+      2. ウェルカムメッセージエリア (全幅)
+      3. ファイルアップロードエリア (`id="upload-section"`)
+      4. Issue一覧表示エリア (`id="issue-list-section"`) - アコーディオン詳細表示含む
+      5. アクション実行パネル (`id="action-panel-section"`) - GitHub登録、ローカル保存、DryRunモード
+      6. AI設定エリア - プロバイダー選択、モデル名選択、APIキー入力
+
+      **テスト実装状況:**
+      - `webapp/app/tests.py` に計9つのテストメソッドを実装
+      - 全テストがパスすることを確認済み
+    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+    labels:
+      - "type:user-story"
+      - "epic:webui-core"
+      - "layer:adapter-ui"
+      - "priority:high"
+      - "status:done"
+    assignees: []
+    referenced_requirements_ids: ["UC-Web-001", "FR-WebUI-001", "FR-Display-001"]
+    dependencies_guessed: ["TASK-DJANGO-SETUP"]
+    size_guessed: "[SP: 13]"
+    status: "closed"
+    resolved_date: "2025-05-25"
+    notes: |
+      完了したサブタスク:
+      - TASK-SKELETON-UPLOAD: ファイルアップロードエリアの骨格実装
+      - TASK-SKELETON-LIST: Issue一覧表示エリアの骨格実装（ダミーデータ含む）
+      - TASK-SKELETON-ACTION: アクション実行パネルの骨格実装
+      - TASK-SKELETON-LAYOUT: 結果表示エリアの追加と2カラムレイアウト配置
+      
+      追加実装された機能:
+      - Issue一覧での詳細表示機能（アコーディオンUI）
+      - AI設定UI（プロバイダー選択、モデル名ドロップダウン、APIキー入力）
+      - レイアウト調整（ウェルカムメッセージ全幅化、セクション順序変更）
 
 # GitHub Automation Tool - Decomposed Sub-Issues for TASK-DJANGO-SETUP
 # Version 2.3 - Based on previous task breakdown.
