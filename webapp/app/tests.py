@@ -1,5 +1,9 @@
 from django.test import TestCase
 from django.urls import reverse
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.exceptions import ValidationError
+
+from .forms import FileUploadForm
 
 
 class TopPageViewTest(TestCase):
@@ -210,3 +214,57 @@ class TopPageViewTest(TestCase):
                             msg_prefix="API key input not found")
         self.assertContains(response, 'name="api_key"',
                             msg_prefix="API key input name attribute missing")
+
+
+class FileUploadFormTests(TestCase):
+    def test_file_required(self):
+        form = FileUploadForm(files={})
+        self.assertFalse(form.is_valid())
+        self.assertIn('issue_file', form.errors)
+        self.assertIn('このフィールドは必須です', str(form.errors['issue_file']))
+
+    def test_invalid_extension(self):
+        file = SimpleUploadedFile(
+            "test.txt", b"dummy content", content_type="text/plain"
+        )
+        form = FileUploadForm(files={'issue_file': file})
+        self.assertFalse(form.is_valid())
+        self.assertIn('issue_file', form.errors)
+        self.assertIn('Unsupported file extension',
+                      str(form.errors['issue_file']))
+
+    def test_valid_extensions(self):
+        for ext, ctype in [
+            ("md", "text/markdown"),
+            ("yml", "application/x-yaml"),
+            ("yaml", "application/x-yaml"),
+            ("json", "application/json")
+        ]:
+            file = SimpleUploadedFile(
+                f"test.{ext}", b"dummy content", content_type=ctype
+            )
+            form = FileUploadForm(files={'issue_file': file})
+            self.assertTrue(
+                form.is_valid(), f"Extension {ext} should be valid"
+            )
+
+    def test_file_size_limit_exact(self):
+        # 10MBちょうど
+        size = 10 * 1024 * 1024
+        file = SimpleUploadedFile(
+            "test.md", b"a" * size, content_type="text/markdown"
+        )
+        form = FileUploadForm(files={'issue_file': file})
+        self.assertTrue(form.is_valid(), "10MBちょうどは許可されるべき")
+
+    def test_file_size_limit_exceeded(self):
+        # 10MB + 1バイト
+        size = 10 * 1024 * 1024 + 1
+        file = SimpleUploadedFile(
+            "test.md", b"a" * size, content_type="text/markdown"
+        )
+        form = FileUploadForm(files={'issue_file': file})
+        self.assertFalse(form.is_valid())
+        self.assertIn('issue_file', form.errors)
+        self.assertIn('File size cannot exceed',
+                      str(form.errors['issue_file']))
