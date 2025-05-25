@@ -48,8 +48,9 @@ class TopPageViewTest(TestCase):
         # パネル全体
         self.assertContains(response, 'id="action-panel-section"',
                             msg_prefix="Action panel section not found")
-        self.assertContains(response, 'id="action-form"',
-                            msg_prefix="Action form not found")
+        # 見出しテキスト
+        self.assertContains(response, '<h5 class="mb-0">3. Execute Actions</h5>', html=True,
+                            msg_prefix="Action panel header text incorrect or missing")
 
         # GitHub登録エリア
         self.assertContains(response, 'name="repo_name"',
@@ -111,3 +112,66 @@ class TopPageViewTest(TestCase):
                             msg_prefix="Table header 'Title' not found")
         self.assertContains(response, 'class="form-check-input issue-checkbox"',
                             count=2, msg_prefix="Issue row checkboxes not found or not enough samples")
+
+        # --- 詳細表示UIの検証を追加 ---
+        self.assertContains(response, 'data-bs-toggle="collapse" data-bs-target="#issueDetail',
+                            count=2, msg_prefix="Collapse toggle for issue details not found or not enough samples")
+        self.assertContains(response, 'id="issueDetail1"',
+                            msg_prefix="Detail container for first dummy issue not found")
+        self.assertContains(response, 'id="issueDetail2"',
+                            msg_prefix="Detail container for second dummy issue not found")
+        self.assertContains(response, 'class="issue-title-clickable"', count=2,
+                            msg_prefix="Clickable title class not found on dummy issues")
+        self.assertContains(response, "(Click to expand)",
+                            count=2, msg_prefix="Expand hint not found")
+        self.assertContains(response, "<strong>Description:</strong>", count=2,
+                            msg_prefix="Dummy description placeholder not found in details")
+
+    def test_ai_configuration_section_exists(self):
+        """AI設定エリアのUI骨格要素が存在することを検証"""
+        response = self.client.get(reverse('app:top_page'))
+        self.assertEqual(response.status_code, 200)
+
+        # AI設定セクションのタイトル
+        self.assertContains(response, '<h6 class="card-title mt-4">AI Configuration</h6>',
+                            msg_prefix="AI Configuration section title not found")
+
+        # AIプロバイダー選択 (ラジオボタン)
+        self.assertContains(response, 'name="ai_provider"',
+                            msg_prefix="AI provider select radio buttons not found")
+        self.assertContains(response, 'id="ai_provider_openai"',
+                            msg_prefix="OpenAI provider radio button not found")
+        self.assertContains(response, 'id="ai_provider_gemini"',
+                            msg_prefix="Gemini provider radio button not found")
+
+        # OpenAI モデル名選択ドロップダウン
+        self.assertContains(response, 'id="openai-model-select"',
+                            msg_prefix="OpenAI model select dropdown not found")
+        self.assertContains(response, 'name="openai_model_name"',
+                            msg_prefix="OpenAI model name attribute missing")
+        self.assertContains(response, '<option value="gpt-4o" selected>gpt-4o (Default)</option>',
+                            msg_prefix="OpenAI default model option missing")
+        self.assertContains(response, '<option value="gpt-4">gpt-4</option>',
+                            msg_prefix="OpenAI gpt-4 model option missing")
+        self.assertContains(response, '<option value="gpt-3.5-turbo">gpt-3.5-turbo</option>',
+                            msg_prefix="OpenAI gpt-3.5-turbo model option missing")
+
+        # Gemini モデル名選択ドロップダウン
+        self.assertContains(response, 'id="gemini-model-select"',
+                            msg_prefix="Gemini model select dropdown not found")
+        self.assertContains(response, 'name="gemini_model_name"',
+                            msg_prefix="Gemini model name attribute missing")
+        self.assertContains(response, '<option value="gemini-1.5-flash">gemini-1.5-flash</option>',
+                            msg_prefix="Gemini default model option missing")
+        self.assertContains(response, '<option value="gemini-1.5-flash" selected>gemini-1.5-flash (Default)</option>',
+                            msg_prefix="Gemini default model option (selected) missing")
+        self.assertContains(response, '<option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>',
+                            msg_prefix="Gemini pro-latest model option missing")
+        self.assertContains(response, '<option value="gemini-1.0-pro">gemini-1.0-pro</option>',
+                            msg_prefix="Gemini 1.0-pro model option missing")
+
+        # APIキー入力 (単一フォーム)
+        self.assertContains(response, 'id="api-key-input"',
+                            msg_prefix="API key input not found")
+        self.assertContains(response, 'name="api_key"',
+                            msg_prefix="API key input name attribute missing")
