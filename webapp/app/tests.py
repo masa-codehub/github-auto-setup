@@ -2,8 +2,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
+from django.contrib.messages import get_messages
 
-from .forms import FileUploadForm
+from .forms import FileUploadForm, MAX_UPLOAD_SIZE_BYTES
 
 
 class TopPageViewTest(TestCase):
@@ -233,3 +234,66 @@ class FileUploadFormTests(TestCase):
         self.assertIn('issue_file', form.errors)
         self.assertIn('File size cannot exceed',
                       str(form.errors['issue_file']))
+
+
+class TopPageViewUploadTests(TestCase):
+    def test_post_valid_file(self):
+        valid_file_content = b"title: Test Issue\ndescription: This is a test."
+        uploaded_file = SimpleUploadedFile(
+            "test.yml", valid_file_content, content_type="application/x-yaml"
+        )
+        response = self.client.post(reverse('app:top_page'), {
+                                    'issue_file': uploaded_file})
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse('app:top_page'))
+        # メッセージフレームワークのテスト
+        storage = get_messages(response.wsgi_request)
+        messages = list(storage)
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(str(
+            messages[0]), "File 'test.yml' uploaded successfully. Content ready for parsing.")
+
+    def test_post_invalid_extension_file(self):
+        invalid_file = SimpleUploadedFile(
+            "test.txt", b"invalid content", content_type="text/plain"
+        )
+        response = self.client.post(reverse('app:top_page'), {
+                                    'issue_file': invalid_file})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('upload_form', response.context)
+        form_in_context = response.context['upload_form']
+        self.assertFalse(form_in_context.is_valid())
+        self.assertIn('issue_file', form_in_context.errors)
+        self.assertIn("Unsupported file extension", str(
+            form_in_context.errors['issue_file']))
+        storage = get_messages(response.wsgi_request)
+        messages = list(storage)
+        self.assertTrue(any("File upload failed" in str(m) for m in messages))
+
+    def test_post_no_file(self):
+        response = self.client.post(reverse('app:top_page'), {})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('upload_form', response.context)
+        form_in_context = response.context['upload_form']
+        self.assertFalse(form_in_context.is_valid())
+        self.assertIn('issue_file', form_in_context.errors)
+        storage = get_messages(response.wsgi_request)
+        messages = list(storage)
+        self.assertTrue(any("File upload failed" in str(m) for m in messages))
+
+    def test_post_file_too_large(self):
+        large_content = b"a" * (MAX_UPLOAD_SIZE_BYTES + 1)
+        large_file = SimpleUploadedFile(
+            "large.yml", large_content, content_type="application/x-yaml"
+        )
+        response = self.client.post(reverse('app:top_page'), {
+                                    'issue_file': large_file})
+        self.assertEqual(response.status_code, 200)
+        form_in_context = response.context['upload_form']
+        self.assertFalse(form_in_context.is_valid())
+        self.assertIn('issue_file', form_in_context.errors)
+        self.assertIn("File size cannot exceed", str(
+            form_in_context.errors['issue_file']))
+        storage = get_messages(response.wsgi_request)
+        messages = list(storage)
+        self.assertTrue(any("File upload failed" in str(m) for m in messages))
