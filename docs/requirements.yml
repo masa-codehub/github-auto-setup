@@ -176,7 +176,35 @@ sections:
       - id: "FR-File-001"
         description: "Web UIを通じて、ユーザーがIssue情報ファイル（`.md`, `.yml`, `.json`）をアップロードできること。\n(実装状況: 2025-05-25 TASK-WEBUI-FILEUPLOAD-VIEW 完了。\n Web UIからのファイルPOSTリクエスト受信、フォームバリデーション、\n メモリへのファイル読み込み、ユーザーへのメッセージ通知機能が実装されました。\n ファイル内容の解析・マッピングは後続タスクで対応します。)"
       - id: "FR-Parse-001"
-        description: "アップロードされたファイル形式（`.md`, `.yml`, `.json`）に応じて、適切なパーサーがファイル内容を読み込み、Issue単位のデータに分割すること。"
+        type: functional_requirement
+        name: ファイル形式別パーサーによるIssueブロック抽出
+        description: "アップロードされたファイル内容（文字列）を、その形式（Markdown, YAML, JSON）に応じた専用パーサーを用いて解析し、個々のIssueを表す中間表現のリスト (`IntermediateParsingResult`) に分割する機能。この中間表現は、後続のAIによるデータマッピング処理の入力となる。"
+        priority: high
+        status: implemented
+        acceptance_criteria:
+          - "AC-Parse-001: `MarkdownIssueParser` は、入力されたMarkdown文字列を、指定された正規表現パターン（デフォルト: 行頭の`---`）に基づいて個々のテキストブロック（`RawIssueBlock` as `str`）のリストに分割できること。区切り文字自体は結果に含まれず、各ブロックの前後の空白は除去される。空のブロックは結果から除外される。"
+          - "AC-Parse-002: `YamlIssueParser` は、入力されたYAML文字列を解析し、以下のルールでIssueブロック（`RawIssueBlock` as `Dict[str, Any]`）のリストを抽出できること:"
+            - "YAMLのルートがリストの場合、そのリストをそのまま返す。"
+            - "YAMLのルートが辞書の場合、コンストラクタで指定された`issues_key`（デフォルト: `issues`）に対応する値がリストであれば、そのリストを返す。"
+            - "上記以外の場合（`issues_key` が存在しない、または値がリストでない）、警告ログを出力し、空リストを返す。"
+            - "不正なYAML形式の場合は `ParsingError` を送出する。"
+          - "AC-Parse-003: `JsonIssueParser` は、入力されたJSON文字列を解析し、以下のルールでIssueブロック（`RawIssueBlock` as `Dict[str, Any]`）のリストを抽出できること:"
+            - "JSONのルートが配列の場合、その配列をそのまま返す。"
+            - "JSONのルートがオブジェクトの場合、コンストラクタで指定された`issues_key`（デフォルト: `issues`）に対応する値が配列であれば、その配列を返す。"
+            - "上記以外の場合（`issues_key` が存在しない、または値が配列でない）、警告ログを出力し、空リストを返す。"
+            - "不正なJSON形式の場合は `ParsingError` を送出する。"
+          - "AC-Parse-004: 各パーサーは、入力文字列が空または空白のみの場合、空リストを返すこと。"
+          - "AC-Parse-005: 各パーサーは、`AbstractIssueFileParser` インターフェースを実装すること。"
+        dependencies: []
+        related_issues:
+          - TASK-FILEPARSE-IMPL
+        technical_notes:
+          - "クリーンアーキテクチャの原則に基づき、各パーサーは `adapters` レイヤーに配置され、ファイル形式固有の解析ロジックをカプセル化。"
+          - "ポリモーフィズムを実現するため、共通の `AbstractIssueFileParser` インターフェースを定義。"
+          - "エラーハンドリングとして、ドメイン固有の `ParsingError` 例外を導入し、具体的なパースエラーはこれにラップして送出。"
+          - "Markdownパーサーは `re.split` を利用し、区切りパターンを外部から指定可能にすることで柔軟性を確保。"
+          - "YAML/JSONパーサーは、`issues_key` を外部から指定可能にし、主要なデータ構造パターン（ルートリスト、キー指定リスト）に対応。曖昧なフォールバックロジックは廃止し、明確なルールに基づいて動作。"
+          - "TDDアプローチにより、各パーサーのロジックの堅牢性を確保。"
       - id: "FR-Map-002" # 旧FR-Map-001を具体化
         description: "アップロードされたファイル内のIssue関連情報のキーや項目名に揺らぎがあっても、AI（および設定されたルール）がそれらを解釈し、`IssueData`モデルの各フィールドに適切にマッピングすること。"
       - id: "FR-Display-001"
