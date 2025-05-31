@@ -380,39 +380,42 @@ issues:
       このパーサーは、後続のデータマッピング処理（AI支援）への入力となる中間表現を生成する。
 
       **Implementation Tasks:**
-      - [ ] 各ファイル形式（Markdown, YAML, JSON）の典型的なIssue記述構造を分析・定義
-      - [ ] Markdownパーサー実装:
-        - [ ] Issueの区切り（例: `---` や特定ヘッダー）を認識し、個々のIssueブロックに分割するロジック
-        - [ ] 各Issueブロック内のテキストを抽出
-      - [ ] YAMLパーサー実装:
-        - [ ] `PyYAML`ライブラリを使用し、YAMLファイルをパース
-        - [ ] Issueリストのキー（例: `issues`）を特定し、各Issueオブジェクトを抽出するロジック
-      - [ ] JSONパーサー実装:
-        - [ ] Python標準の`json`ライブラリを使用し、JSONファイルをパース
-        - [ ] Issueリストのキーを特定し、各Issueオブジェクトを抽出するロジック
-      - [ ] パーサーの共通インターフェースまたは基底クラスを設計（任意）
-      - **テスト:**
-        - [ ] （TDD）各ファイル形式のパーサーに対するユニットテスト作成 (様々な構造のサンプルファイルを使用)
-          - Markdown: 単一Issue、複数Issue、区切り文字のバリエーション
-          - YAML: リスト形式、ネスト構造、キーの存在確認
-          - JSON: リスト形式、オブジェクト構造、キーの存在確認
-        - [ ] `FileReader`を利用したファイル読み込み部分のテスト (既存テストでカバーされていればOK)
-
-      **Action/Verification:**
-      各形式のサンプルファイルを用意し、パーサーが正しくIssueの塊を分離できることをユニットテストで検証。
-    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+      - [x] `AbstractIssueFileParser`（共通インターフェース）、`RawIssueBlock`、`IntermediateParsingResult`（型エイリアス）を`adapters/issue_file_parser_base.py`に定義
+      - [x] `MarkdownIssueParser` を `adapters/markdown_issue_parser.py` に実装。コンストラクタで区切り文字の正規表現パターン (`delimiter_pattern`) を受け付け、デフォルトは行頭の `---`。`re.split` を使用。
+      - [x] `YamlIssueParser` を `adapters/yaml_issue_parser.py` に実装。`PyYAML` を使用し、指定キー（デフォルト: `issues`）またはルートレベルのリストからIssueブロックを抽出。指定キーの値がリストでない場合は警告ログを出力し空リストを返却。
+      - [x] `JsonIssueParser` を `adapters/json_issue_parser.py` に実装。Python標準 `json` を使用し、指定キー（デフォルト: `issues`）またはルートレベルのリストからIssueブロックを抽出。指定キーの値がリストでない場合は警告ログを出力し空リストを返却。
+      - [x] カスタム例外 `ParsingError` を `domain/exceptions.py` に追加し、YAML/JSONパーサーのパースエラー時に送出。
+      - [x] 各パーサーのユニットテストを `tests/adapters/` 配下に実装・改善。テストケースは単一/複数Issue、区切り文字、空ファイル、不正フォーマット、キー/値の型チェックなどをカバー。
+      - [x] テストコード内の `sys.path` 操作を削除し、標準的なインポート方法に修正。
+    milestone: "M2"
     labels:
       - "type:technical-task"
       - "epic:data-parsing"
       - "layer:adapter-input-parser"
       - "layer:infrastructure"
-      - "TDD"
-      - "priority:high"
-    assignees: []
-    referenced_requirements_ids: ["FR-Parse-001"]
-    dependencies_guessed: []
-    size_guessed: "[SP: 8]"
-
+    referenced_requirements:
+      - FR-Parse-001
+    implementation_tasks:
+      - "[x] `AbstractIssueFileParser`（共通インターフェース）、`RawIssueBlock`、`IntermediateParsingResult`（型エイリアス）を`adapters/issue_file_parser_base.py`に定義"
+      - "[x] `MarkdownIssueParser` を `adapters/markdown_issue_parser.py` に実装。コンストラクタで区切り文字の正規表現パターン (`delimiter_pattern`) を受け付け、デフォルトは行頭の `---`。`re.split` を使用。"
+      - "[x] `YamlIssueParser` を `adapters/yaml_issue_parser.py` に実装。`PyYAML` を使用し、指定キー（デフォルト: `issues`）またはルートレベルのリストからIssueブロックを抽出。指定キーの値がリストでない場合は警告ログを出力し空リストを返却。"
+      - "[x] `JsonIssueParser` を `adapters/json_issue_parser.py` に実装。Python標準 `json` を使用し、指定キー（デフォルト: `issues`）またはルートレベルのリストからIssueブロックを抽出。指定キーの値がリストでない場合は警告ログを出力し空リストを返却。"
+      - "[x] カスタム例外 `ParsingError` を `domain/exceptions.py` に追加し、YAML/JSONパーサーのパースエラー時に送出。"
+      - "[x] 各パーサーのユニットテストを `tests/adapters/` 配下に実装・改善。テストケースは単一/複数Issue、区切り文字、空ファイル、不正フォーマット、キー/値の型チェックなどをカバー。"
+      - "[x] テストコード内の `sys.path` 操作を削除し、標準的なインポート方法に修正。"
+    action_verification: "各形式のサンプルファイルを用意し、パーサーが正しくIssueの塊を分離できることをユニットテストで検証済み。関連テストは全てパス。"
+    design_highlights:
+      - "クリーンアーキテクチャ: 各パーサーを`adapters`レイヤーに配置し、責務を明確化。具象パーサークラスを個別のファイルに分離し、保守性を向上。"
+      - "共通インターフェース: `AbstractIssueFileParser` を導入し、パーサーのポリモーフィックな利用を可能に。"
+      - "エラーハンドリング: 専用のカスタム例外 `ParsingError` を定義し、ファイル形式固有のエラーを抽象化。YAML/JSONパーサーでは、`issues_key` の値が期待する型でない場合に警告ログを出力し、安全に空リストを返すことで堅牢性を向上。"
+      - "柔軟性と拡張性: `MarkdownIssueParser` は区切り文字パターンを外部から指定可能にし、YAML/JSONパーサーも `issues_key` を外部指定可能とすることで、多様なファイル形式への対応力を確保。"
+      - "TDD: 各パーサーのロジックはTDDアプローチで開発・改善し、テストカバレッジと信頼性を確保。"
+    future_considerations:
+      - "パーサーファクトリの導入: ファイル拡張子に基づいて適切なパーサーインスタンスを生成するファクトリを実装することで、利用側のコードを簡潔にし、設定の集中管理を可能にする。"
+      - "`config.yaml` との連携強化: `MarkdownIssueParser` の `delimiter_pattern` や、YAML/JSONパーサーの `issues_key`（および候補キーリスト）を `config.yaml` から動的に読み込む仕組みを導入する。"
+      - "`AIParser` との連携: 本パーサーが出力する `IntermediateParsingResult` を `AIParser` がスムーズに処理できるよう、インターフェース調整またはラッパー処理の実装が必要。"
+    known_limitations:
+      - "Markdownパーサーのデフォルト区切り文字は行頭の `---` のみ。他の一般的な区切り（例: 特定ヘッダー）は、呼び出し側で `delimiter_pattern` を指定する必要がある。"
   - title: "[TechnicalTask] AI支援データマッピングロジックの設計と実装 (TASK-DATAMAP-IMPL)"
     body: |
       **Content:**
