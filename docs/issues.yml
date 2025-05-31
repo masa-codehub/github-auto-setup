@@ -495,34 +495,44 @@ issues:
   - title: "[TechnicalTask] Web UI: ファイルアップロード機能実装 (TASK-WEBUI-FILEUPLOAD)"
     body: |
       **Content:**
-      DjangoとBootstrap5を使用し、Web UIにIssue情報ファイル（単一または複数ファイル、`.md`, `.yml`, `.json`）をアップロードする機能を実装する。
+      DjangoとBootstrap5を使用し、Web UIにIssue情報ファイル（単一ファイル限定: `.md`, `.yml`, `.yaml`, `.json`）をアップロードする機能を実装する。
       アップロードされたファイルはバックエンドの処理（パーシング、マッピング）に渡せるようにする。
 
-      **Implementation Tasks:**
-      - **Djangoバックエンド:**
-        - [ ] ファイルアップロードを受け付けるDjangoフォーム (`forms.py`) とビュー (`views.py`) を作成
-        - [ ] アップロードされたファイルを一時的に保存するか、メモリ上で処理するロジックを実装
-        - [ ] ファイル形式（拡張子）のチェックと、許可された形式以外のファイルに対するエラーハンドリング
-      - **Djangoフロントエンド (Templates + Bootstrap5):**
-        - [ ] ファイル選択フィールド（`<input type="file">`）と送信ボタンを持つHTMLフォームをDjangoテンプレートで作成
-        - [ ] Bootstrap5のスタイルを適用し、ユーザーフレンドリーな見た目にする
-        - [ ] アップロード処理中や完了後のフィードバックメッセージ表示エリアを確保
-      - **テスト:**
-        - [ ] （TDD）ファイルアップロードビューのユニットテスト（正常なアップロード、不正なファイル形式、ファイルなしでの送信など）
-        - [ ] 複数のファイルを一度にアップロードできることのテスト
-
-      **Action/Verification:**
-      UIからファイルをアップロードし、バックエンドの指定の場所にファイルが保存される（またはメモリ上で処理される）ことを確認。
-    milestone: "M1" # M1: Web UI基礎とファイル処理基盤
+    milestone: "M1"
     labels:
       - "type:technical-task"
       - "epic:webui-core"
       - "layer:adapter-ui"
       - "priority:high"
+      - "status:done"
     assignees: []
+    resolution_date: "2025-05-31"
     referenced_requirements_ids: ["FR-File-001"]
     dependencies_guessed: ["TASK-DJANGO-SETUP"]
     size_guessed: "[SP: 3]"
+    implementation_tasks:
+      - "**Djangoバックエンド:**"
+      - "[x] `webapp/app/forms.py` に `FileUploadForm` を作成し、許可された拡張子 (`.md`, `.yml`, `.yaml`, `.json`) とファイルサイズ上限 (10MB) のバリデーションを実装。"
+      - "[x] `webapp/app/views.py` の `top_page` ビューに、POSTリクエストでアップロードされたファイルを受け付け、`FileUploadForm` で検証するロジックを実装。"
+      - "[x] `top_page` ビューにて、検証成功時にファイル内容をUTF-8でデコードし、ファイル名と共にセッションに一時格納するロジックを実装。その後、同一ページへリダイレクト。"
+      - "[x] `top_page` ビューにて、リダイレクト後のGETリクエスト時にセッションからファイル情報を取得・クリアし、後続処理で利用可能にする準備を実装。"
+      - "[x] `top_page` ビューにて、ファイル形式エラー、サイズ超過エラー、ファイル読み込み時の`UnicodeDecodeError`を捕捉し、Djangoメッセージフレームワークを通じてユーザーにエラー通知する処理を実装。"
+      - "**Djangoフロントエンド (Templates + Bootstrap5):**"
+      - "[x] `webapp/templates/top_page.html` に、`<input type='file'>` を含むファイルアップロードフォーム (`id='upload-form'`) と送信ボタンをBootstrap5スタイルで実装。"
+      - "[x] `webapp/templates/top_page.html` の `id='result-notification-area'` に、Djangoメッセージフレームワークからの成功・エラーメッセージをBootstrap5のアラートコンポーネントを用いて表示する機能を追加。"
+      - "**テスト (`webapp/app/tests.py`):**"
+      - "[x] `FileUploadFormTests`: ファイル未選択、不正拡張子、許可拡張子、サイズ上限・超過時のフォームバリデーションに関する単体テストを実装。"
+      - "[x] `TopPageViewUploadTests`: 正常なファイルアップロード（リダイレクト、成功メッセージ、セッションクリア検証含む）、不正拡張子・未選択・サイズ超過・デコード不可ファイルアップロード時のビューの挙動を検証するテストを実装・修正。"
+    design_highlights:
+      - "ファイルバリデーションはDjangoフォーム (`FileUploadForm`) の責務とし、ビュー (`top_page`) はフォームの有効性を信頼する形とした (CA: Adapter-UI内の責務分離)。"
+      - "アップロードされたファイルデータは、一時的にサーバーサイドセッションに格納する方式を採用。ファイルサイズ上限(10MB)を考慮し、現時点では許容範囲と判断。大規模ファイル対応が必要な場合は、一時ファイルストレージへの保存などを検討する必要がある (将来的な考慮点)。"
+      - "ユーザーへのフィードバックはDjango標準のメッセージフレームワークを利用し、テンプレート側でBootstrap5のアラートとして表示することで、UIとバックエンドの疎結合を保った。"
+    future_considerations:
+      - "複数ファイルアップロード: 現在は単一のIssue定義ファイルのみ対応。本ツールが生成した構造化Issueファイルフォルダ（例: `./output_issues/` 配下）をzipファイル等で一括アップロードし、再読み込みする機能は将来的な拡張機能として別途検討する（今回のスコープ外と決定）。"
+      - "非同期アップロード: 大容量ファイルのアップロードや、よりスムーズなUXのため、JavaScriptを用いた非同期ファイルアップロード（プログレスバー表示など）の導入検討。"
+      - "セッション管理: より大規模なアプリケーションになった場合、セッションストレージの負荷やセキュリティについて詳細な検討が必要となる可能性。"
+    known_limitations:
+      - "現時点では、アップロードされたファイルの内容に対する詳細なセキュリティスキャン（マルウェアチェック等）は実装されていない。"
 
   - title: "[TechnicalTask] Web UI: Issue一覧表示と選択機能の実装 (TASK-WEBUI-ISSUE-DISPLAY)"
     body: |
@@ -849,6 +859,3 @@ issues:
       - Issue一覧での詳細表示機能（アコーディオンUI）
       - AI設定UI（プロバイダー選択、モデル名ドロップダウン、APIキー入力）
       - レイアウト調整（ウェルカムメッセージ全幅化、セクション順序変更）
-
-# GitHub Automation Tool - Decomposed Sub-Issues for TASK-DJANGO-SETUP
-# Version 2.3 - Based on previous task breakdown.

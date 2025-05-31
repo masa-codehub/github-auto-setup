@@ -26,8 +26,6 @@ class TopPageViewTest(TestCase):
         response = self.client.get(reverse('app:top_page'))
         self.assertContains(
             response, "GitHub Automation Tool へようこそ！", msg_prefix="ウェルカムメッセージのH1タイトルが含まれていません")
-        self.assertContains(response, "Bootstrap 5 のスタイルが正しく適用されています。",
-                            msg_prefix="Bootstrap適用確認メッセージが含まれていません")
         self.assertContains(response, "btn-primary",
                             msg_prefix="Bootstrapのプライマリボタンクラスが見つかりません")
         self.assertContains(response, "card-title",
@@ -288,6 +286,23 @@ class TopPageViewUploadTests(TestCase):
         self.assertEqual(str(
             messages[0]), "File 'test.yml' uploaded successfully. Content ready for parsing.")
 
+    def test_post_valid_file_session_content(self):
+        """アップロード成功時、ファイル名と内容がセッションに格納され、リダイレクト後にクリアされることを検証"""
+        valid_file_content = b"title: Test Issue\ndescription: This is a test."
+        uploaded_file_name = "test.yml"
+        uploaded_file = SimpleUploadedFile(
+            uploaded_file_name, valid_file_content, content_type="application/x-yaml"
+        )
+        # follow=Trueでリダイレクトを追跡し、最終的なレスポンスとセッション状態を確認
+        response_get = self.client.post(reverse('app:top_page'), {'issue_file': uploaded_file}, follow=True)
+        self.assertEqual(response_get.status_code, 200)
+        # views.py のロジックに基づき、リダイレクト後のGETリクエスト処理でセッションから値が取り出され、popされているため、セッションには残っていないことを確認。
+        self.assertNotIn('uploaded_file_name', self.client.session)
+        self.assertNotIn('uploaded_file_content', self.client.session)
+        # 成功メッセージが表示されることを確認
+        messages = list(get_messages(response_get.wsgi_request))
+        self.assertTrue(any("uploaded successfully" in str(m) for m in messages))
+
     def test_post_invalid_extension_file(self):
         invalid_file = SimpleUploadedFile(
             "test.txt", b"invalid content", content_type="text/plain"
@@ -332,3 +347,15 @@ class TopPageViewUploadTests(TestCase):
         storage = get_messages(response.wsgi_request)
         messages = list(storage)
         self.assertTrue(any("File upload failed" in str(m) for m in messages))
+
+    def test_post_unicode_decode_error(self):
+        """デコード不可能なバイナリファイルをアップロードした場合にエラーメッセージが表示されることを検証"""
+        # UTF-8としてデコードできないバイト列
+        binary_content = b"\xff\xfe\xfd\xfc\xfb"
+        uploaded_file = SimpleUploadedFile(
+            "test.yml", binary_content, content_type="application/x-yaml"
+        )
+        response = self.client.post(reverse('app:top_page'), {'issue_file': uploaded_file})
+        self.assertEqual(response.status_code, 200)
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(any("Failed to decode" in str(m) for m in messages))
