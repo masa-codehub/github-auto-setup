@@ -70,3 +70,8 @@ class AiParserError(Exception):
 # class PromptTemplateError(AiParserError):
 #      """プロンプトテンプレートの生成やバリデーションでエラーが発生した場合"""
 #      pass
+
+
+class ParsingError(Exception):
+    """ファイル内容の解析中に発生したエラー"""
+    pass
