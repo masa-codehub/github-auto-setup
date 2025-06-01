@@ -180,6 +180,12 @@ def load_settings(config_file: Path = Path("config.yaml")) -> Settings:
         # validation_alias を使っているので、環境変数名は Pydantic が処理
         settings = Settings(**init_data)
 
+        # --- GitHub PATの空文字チェック ---
+        pat_value = settings.github_pat.get_secret_value()
+        if not pat_value or not pat_value.strip():
+            logger.error("GITHUB_PAT is loaded but its value is empty.")
+            raise ValueError("GITHUB_PAT cannot be empty.")
+
         # --- Log loaded settings (masking secrets) ---
         logger.info("Settings loaded successfully.")
         logger.debug(f"AI Model Env : {settings.ai_model}")

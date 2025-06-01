@@ -7,6 +7,9 @@ class GitHubClientError(Exception):
         self.original_exception = original_exception
         super().__init__(message)
 
+    def __str__(self):
+        return str(self.message)
+
 
 class GitHubAuthenticationError(GitHubClientError):
     """認証失敗または権限不足エラー"""

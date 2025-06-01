@@ -5,12 +5,13 @@ import logging
 import sys
 from typing_extensions import Annotated
 from pathlib import Path
+from githubkit import GitHub
 
 # TODO: Consider making the project installable (pip install -e .)
 # or using PYTHONPATH environment variable for more robust module resolution.
 # This sys.path manipulation is for convenience in this specific test script.
 # Add webapp/core_logic to path if needed
-sys.path.insert(0, str(Path(__file__).parent.parent / 'webapp' / 'core_logic'))
+# sys.path.insert(0, str(Path(__file__).parent.parent / 'webapp' / 'core_logic'))
 
 try:
     from github_automation_tool.infrastructure.config import load_settings, Settings
@@ -66,7 +67,8 @@ def main():
     github_client: GitHubAppClient | None = None
     try:
         logger.info("Initializing GitHubAppClient...")
-        github_client = GitHubAppClient(auth_token=settings.github_pat)
+        github_instance = GitHub(settings.github_pat.get_secret_value())
+        github_client = GitHubAppClient(github_instance)
         logger.info("GitHubAppClient initialized successfully.")
     except GitHubAuthenticationError as e:
         logger.error(f"Authentication error during client initialization: {e}")
@@ -157,6 +159,7 @@ def main():
                     print(
                         f"ERROR: PAT is missing required scope(s): {missing_scopes}. Required: {required_scopes}", file=sys.stderr)
                     all_checks_passed = False
+                    raise typer.Exit(code=1)  # 明示的にエラー終了
                 else:
                     logger.info("Required scopes (repo, project) are present.")
 

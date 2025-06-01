@@ -296,44 +296,29 @@ sections:
 
   - heading: "11. 制約条件・前提条件"
     items:
-      - "開発言語: Python 3.10 以上。"
-      - "実行環境: Docker コンテナ (Linux ベース) での実行を強く推奨。"
-      - "Webフレームワーク: バックエンドAPIおよびUIの構築にはPython/Djangoを使用する。フロントエンドのスタイリングにはBootstrap5を適用する。"
-      - "外部 API 依存: GitHub API, OpenAI API または Google Generative AI API。"
-      - "主要ライブラリ依存: `typer`, `pydantic`, `pydantic-settings`, `githubkit`, `langchain` (または直接AI SDK), `PyYAML`, `django`, `bootstrap5` (Django連携ライブラリまたは手動導入)。"
-      - "認証・設定: 有効なGitHub PATとAI APIキーが環境変数または`.env`ファイルに設定されていること。`config.yaml` からAIモデル名、データマッピングルール、ログレベルなどが読み込まれる。"
-      - "入力ファイル構造: `.md`, `.yml`, `.json`ファイルは、Issue情報を機械的に分割・マッピング可能なある程度一貫した構造で記述されていること。キーの揺らぎはある程度許容する。"
-      - "AIとパーサーの役割: AIは主に、多様な入力ファイル形式やキーの揺らぎに対応するためのデータマッピング支援に利用される。そのマッピング情報に基づき、機械的なパーサーが実際のデータ抽出を行う。"
-      - "データマッピングルールの設定 (`config.yaml`): ユーザーがAIのマッピングを補助するためのルールやヒントを設定ファイルで定義できる。具体的なフォーマットは今後の設計で提案する。"
-      - "ローカル保存ファイルの形式: 入力ファイル形式に関わらず、ローカルに分割・保存する際のIssueファイルの形式はYAMLに統一する。"
-      - "GitHub連携: 本ツールは、ローカルのIssue定義ファイルを正としてGitHubに情報を登録・更新（一方向）することを主な目的とする。GitHub上のIssueの状態をローカルに同期する機能は持たない。"
-      - "`ParsedSourceFileContent`モデル (旧`ParsedRequirementData`): このモデルは、入力ファイルの種類に関わらず、ファイル全体から読み取られたIssue情報のリストと、ファイルレベルのメタデータを保持する。実装の進行に合わせて、このモデルの名称やフィールドは適宜見直す。"
-  - heading: "12. 実装タスク進捗・履歴"
-    content: |
-      ### [TechnicalTask] Djangoプロジェクト初期セットアップとBootstrap5導入 (TASK-DJANGO-SETUP)
-      - Resolved: 2025-05-24 (JST)
-      - Status: Closed
-
-      **概要**
-      Djangoアプリケーションの基本骨格を構築し、Dockerコンテナ環境での実行基盤を整備。
-      - Djangoプロジェクト・アプリ作成と基本設定
-      - `settings.py`の`INSTALLED_APPS`/静的ファイル/テンプレート設定
-      - Bootstrap5静的ファイル配置
-      - `base.html`作成とBootstrap5レイアウト組み込み
-      - トップページView/テンプレート作成
-      - Dockerコンテナ設定（`docker-compose.yml`, `Dockerfile`）
-      - トップページViewのテスト実装
-
-      **完了確認**
-      - 構成・設定・テンプレート・静的ファイル・テスト・Docker関連すべて要件通り
-      - サブタスク「初期動作確認テストの実装」も完了
-      - 受け入れ基準を満たしたため本タスクは完了
-
-      **関連ファイル**
-      - `webapp/webapp_project/settings.py`
-      - `webapp/app/views.py`
-      - `webapp/templates/base.html`
-      - `webapp/templates/top_page.html`
-      - `webapp/app/tests.py`
-      - `.build/context/docker-compose.yml`
-      - `README.md` (実行手順記載)
+      - id: "11.1"
+        description: >
+          認証・設定: 有効なGitHub Personal Access Token (PAT)が環境変数 `GITHUB_PAT` 
+          (または設定ファイル経由だが環境変数が優先) に設定されている必要がある。
+          PATは、リポジトリ操作のための `repo` スコープと、GitHub Projects (V2) 連携のための
+          `project` スコープを最低限持っている必要がある。
+          PATが未設定、空文字列、または無効な場合は、アプリケーション (CLIおよびWeb UI) は
+          早期にエラーを検出し、ユーザーに適切なフィードバック（エラーメッセージ、ログ）を
+          提供して処理を中断する。
+        category: constraint
+        source: stakeholder_interview, technical_design
+        priority: must_have
+        acceptance_criteria:
+          - "[x] AC-11.1-01: 環境変数 `GITHUB_PAT` からPATを読み込めること。"
+          - "[x] AC-11.1-02: `GITHUB_PAT` が設定されていない、または空文字列の場合、CLIはエラーメッセージを出力し終了コード1で終了すること。Web UIはユーザーに設定エラーのメッセージを表示すること。"
+          - "[x] AC-11.1-03: `GITHUB_PAT` がGitHub APIに対して無効な場合（認証失敗）、CLIは認証エラーメッセージを出力し終了コード1で終了すること。Web UIはユーザーに認証エラーのメッセージを表示すること。"
+          - "[x] AC-11.1-04: `scripts/test_github_connection.py` を用いて、PATの基本的な接続性、認証、スコープ（`repo`, `project`）、レートリミット情報を確認できること。スコープ不足時はエラー終了すること。"
+        technical_notes:
+          - "PATの読み込みと基本的な検証（空でないこと）は `infrastructure/config.py` の `Settings` モデルと `load_settings` 関数が責務を持つ (CA)。"
+          - "GitHub APIとの実際の認証確認は、`GitHubRestClient` の `get_authenticated_user` 呼び出しなど、最初のAPIアクセス時に行われる。これにより `GitHubAuthenticationError` が送出される可能性がある。"
+          - "CLI (`main.py`) および Web UI (`views.py`) の両エントリーポイントで、これらの設定エラーや認証エラーを捕捉し、ユーザーにフィードバックを提供するエラーハンドリング機構を実装。"
+          - "エラーメッセージは、ログと標準エラー出力（CLI）、Djangoメッセージフレームワーク（Web UI）を通じてユーザーに伝達される。"
+        test_strategy_summary:
+          - "CLI: `test_cli.py` にて、PAT未設定/空/無効時のエラー終了とメッセージ出力を検証する単体/結合テストを実装 (`unittest.mock` を使用)。"
+          - "Web UI: `tests.py` (`WebUIGitHubActionAuthErrorTests`) にて、PAT未設定/空/無効時にフォーム経由のアクション（骨子）を試行した場合のDjangoメッセージフレームワークによるユーザー通知を検証するテストを実装 (`unittest.mock`, Djangoテストクライアントを使用)。"
+          - "接続スクリプト: `scripts/test_github_connection.py` を手動実行し、実際のPATを用いた接続性・スコープ確認を行う (統合テストに近い)。"

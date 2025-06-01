@@ -23,6 +23,7 @@ django                  #
 pip-tools               # requirements.in から requirements.txt を生成するツール
 pytest                  # テストフレームワーク
 pytest-cov              # pytest 用のカバレッジ測定ツール
+pytest-django           # 
 ruff                    # 高速な Linter & Formatter
 mypy                    # 静的型チェッカー
 
