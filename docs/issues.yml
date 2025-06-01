@@ -864,3 +864,149 @@ issues:
       - Issue一覧での詳細表示機能（アコーディオンUI）
       - AI設定UI（プロバイダー選択、モデル名ドロップダウン、APIキー入力）
       - レイアウト調整（ウェルカムメッセージ全幅化、セクション順序変更）
+      
+  - title: "[TechnicalTask][Adapter-UI] Issue一覧表示のためのDjangoビューロジック改修 (TASK-WEBUI-ISSUE-DISPLAY-VIEW)"
+    description: |
+      メインIssue `TASK-WEBUI-ISSUE-DISPLAY` の一部として、`webapp/app/views.py` の `top_page` ビューを改修し、アップロード・解析されたIssue情報 (`List[IssueData]`) を取得してテンプレートコンテキストに正しく渡す機能を実装する。
+      セッションからのファイル情報取得、`core_logic` の `IssueProcessingService` (またはそれに類するファイル解析・マッピングサービス) の呼び出し、エラーハンドリング、結果のコンテキスト設定を含む。
+    implementation_tasks:
+      - "[ ] (CA) `core_logic` 内に、アップロードされたファイルの内容 (`file_name`, `file_content`) を受け取り、初期パースとAIパースを経て `List[IssueData]` を返す `IssueProcessingService.process_uploaded_file` メソッドを実装する (または既存のものを利用する)。"
+      - "[ ] (TDD) `IssueProcessingService` に対する単体テストを作成・実行する。"
+      - "[ ]     - 各ファイル形式 (`.md`, `.yml`, `.json`) の正常な解析ケース。"
+      - "[ ]     - 不正なファイル形式、空のファイル、AIパーサーがエラーを返すケースなどの異常系。"
+      - "[ ]     - 初期パーサー、AIパーサーはモック化する。"
+      - "[ ] (CA) Djangoアプリケーション起動時に `core_logic` の `Settings` をロードし、`django.conf.settings` 経由でビューからアクセスできるようにする (例: `django.conf.settings.CORE_LOGIC_SETTINGS`)。"
+      - "[ ] (CA) `webapp/app/views.py` の `top_page` ビューを修正:"
+      - "[ ]     - セッションから `uploaded_file_name` と `uploaded_file_content` を取得する。"
+      - "[ ]     - 取得したファイル情報を使って、`IssueProcessingService.process_uploaded_file` を呼び出す。"
+      - "[ ]     - サービスからの戻り値 (`List[IssueData]`) とIssue件数をテンプレートコンテキスト (`issue_list`, `issue_count`) に設定する。"
+      - "[ ]     - サービスが例外を送出した場合、Djangoメッセージフレームワークを使ってユーザーにエラーを通知し、コンテキストの `issue_list` は空にする。"
+      - "[ ]     - ファイル表示後はセッションからファイル情報をクリアする。"
+      - "[ ] (TDD) `webapp/app/tests.py` の `IssueListViewTests` (または同様のテストクラス) を修正・拡充:"
+      - "[ ]     - `IssueProcessingService.process_uploaded_file` をモック化する。"
+      - "[ ]     - モックが正常な `List[IssueData]` (0件、1件、複数件) を返した場合に、ビューが正しいコンテキスト (`issue_list`, `issue_count`) をテンプレートに渡すことを検証するテストを作成・実行する。"
+      - "[ ]     - モックが例外 (`ParsingError`, `AiParserError` など) を送出した場合に、ビューがエラーメッセージをセットし、`issue_list` が空になることを検証するテストを作成・実行する。"
+    acceptance_criteria:
+      - "`IssueProcessingService.process_uploaded_file` をモックしたビューの単体テストがすべて成功すること。"
+      - "ビューが、ファイルアップロード・解析後の `List[IssueData]` をテンプレートへ正しく渡せること。"
+      - "ファイル解析エラー時に、ユーザーに適切なエラーメッセージが表示され、Issueリストが安全に空として扱われること。"
+    related_requirements: "FR-Display-001"
+    main_issue: "TASK-WEBUI-ISSUE-DISPLAY"
+    dependencies:
+      - "US-001 (ファイル解析・マッピングロジックの実装)"
+      - "TASK-CORELOGIC-PACKAGING (core_logicの安定したインポートのため)"
+    milestone: "M1: Web UI基礎とファイル処理基盤"
+    labels:
+      - "type:technical-task"
+      - "layer:adapter-ui"
+      - "layer:usecase" # IssueProcessingService
+      - "TDD"
+      - "CleanArchitecture"
+      - "epic:webui-core"
+      - "epic:data-parsing"
+    size_estimate: "[SP: 3]"
+    status: "status:todo"
+
+  - title: "[TechnicalTask][Adapter-UI] Issue一覧と詳細表示のテンプレート実装 (TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE)"
+    description: |
+      メインIssue `TASK-WEBUI-ISSUE-DISPLAY` の一部として、`webapp/templates/top_page.html` を改修し、ビューから渡された `issue_list` と `issue_count` を使って、Issue情報の一覧と各Issueの詳細情報（アコーディオン形式）を動的にレンダリングする。
+      各Issue行には、選択用のチェックボックス (`value`属性に `issue.temp_id` を使用) を配置する。
+    implementation_tasks:
+      - "[ ] `webapp/templates/top_page.html` の `id=\"issue-list-section\"` 内のテーブル (`id=\"issue-table\"`) を修正:"
+      - "[ ]     - `<tbody>` 内で `{% for issue in issue_list %}` ループを使用し、各 `issue` オブジェクトの情報を表示する。"
+      - "[ ]     - **表示項目:**"
+      - "[ ]         - チェックボックス: `<input type=\"checkbox\" class=\"form-check-input issue-checkbox\" value=\"{{ issue.temp_id }}\" onclick=\"event.stopPropagation();\">` を配置。"
+      - "[ ]         - タイトル: `{{ issue.title }}` を表示し、アコーディオンのトリガー (`data-bs-target=\"#issueDetail{{ forloop.counter0 }}\"`) と詳細表示コンテナのID (`id=\"issueDetail{{ forloop.counter0 }}\"`) を動的に設定する。"
+      - "[ ]         - 担当者: `{{ issue.assignees|join:\", \" }}` (存在する場合のみ)。"
+      - "[ ]         - ラベル: `{% for l in issue.labels %}<span class=\"badge bg-secondary\">{{ l }}</span> {% endfor %}` (存在する場合のみ)。"
+      - "[ ]     - アコーディオン (`<div class=\"collapse\" id=\"issueDetail{{ forloop.counter0 }}\">`) 内に、`issue.description` (改行を`<br>`に変換)、`issue.tasks` (リスト表示)、`issue.acceptance` (リスト表示) などの詳細情報を表示する。"
+      - "[ ] `id=\"issue-count-indicator\"` のテキストを `{{ issue_count }} issues found.` のように動的に更新する。"
+      - "[ ] Issueリストが空の場合 (`{% empty %}` タグを使用) は、テーブルボディに「No issues to display.」のようなメッセージを表示する。"
+      - "[ ] (TDD) `webapp/app/tests.py` の `IssueListViewTests` で、ビューテストのアサーションを強化:"
+      - "[ ]     - モックデータに基づいて、レンダリングされたHTML内に、期待される数のテーブル行 (`<tr>`)、チェックボックス、タイトル、担当者、ラベル、アコーディオン用IDが含まれていることを `assertContains` で検証する。"
+      - "[ ]     - チェックボックスの `value` 属性が、対応する `IssueData` の `temp_id` と一致することを検証する。"
+    acceptance_criteria:
+      - "ビューから渡された `issue_list` の内容（0件、1件、複数件）に応じて、HTMLテーブルが正しく動的に生成されること。"
+      - "各Issueの情報（タイトル、担当者、ラベル、詳細）がテンプレートに正しく表示されること。"
+      - "各Issue行に、`temp_id` を `value` に持つチェックボックスが配置されること。"
+      - "アコーディオンの開閉が各Issueに対して独立して機能すること。"
+      - "関連するDjango Viewテストがすべて成功すること。"
+    related_requirements: "FR-Display-001"
+    main_issue: "TASK-WEBUI-ISSUE-DISPLAY"
+    dependencies:
+      - "TASK-WEBUI-ISSUE-DISPLAY-VIEW"
+      - "IssueData モデルに temp_id が実装されていること"
+    milestone: "M1: Web UI基礎とファイル処理基盤"
+    labels:
+      - "type:technical-task"
+      - "layer:adapter-ui"
+      - "TDD"
+      - "epic:webui-core"
+    size_estimate: "[SP: 2]"
+    status: "status:todo"
+
+  - title: "[TechnicalTask][Adapter-UI] Issue選択機能のJavaScript実装 (TASK-WEBUI-ISSUE-DISPLAY-JS)"
+    description: |
+      メインIssue `TASK-WEBUI-ISSUE-DISPLAY` の一部として、クライアントサイドJavaScript (`webapp/static/js/issue_selection.js`) を実装し、Issue一覧のチェックボックスに対する全選択、全解除、および個別選択に応じたヘッダーチェックボックスの連動機能を提供する。
+      選択されたIssueのID (`temp_id`) は、アクションフォーム内の隠しフィールド (`id=\"selected-issue-ids-input\"`) にカンマ区切りで保持する。
+    implementation_tasks:
+      - "[ ] `webapp/static/js/issue_selection.js` を新規作成する。"
+      - "[ ] `webapp/templates/base.html` の `extra_scripts` ブロックで `issue_selection.js` を読み込むように修正する。"
+      - "[ ] `webapp/templates/top_page.html` のアクションフォーム (`id=\"action-form\"`) 内に、選択されたIssue IDを保持するための隠し入力フィールド `<input type=\"hidden\" name=\"selected_issue_ids\" id=\"selected-issue-ids-input\">` を追加する。"
+      - "[ ] JavaScriptで以下の機能を実装する:"
+      - "[ ]     - ヘッダーチェックボックス (`#select-all-header-checkbox`) の `change` イベントで、全ての個別Issueチェックボックス (`.issue-checkbox`) の状態を同期させる。"
+      - "[ ]     - 「Select All」ボタン (`#select-all-button`) の `click` イベントで、全てのIssueチェックボックスとヘッダーチェックボックスをオンにする。"
+      - "[ ]     - 「Deselect All」ボタン (`#deselect-all-button`) の `click` イベントで、全てのIssueチェックボックスとヘッダーチェックボックスをオフにする。"
+      - "[ ]     - 個別のIssueチェックボックスの `change` イベントで、ヘッダーチェックボックスの状態を更新する（全て選択されていればオン、そうでなければオフ）。"
+      - "[ ]     - いずれかのチェックボックスの状態が変更された際に、選択されている全てのIssueチェックボックスの `value` (`temp_id`) を収集し、カンマ区切りの文字列として `#selected-issue-ids-input` の値を更新する `updateSelectedIssueIds()` 関数を実装し、適切に呼び出す。"
+      - "[ ] (TDD/E2E) `webapp/app/tests.py` でE2Eテスト（例: SeleniumやPlaywright、または手動テストケース）を準備し、以下の動作を検証する。"
+      - "[ ]     - 全選択/解除ボタン、ヘッダーチェックボックス、個別チェックボックスのインタラクションが期待通りであること。"
+      - "[ ]     - `#selected-issue-ids-input` の値が、選択状態に応じて正しく更新されること。"
+      - "[ ] (任意だが推奨) JavaScriptの主要な選択ロジックに対して単体テストを実装する（例: Jest, QUnit）。"
+    acceptance_criteria:
+      - "UI上の「すべて選択」「すべて解除」ボタン、およびテーブルヘッダーのチェックボックスが、一覧のIssueチェックボックスと正しく連動して動作すること。"
+      - "個別のIssueチェックボックスの選択状態に応じて、「すべて選択」チェックボックスの状態が適切に更新されること。"
+      - "選択されたIssueの `temp_id` が、`selected-issue-ids-input` というIDを持つ隠しフィールドにカンマ区切りで格納されること。"
+      - "E2Eテストまたは手動テストで、上記のUI操作とデータ保持が確認できること。"
+    related_requirements: "FR-Select-001"
+    main_issue: "TASK-WEBUI-ISSUE-DISPLAY"
+    dependencies:
+      - "TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE" # HTML構造が確定していること
+    milestone: "M1: Web UI基礎とファイル処理基盤"
+    labels:
+      - "type:technical-task"
+      - "layer:adapter-ui"
+      - "TDD" # E2E/手動
+      - "epic:webui-core"
+    size_estimate: "[SP: 2]"
+    status: "status:todo"
+
+  - title: "[Chore] Pythonパス解決の安定化とインポートパス整理 (TASK-CORELOGIC-IMPORT-FIX)" # タイトルは前回提案のものを維持
+    description: |
+      `webapp/app/` および `webapp/core_logic/` 配下のPythonモジュール間で安定したインポートを実現し、`PYTHONPATH` 環境変数への明示的な依存を解消する。
+      プロジェクトルートから `pytest` コマンド単独で、Djangoアプリテストと `core_logic` テストの両方を実行できるようにし、開発体験を向上させる。
+      このタスクでは、`core_logic` を独立したインストール可能パッケージとせず、`webapp` ディレクトリ構造内の一部として扱い、プロジェクトルートの `pyproject.toml` の `pythonpath` 設定でモジュール解決を行う。
+    implementation_tasks:
+      - "[ ] `webapp/core_logic/github_automation_tool/` がPythonパッケージとして正しく認識されるように、各ディレクトリに `__init__.py` ファイルが存在することを確認する（必要であれば作成）。" # `github_automation_tool` をトップレベルのパッケージ名として参照する場合
+      - "[ ] `webapp/app/views.py` および `webapp/app/tests.py` 内の `core_logic` 関連モジュールへのインポート文を、`from core_logic.github_automation_tool.domain.models import IssueData` のような、`webapp` ディレクトリを基準とした絶対パス形式（または適切に解決される相対パス）に統一する。"
+      - "[ ] `webapp/core_logic/tests/` 配下の全てのテストファイルから `sys.path.insert` の記述を削除する。"
+      - "[ ] `webapp/core_logic/tests/` 配下のインポート文を、`from ..adapters.markdown_issue_parser import ...` (推奨される相対パス) または `from github_automation_tool.adapters.markdown_issue_parser import ...` (絶対パス、`webapp/core_logic` が `pythonpath` に追加されている場合) の形式に統一し、動作確認する。"
+      - "[ ] プロジェクトルート (`masa-codehub/github-auto-setup/`) の `pyproject.toml` の `[tool.pytest.ini_options]` を以下のように設定または確認する:"
+      - "[ ]   - `DJANGO_SETTINGS_MODULE = \"webapp_project.settings\"` が設定されていること。" # settings.py は Django 設定の主要ファイル
+      - "[ ]   - `pythonpath` に `\"webapp\"` および `\"webapp/core_logic\"` (または `\".\"` でプロジェクトルートを指定し、`core_logic` がその下の `github_automation_tool` として認識されるようにする) を含めるように設定し、pytestが `webapp.app` と `github_automation_tool` パッケージの両方を検出できるようにする。最適な設定を検証し、確定する。(例: `pythonpath = [\"webapp\", \"webapp/core_logic\"]` または `pythonpath = [\".\"]` で `import github_automation_tool` が可能か確認)"
+      - "[ ] `README.md` および関連ドキュメント（テスト実行手順など）を更新し、推奨されるテスト実行コマンド（プロジェクトルートからの `pytest`）と、今回のインポートパス整理に関する背景や設定を反映する。"
+    acceptance_criteria:
+      - "`PYTHONPATH` 環境変数を設定せずに、**プロジェクトルート (`masa-codehub/github-auto-setup/`) から `pytest` コマンドを単独で実行する**ことで、`webapp/app/tests.py` 配下および `webapp/core_logic/tests/` 配下の全てのテストが正常に検出・実行され、全てパスすること。"
+      - "`webapp/app/views.py` から `github_automation_tool` パッケージ内のモジュール（例: `from github_automation_tool.domain.models import ...` や `from core_logic.github_automation_tool.domain.models import ...` など、最終的なインポート戦略に合わせた形）が、Django開発サーバー起動時およびリクエスト処理時にエラーなくインポートできること。"
+      - "Pythonコード（特にテストファイル）内から `sys.path.insert` や `sys.path.append` のようなパス操作の記述が完全に除去されていること。"
+      - "VSCodeなどのIDEで、`core_logic` 内のモジュールへのインポートエラーが表示されなくなること（プロジェクトルートの `pyproject.toml` の `pythonpath` 設定やIDEのPythonインタプリタ/ソースルート設定が適切である場合）。"
+    related_requirements: "" # 間接的にテスト実行容易性の向上、開発効率向上
+    main_issue: "" # 横断的な改善タスク
+    dependencies: []
+    milestone: "M1: Web UI基礎とファイル処理基盤" #
+    labels:
+      - "type:chore"
+      - "layer:infrastructure"
+      - "epic:infra-config" #
+    size_estimate: "[SP: 2]"
+    status: "status:todo"
