@@ -1,5 +1,12 @@
 # github-auto-setup
 
+## GitHub Personal Access Token (PAT) の準備
+このツールを使用するには、GitHub Personal Access Token (PAT) が必要です。PATには以下のスコープを付与してください:
+- `repo`: プライベートリポジトリへのアクセス、Issue作成、ラベル作成などに必要です。
+- `project`: GitHub Projects (V2) へのIssue追加に必要です。
+
+取得したPATは、環境変数 `GITHUB_PAT` に設定してください。
+
 ## ローカル開発環境での実行と確認
 
 本アプリケーションはDockerコンテナでの実行が推奨されます。
@@ -107,5 +114,18 @@ VSCodeの「Reopen in Container」機能を利用して開発コンテナを起�
 2.  **保存実行:**
     * 「**Save Issues Locally**」ボタン (`<button id="local-save-button">`) をクリックします。
     * 処理結果はページ上部の通知エリアに表示されます。
+
+## GitHub PAT接続テストスクリプトの利用方法
+
+プロジェクトルートで以下のコマンドを実行してください:
+
+```bash
+python -m scripts.test_github_connection
+```
+
+- 必要な環境変数 `GITHUB_PAT` を事前に設定してください。
+- PATには `repo` および `project` スコープが必要です。
+- スコープ不足や認証エラー時はエラーメッセージとともに終了コード1で終了します。
+- スクリプトは `githubkit` パッケージに依存します。
 
 ---

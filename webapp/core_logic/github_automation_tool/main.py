@@ -62,7 +62,10 @@ def print_error(message: str):
     テストで検証しやすいように標準化する。
     """
     logger.error(message)
-    print(f"\nERROR: {message}", file=sys.stderr)
+    import sys
+    print("DEBUG: print_error called", file=sys.stderr)
+    import typer
+    typer.echo(message, err=True)
 
 # --- Main Command ---
 @app.command()
@@ -77,39 +80,35 @@ def run(
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Simulate the process without making actual changes on GitHub.")] = False,
     version: Annotated[Optional[bool], typer.Option("--version", help="Show the application version and exit.", callback=version_callback, is_eager=True)] = None,
 ):
-    """
-    Reads a Markdown file using settings from a config file (and env vars),
-    parses it using AI, and automatically creates GitHub resources.
-    """
+    # --- 設定ロードと初期化 ---
+    try:
+        settings = load_settings(config_file=config_file)
+    except ValidationError as e:
+        msg = f"Configuration validation error(s): {e}"
+        print_error(msg)
+        raise typer.Exit(code=1)
+    except ValueError as e:
+        print_error(str(e))
+        raise typer.Exit(code=1)
+    except Exception as e:
+        print_error(f"Failed to load settings: {e}")
+        raise typer.Exit(code=1)
+
     reporter = CliReporter()
-    settings: Optional[Settings] = None # 初期化
+    # settings: Optional[Settings] = None # 初期化
 
     try:
         # --- 1. 設定読み込み ---
-        try:
-            logger.info(f"Loading settings using config file: {config_file}")
-            settings = load_settings(config_file=config_file)
+        logger.info(f"Loading settings using config file: {config_file}")
+        # settings = load_settings(config_file=config_file)
 
-            # ログレベルを設定から適用
-            log_level_name = settings.final_log_level # 最終的なログレベルを使用
-            numeric_level = getattr(logging, log_level_name, logging.INFO)
-            # ルートロガーとメインロガーの両方に設定
-            logging.getLogger().setLevel(numeric_level)
-            logger.setLevel(numeric_level)
-            logger.info(f"Log level set to: {log_level_name}") # INFOレベルで出力
-
-        except ValidationError as e:
-            # Pydantic のバリデーションエラー
-            error_message = f"Configuration validation error(s): {e}"
-            # logger はまだ WARNING かもしれないので print_error を使う
-            print_error(error_message)
-            raise typer.Exit(code=1)
-        except Exception as e:
-             # load_settings 内で Warning/Error ログは出ているはず
-             error_message = f"Failed to load settings: {e}"
-             print_error(error_message)
-             raise typer.Exit(code=1)
-
+        # ログレベルを設定から適用
+        log_level_name = settings.final_log_level # 最終的なログレベルを使用
+        numeric_level = getattr(logging, log_level_name, logging.INFO)
+        # ルートロガーとメインロガーの両方に設定
+        logging.getLogger().setLevel(numeric_level)
+        logger.setLevel(numeric_level)
+        logger.info(f"Log level set to: {log_level_name}") # INFOレベルで出力
 
         # --- 2. 依存コンポーネントのインスタンス化 (手動DI) ---
         logger.debug("Initializing core components...")
@@ -125,6 +124,13 @@ def run(
         graphql_client = GitHubGraphQLClient(github_instance=github_instance)
         assignee_validator = AssigneeValidator(rest_client=rest_client)
         ai_parser = AIParser(settings=settings)
+
+        # --- PAT認証チェックを追加 ---
+        try:
+            rest_client.get_authenticated_user()
+        except Exception as e:
+            logger.error(f"GitHub PAT authentication failed: {e}")
+            raise GitHubAuthenticationError(f"GitHub PAT authentication failed: {e}") from e
 
         # UseCaseに適切なクライアントを注入
         create_repo_uc = CreateRepositoryUseCase(github_client=rest_client) # 修正: rest_client を渡す
@@ -174,7 +180,6 @@ def run(
         logger.info(f"Project Name    : {project_name if project_name else 'None'}")
         logger.info(f"Dry Run Mode    : {dry_run}")
         logger.info("------------------------------------")
-
         result: CreateGitHubResourcesResult = main_use_case.execute(
             parsed_data=parsed_data,
             repo_name_input=repo_name_input,
@@ -185,23 +190,21 @@ def run(
         reporter.display_create_github_resources_result(result)
         logger.info("Workflow execution completed.")
 
-    # --- 5. エラーハンドリング ---
-    except (GitHubValidationError, GitHubAuthenticationError, GitHubClientError) as e:
+    except ValidationError as e:
+        error_message = f"Configuration validation error(s): {e}"
+        print_error(error_message)
+        raise typer.Exit(code=1)
+    except ValueError as e:
+        error_message = f"Value error: {e}"
+        print_error(error_message)
+        raise typer.Exit(code=1)
+    except (GitHubAuthenticationError, GitHubClientError) as e:
         error_message = f"Workflow failed: {type(e).__name__} - {e}"
         print_error(error_message)
         raise typer.Exit(code=1)
-    except typer.Exit:
-         # Typer が Exit した場合はそのまま終了
-         raise
     except Exception as e:
-        # 予期しないその他の重大なエラー
         error_message = f"An unexpected critical error occurred: {e}"
         print_error(error_message)
-        if reporter:
-             reporter.display_general_error(e, context="during main execution")
-        else:
-             import traceback
-             traceback.print_exc(file=sys.stderr)
         raise typer.Exit(code=1)
 
 # スクリプトとして直接実行する場合のエントリーポイント

@@ -177,7 +177,7 @@ def test_yaml_config_settings_source_io_error(temp_yaml_file, caplog):
          caplog.at_level(logging.ERROR):
         source = YamlConfigSettingsSource(Settings, config_file_path=temp_yaml_file)
         settings_dict = source()
-    
+
     assert settings_dict == {}
     assert "Error reading YAML file" in caplog.text
     assert "Permission denied" in caplog.text
@@ -194,3 +194,15 @@ def test_yaml_config_settings_source_unexpected_error(temp_yaml_file, caplog):
     assert settings_dict == {}
     assert "Unexpected error loading YAML file" in caplog.text
     assert "Unexpected error" in caplog.text
+
+
+def test_load_settings_github_pat_empty():
+    """GITHUB_PATが空文字列の場合にValueErrorとなること"""
+    env_vars = {
+        "GITHUB_PAT": "   ",  # 空白のみ
+        "AI_MODEL": "gemini"
+    }
+    with mock.patch.dict(os.environ, env_vars):
+        with pytest.raises(ValueError) as exc_info:
+            load_settings(config_file=Path("/non/existent/file.yaml"))
+        assert "GITHUB_PAT cannot be empty." in str(exc_info.value)

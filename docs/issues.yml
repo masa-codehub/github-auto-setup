@@ -650,34 +650,38 @@ issues:
     dependencies_guessed: ["TASK-DATAMAP-IMPL"] # (保存するIssueDataが必要)
     size_guessed: "[SP: 5]"
 
-  - title: "[TechnicalTask] GitHub APIクライアントセットアップと認証確認 (TASK-GITHUB-CLIENTS-SETUP)"
-    body: |
-      **Content:**
-      `GitHubRestClient`, `GitHubGraphQLClient`, `AssigneeValidator` の初期化ロジックを整備し、アプリケーション起動時（または初回APIコール時）にGitHub PATを環境変数/設定ファイルから正しく読み込み、認証できることを保証する。
-
-      **Implementation Tasks:**
-      - [ ] `Settings`モデルでのGitHub PAT (`github_pat`) の読み込みと検証ロジックを確認・強化
-      - [ ] `main.py` (CLI) およびDjangoアプリケーション起動時に、`githubkit.GitHub`インスタンスがPATで正しく初期化されることを確認
-      - [ ] `GitHubRestClient`, `GitHubGraphQLClient`, `AssigneeValidator` が、この初期化された`GitHub`インスタンスをコンストラクタで受け取るようにする（現状確認と必要なら修正）
-      - **テスト:**
-        - [ ] `scripts/test_github_connection.py` を実行し、PAT認証、スコープ確認、レート制限確認がパスすることを確認
-        - [ ] GitHub PATが未設定または無効な場合に、アプリケーション（CLI/Web UI）が早期に適切なエラー（例: `GitHubAuthenticationError`）をスローし、ユーザーに通知することをテストで確認
-
-      **Action/Verification:**
-      設定ファイル/環境変数からPATを読み込み、各クライアントが初期化できることを確認。`test_github_connection.py` スクリプトなどを活用。
-    milestone: "M1" # M1: Web UI基礎とファイル処理基盤 (初期設定として重要)
-    labels:
-      - "type:technical-task"
-      - "epic:github-integration"
-      - "epic:infra-config"
-      - "layer:adapter-github"
-      - "layer:infrastructure"
-      - "priority:high"
-    assignees: []
-    referenced_requirements_ids: ["3. スコープ定義 (入力: 環境変数)", "11. 制約条件・前提条件 (認証・設定)"]
-    dependencies_guessed: []
-    size_guessed: "[SP: 2]"
-
+  - id: TASK-GITHUB-CLIENTS-SETUP
+    title: "[TechnicalTask] GitHub APIクライアントセットアップと認証確認"
+    type: technical_task
+    layer:
+      - Adapter-GitHub
+      - Infrastructure
+    epic:
+      - GitHub-Integration
+      - Infra-Config
+    status: done
+    priority: high
+    resolution_date: 2025-06-01
+    implementation_tasks:
+      - "[x] `infrastructure/config.py`の`Settings`モデルにて、`GITHUB_PAT`の読み込み（環境変数優先）と必須検証、空文字列の場合の`ValueError`送出ロジックを実装・強化。"
+      - "[x] `main.py`(CLI)にて、`load_settings`で取得したPATを用いて`githubkit.GitHub`インスタンスを生成し、`GitHubRestClient`, `GitHubGraphQLClient`, `AssigneeValidator`にDIする処理を実装。"
+      - "[x] `main.py`(CLI)にて、設定読み込みエラー（`ValidationError`, `ValueError`）やGitHub認証エラー（`GitHubAuthenticationError`など）を捕捉し、エラーメッセージ出力と終了コード1で終了する処理を実装。"
+      - "[x] `webapp/app/views.py`(`top_page` POST処理)にて、`load_settings`呼び出しを追加し、設定不備（PAT空など）やモックUseCaseからの`GitHubAuthenticationError`発生時にDjangoメッセージフレームワークでユーザー通知を行う骨格を実装。"
+      - "[x] `scripts/test_github_connection.py`を修正し、`sys.path`操作の削除(コメントアウト)、import文のグローバル化、PATスコープ不足時の明確なエラー終了処理を実装。"
+      - "[x] `pyproject.toml`にpytestの`pythonpath`設定を追加し、モジュール解決を改善。"
+      - "[x] `webapp/core_logic/tests/adapters/test_cli.py`にて、PAT未設定/空/無効時のCLIエラーハンドリングテストを追加・整備。"
+      - "[x] `webapp/app/tests.py`に`WebUIGitHubActionAuthErrorTests`を追加し、Web UIでの基本的なPAT設定エラー（`ValueError`）およびモックUseCaseからの`GitHubAuthenticationError`発生時のユーザー通知テストを実装。"
+    action_verification: "CLIおよびWeb UIのテストケースにより、PAT未設定・空・無効時のエラーハンドリングを確認。`scripts/test_github_connection.py`により、有効なPATでの接続、スコープ、レート制限情報を確認（手動実行）。`README.md`にスクリプト実行方法とPATスコープ情報を記載。"
+    design_highlights:
+      - "設定 (`Settings`モデル) の責務として、PATの基本的な検証（必須、空でないこと）を`infrastructure`層に配置。これにより、アプリケーション全体で一貫した設定値のバリデーションを提供。"
+      - "CLI (`main.py`) と Web UI (`views.py`) の両エントリーポイントで、GitHubクライアントの初期化前にPATの有効性を確認する（または試みる）ことで、早期に認証関連の問題を検出しユーザーにフィードバックする方針を採用。"
+      - "ドメイン例外 (`GitHubAuthenticationError`, `GitHubClientError`など) を定義し、各アダプターやユースケースで発生したエラーをこれらのドメイン固有の例外にマッピングすることで、上位レイヤーでのエラーハンドリングを統一的に行う基盤を整備 (CAの原則)。"
+    future_considerations:
+      - "Web UI (`views.py`) におけるGitHub連携アクション（Issue登録など）の本格実装時には、`CreateGitHubResourcesUseCase` 等の初期化ロジックをビューからサービスクラスやファクトリ関数へ分離することを推奨（現状はテスト用の骨子実装）。"
+      - "Web UIのテスト (`webapp/app/tests.py`) は、GitHub連携アクションの本格実装後に、より具体的なユーザーインタラクションと、それに対する詳細なエラーフィードバック（UI要素へのメッセージ表示など）を検証するように拡張する必要がある。"
+      - "`main.py`のエラーハンドリングは、例外タイプに応じてユーザーへの指示をより具体的にすることも検討可能（例: 認証エラー時はPAT確認、レート制限時は待機を促すなど）。"
+    known_limitations:
+      - "Web UIテストは、`CreateGitHubResourcesUseCase`の呼び出しをモックしているため、UseCase内部の詳細なエラーパス（例: リポジトリ作成失敗、ラベル作成失敗など）に対するUIフィードバックまでは検証していない。"
   - title: "[TechnicalTask] ドメインモデルのレビューと最終化 (TASK-DOMAIN-MODEL-REVIEW)"
     body: |
       **Content:**
@@ -728,6 +732,7 @@ issues:
         - [ ] Bootstrap5のアラートコンポーネントなどを活用して、メッセージをスタイリング
       - **テスト:**
         - [ ] （TDD）主要な処理（ファイルアップロード、GitHub登録）実行時に、期待されるサーバーログが出力されることのテスト
+       
         - [ ] UI上で、成功時、エラー時、処理中などに適切なフィードバックメッセージが表示されることをE2Eテストまたは手動テストで確認
 
       **Action/Verification:**
