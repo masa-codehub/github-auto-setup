@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
+import uuid
 # Removed typing imports; using built-in generics for Python 3.13
 
 
@@ -28,6 +29,8 @@ class IssueData(BaseModel):
     milestone: str | None = Field(default=None, description="抽出されたマイルストーン名")
     assignees: list[str] | None = Field(
         default=None, description="抽出された担当者名のリスト (例: '@username')")
+
+    temp_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="一時的な一意ID（UI選択用）")
 
     @property
     def body(self) -> str:

@@ -1,5 +1,5 @@
 from .issue_file_parser_base import AbstractIssueFileParser, IntermediateParsingResult
-from webapp.core_logic.github_automation_tool.domain.exceptions import ParsingError
+from ..domain.exceptions import ParsingError
 import re
 
 class MarkdownIssueParser(AbstractIssueFileParser):
