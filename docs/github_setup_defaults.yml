@@ -1,0 +1,181 @@
+# docs/github_setup_defaults.yml
+
+# ======================================================================
+# GitHub Automation Tool - Default Setup Configurations
+# ======================================================================
+# This file defines default labels and milestones that the
+# GitHub Automation Tool can use when setting up new repositories
+# or ensuring consistency across existing ones.
+#
+# The `CreateGitHubResourcesUseCase` can refer to this file (or a parsed version of it)
+# to determine which labels and milestones to create if they don't already exist
+# in the target repository.
+#
+# Format:
+#   labels:
+#     - name: "label-name"
+#       description: "Optional description for the label."
+#       color: "aabbcc" # 6-digit hex color without leading '#'
+#   milestones:
+#     - title: "Milestone Title"
+#       description: "Optional description for the milestone."
+#       # due_on: "YYYY-MM-DDTHH:MM:SSZ" # Optional due date in ISO 8601 format
+#       # state: "open" # Default is "open", can be "closed"
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# Default Labels
+# ----------------------------------------------------------------------
+# Based on common agile practices and information from docs/issues.yml
+# Colors are examples and can be adjusted.
+# Descriptions help clarify the purpose of each label.
+# ----------------------------------------------------------------------
+labels:
+  # Types of Work
+  - name: "type:user-story"
+    description: "A feature or requirement expressed from the perspective of an end user."
+    color: "a2eeef" # Light blue
+  - name: "type:technical-task"
+    description: "A specific technical task required to implement a feature or fix an issue."
+    color: "d876e3" # Light purple
+  - name: "type:bug"
+    description: "An error, flaw, failure, or fault in the system that causes it to produce an incorrect or unexpected result, or to behave in unintended ways."
+    color: "d73a4a" # Red
+  - name: "type:chore"
+    description: "A necessary task that doesn't directly deliver new features or fix bugs, such as refactoring, updating dependencies, or improving documentation for maintainability."
+    color: "cfd3d7" # Light grey
+  - name: "type:refactoring"
+    description: "Improving the internal structure of existing code without changing its external behavior."
+    color: "fef2c0" # Light yellow
+  - name: "type:test"
+    description: "Tasks related to writing, improving, or executing tests (unit, integration, E2E)."
+    color: "008672" # Teal
+  - name: "type:documentation"
+    description: "Tasks related to creating or updating project documentation."
+    color: "5319e7" # Indigo
+  - name: "type:spike"
+    description: "A time-boxed investigation to research an approach, understand a requirement, or reduce risk."
+    color: "7057ff" # Purple
+
+  # Layers (Clean Architecture inspired)
+  - name: "layer:domain"
+    description: "Relates to the core business logic and domain entities."
+    color: "f9d0c4" # Light peach
+  - name: "layer:usecase"
+    description: "Relates to application-specific business rules and use cases."
+    color: "c5def5" # Light blue-grey
+  - name: "layer:adapter-ui"
+    description: "Relates to the user interface (Web UI, CLI presentation)."
+    color: "0e8a16" # Green
+  - name: "layer:adapter-input-parser"
+    description: "Relates to parsing input files (Markdown, YAML, JSON)."
+    color: "fbca04" # Yellow
+  - name: "layer:adapter-ai"
+    description: "Relates to AI-powered parsing and data mapping."
+    color: "1d76db" # Blue
+  - name: "layer:adapter-github"
+    description: "Relates to interaction with the GitHub API."
+    color: "000000" # Black (GitHub logo color, adjust if too dark)
+  - name: "layer:adapter-filesystem"
+    description: "Relates to local file system operations (e.g., saving split files)."
+    color: "b61663" # Magenta
+  - name: "layer:infrastructure"
+    description: "Relates to configuration, deployment, and other foundational concerns."
+    color: "e99695" # Light salmon
+
+  # Epics (from docs/issues.yml or docs/agile-practice.yml)
+  - name: "epic:webui-core"
+    description: "Core functionality of the Web User Interface."
+    color: "bfdadc" # Pale blue
+  - name: "epic:data-parsing" # Merged from CORELOGIC as parsing is a key part
+    description: "Parsing various input file formats and mapping data to internal models."
+    color: "bfdadc"
+  - name: "epic:github-integration" # Merged from CORELOGIC
+    description: "Integration with GitHub for creating repositories, issues, labels, etc."
+    color: "bfdadc"
+  - name: "epic:cli-maintenance"
+    description: "Maintenance and synchronization of CLI functionality."
+    color: "bfdadc"
+  - name: "epic:infra-config"
+    description: "Infrastructure, configuration management, and environment setup."
+    color: "bfdadc"
+
+  # Principles & Practices
+  - name: "TDD"
+    description: "Task involves or follows Test-Driven Development practices."
+    color: "cfd3d7"
+  - name: "DDD"
+    description: "Task involves or follows Domain-Driven Design principles."
+    color: "cfd3d7"
+  - name: "CleanArchitecture"
+    description: "Task relates to maintaining or improving Clean Architecture principles."
+    color: "cfd3d7"
+
+  # Priorities (Example, can be customized)
+  - name: "priority:high"
+    description: "High priority task, needs to be addressed urgently."
+    color: "b60205" # Dark red
+  - name: "priority:medium"
+    description: "Medium priority task."
+    color: "D93F0B" # Orange
+  - name: "priority:low"
+    description: "Low priority task."
+    color: "0E7A0E" # Dark Green
+
+  # Statuses (These are typically managed by GitHub itself, but can be defined if needed for filtering/reporting)
+  # It's generally better to use GitHub's built-in status workflows.
+  # If these are for custom workflow states PRIOR to GitHub issue creation, they might be relevant.
+  - name: "status:todo"
+    description: "Task is planned but not yet started."
+    color: "ffffff" # White (adjust for visibility)
+  - name: "status:in-progress"
+    description: "Task is currently being worked on."
+    color: "fef2c0" # Light yellow
+  - name: "status:review"
+    description: "Task is completed and awaiting review."
+    color: "c5def5" # Light blue-grey
+  - name: "status:done" # Note: GitHub has 'closed' state, 'done' might be a custom workflow state.
+    description: "Task has been completed and verified."
+    color: "0075ca" # Blue
+  - name: "status:blocked"
+    description: "Task cannot proceed due to an impediment."
+    color: "e99695" # Light salmon
+  - name: "status:needs-discussion"
+    description: "Further discussion is required before this task can proceed."
+    color: "fbca04" # Yellow
+
+# ----------------------------------------------------------------------
+# Default Milestones
+# ----------------------------------------------------------------------
+# Based on information from docs/issues.yml
+# `due_on` is optional. If provided, use ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ).
+# ----------------------------------------------------------------------
+milestones:
+  - title: "M1: Web UI基礎とファイル処理基盤"
+    description: "Django + Bootstrap5での基本的なUIシェル完成。ファイルアップロード機能と、主要な入力形式（例: YAML）に対する初期パーサーおよびデータマッピングロジックの実装。Issue一覧表示機能の基礎。"
+    # due_on: "2025-07-31T23:59:59Z" # Example due date
+  - title: "M2: データマッピングとAI連携"
+    description: "AIを活用した高度なデータマッピング機能（キーの揺らぎ吸収など）の実装。設定ファイルによるマッピングルールのサポート。全指定ファイル形式（.md, .yml, .json）への対応。"
+  - title: "M3: GitHub連携機能MVP"
+    description: "Web UIからの選択的Issue GitHub登録機能（リポジトリ、ラベル、マイルストーン、Issue作成）の主要パス実装。担当者検証機能の実装。Dry RunモードのUI対応。"
+  - title: "M4: ローカルファイル管理と補助機能"
+    description: "ローカルへのファイル分割・保存機能（YAML形式、index.html生成）の実装。プロジェクト連携機能。"
+  - title: "M5: CLI機能同期と全体最適化"
+    description: "CLI機能のWeb UIバックエンドロジックへの追従。テストカバレッジ向上、ロギング・レポーティング改善、非機能要件の最終確認。"
+
+# ----------------------------------------------------------------------
+# (Optional) Default Repository Settings
+# ----------------------------------------------------------------------
+# This section could define default settings for new repositories
+# if the tool were to create them with more specific configurations.
+# For now, it's a placeholder.
+# ----------------------------------------------------------------------
+# repository_defaults:
+#   description: "Repository created by GitHub Automation Tool"
+#   has_issues: true
+#   has_projects: true
+#   has_wiki: false
+#   default_branch: "main"
+#   allow_squash_merge: true
+#   allow_rebase_merge: false
+#   delete_branch_on_merge: true

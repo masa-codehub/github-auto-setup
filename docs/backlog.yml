@@ -1,0 +1,599 @@
+# docs/backlog.yml
+
+document_info:
+  title: "Product Backlog for GitHub Automation Tool"
+  version: "2.0" # agile-practice.yml と issues.yml を完全に統合したためメジャーバージョンアップ
+  last_updated: "2025-06-02 (JST)" # 更新日
+  status: "Consolidated - Ready for Prioritization and Sprint Planning"
+  source_documents_integrated: # 統合済みのドキュメントを明記
+    - "docs/agile-practice.yml (v2.3)"
+    - "docs/issues.yml (v2.3)"
+  related_documents: # 他の主要ドキュメントへの参照
+    - "docs/requirements.yml (v2.5+)"
+    - "docs/glossary.md"
+    - "docs/ui_ux_specifications.md"
+    - "docs/github_setup_defaults.yml"
+    - "docs/diagrams/context-diagram.md (To be created)"
+    - "docs/diagrams/architecture-diagram.md (To be created)"
+
+development_approach_guidelines:
+    preface: |
+      このセクションは、本プロダクトバックログのアイテム（ユーザーストーリーやテクニカルタスク）を
+      具体化し、実装に進む上での基本的な考え方や、設計を支援する図の活用方法についての方針を示す。
+      チームメンバーは、これらの指針を参考に、効果的かつ効率的な開発を心がける。
+
+    initial_steps_for_implementation:
+      - step_name: "1. Backlog Item Prioritization and Sprint Planning"
+        description: |
+          プロダクトオーナー（または相当する役割）が中心となり、本バックログのアイテムに優先順位を付け、
+          スプリント（または開発イテレーション）で取り組む範囲（スプリントバックログ）を決定する。
+          早期に価値を提供しフィードバックを得るため、コアとなる機能フローの確立を優先的に検討する
+          （例: Web UIのファイルアップロード→解析→一覧表示→選択）。
+      - step_name: "2. Detailed Behavior Clarification for Selected Items"
+        description: |
+          スプリントバックログに選択されたユーザーストーリーについて、アクセプタンスクライテリアを基に、
+          より詳細なシナリオ、期待される動作、正常系・異常系のフローをチーム内で明確に合意する。
+          この段階で、アクティビティ図やシーケンス図の作成が推奨される。
+      - step_name: "3. Key Data Model Finalization (as needed)"
+        description: |
+          特に初期のユーザーストーリー（例: US-001）に取り組む際には、主要なデータモデル
+          （例: `ParsedSourceFileContent` のメタ情報フィールド）の具体的な構造をFIXさせる。
+          これにより、コンポーネント間のデータ連携が明確になる。
+      - step_name: "4. Service Layer Design (for Web UI, if adopted)"
+        description: |
+          Web UI向けにアプリケーションサービス層を導入する場合、主要なUIアクションに対応する
+          サービスメソッドのインターフェース（入力と出力）を定義する。
+
+    guidelines_for_using_diagrams:
+      - diagram_type: "Activity Diagram"
+        purpose: "ユーザー操作フロー、システム内部の主要処理ステップ、条件分岐、繰り返し処理を視覚的に明確にする。"
+        timing_and_use_case: |
+          - ユーザーストーリーの振る舞いを具体化する初期段階。
+          - 複雑なアルゴリズムやビジネスロジックの内部フローを整理する際。
+          - チーム内で業務プロセスやユーザーシナリオの共通理解を形成する際。
+        how_to_use: "開始/終了点、アクション、判断、マージ、フォーク/ジョインでフローを描画。必要に応じてスイムレーンで担当コンポーネントを区別。"
+
+      - diagram_type: "Sequence Diagram"
+        purpose: "特定の機能を実現するための、オブジェクト（コンポーネント、クラス）間の時間軸に沿ったメッセージ交換と相互作用を詳細に示す。"
+        timing_and_use_case: |
+          - アクティビティ図で大まかな流れを掴んだ後、コンポーネント間の具体的なIF（メソッド呼び出し、データ授受）を設計する際。
+          - 各オブジェクトの責務を明確化する際。
+          - 非同期処理や外部API連携のシーケンスを検討する際。
+          - 特にcore_logicのUseCaseとAdapter間、Adapterと外部API間のインタラクション明確化に有効。
+        how_to_use: "ライフライン、メッセージ（同期/非同期）、活性化区間、応答メッセージで描画。"
+
+      - diagram_type: "Component Diagram (Detailed Level)"
+        purpose: "システムを構成する主要コンポーネント（クラスやモジュール）と、それらの間の静的な依存関係やインターフェースを視覚化する。"
+        timing_and_use_case: |
+          - より詳細なアーキテクチャ設計や議論を行う際。
+          - あるコンポーネント変更時の影響範囲を分析する際。
+          - 新規メンバーへのシステム構成説明。
+        how_to_use: "コンポーネント、インターフェース、依存関係、ポートで描画。"
+
+      - diagram_type: "Data Model Diagram (or Class Diagram for models)"
+        purpose: "システムが扱う主要データ（ドメインモデル）の構造、属性、型、関連性を視覚的に表現する。"
+        timing_and_use_case: |
+          - `ParsedSourceFileContent` や `IssueData` などの詳細設計時。
+          - モデル間の関連性（1対多など）を明確にし、データ整合性を担保する設計を行う際。
+        how_to_use: "エンティティ（クラス）、属性、型、リレーションシップで描画。"
+
+      - diagram_type: "State Transition Diagram (State Machine Diagram)"
+        purpose: "特定のオブジェクトやシステムが時間経過やイベント発生に伴い、どのように状態を変化させるかを示す。"
+        timing_and_use_case: |
+          - Web UIの動的な振る舞い（例: 非同期処理中の状態変化）の設計時。
+          - バックログアイテムのワークフロー（ステータス遷移）定義。
+        how_to_use: "状態、遷移、イベント、アクションで描画。"
+
+    recommended_workflow_for_diagrams: |
+      1. スプリントで取り組むユーザーストーリーを選択する。
+      2. そのユーザーストーリーの主要なフローを **アクティビティ図** で大まかに把握する。
+      3. アクティビティ図で洗い出された主要な処理やコンポーネント間のやり取りを **シーケンス図** で詳細化し、インターフェースやデータフローを明確にする。
+      4. 上記の過程で、扱うデータモデルが複雑であれば **データモデル図** で整理する。
+      5. コンポーネント間の静的な依存関係や全体の構造が複雑であれば **コンポーネント図** で整理する。
+      6. UIの状態遷移や特定のオブジェクトのライフサイクルが複雑であれば **状態遷移図** を描く。
+      7. これらの図を基に、実装タスクを具体化し、本バックログのテクニカルタスクを更新・詳細化する。
+      8. 作成した図はチームで共有し、認識合わせとレビューを行う。図は完璧を目指すより、コミュニケーションと設計の補助を目的とする。
+
+epics:
+  - epic_id: "EPIC-WEBUI-CORE" # docs/issues.yml からも参照
+    title: "Web UI基本機能"
+    description: "ファイル読込、Issue表示・選択、ローカル保存など、Web UIのコア機能群。"
+    user_stories:
+      - "US-001"
+      - "US-002"
+      - "US-004"
+      - "US-006" # Web UI DryRun & AI Config
+
+  - epic_id: "EPIC-DATAPARSING" # docs/issues.yml からも参照 (旧 EPIC-CORELOGIC の一部)
+    title: "データ解析とマッピング"
+    description: "多様な入力ファイル形式の解析とIssueDataモデルへのデータマッピング機能群。"
+    user_stories:
+      - "US-001" # 解析とマッピングは US-001 の主要部分
+
+  - epic_id: "EPIC-GITHUB-INTEGRATION" # docs/issues.yml からも参照 (旧 EPIC-CORELOGIC の一部)
+    title: "GitHub連携機能"
+    description: "GitHubリソース（リポジトリ、Issue、ラベル、マイルストーン、プロジェクト）の作成・連携機能群。"
+    user_stories:
+      - "US-003"
+      - "US-006" # Web UI DryRun
+
+  - epic_id: "EPIC-CLI-MAINTENANCE" # docs/issues.yml からも参照
+    title: "CLI機能の維持と同期"
+    description: "既存CLI機能の維持と、Web UIで開発されたコアロジックへの追従。"
+    user_stories:
+      - "US-005" # CLI DryRun を含む
+
+  - epic_id: "EPIC-INFRA-CONFIG" # docs/issues.yml からも参照
+    title: "設定管理・実行環境整備"
+    description: "アプリケーションの設定管理、実行環境（コンテナ、認証等）の整備。"
+    user_stories:
+      - "US-006" # Web UI AI Config
+
+user_stories:
+  - story_id: "US-001"
+    title: "Web UIでのIssueファイルのアップロードと一覧表示"
+    description: "開発者として、ブラウザでアクセス可能なWeb UIを通じてIssue情報ファイル（.md, .yml, .json）をアップロードし、内容をIssue単位で一覧表示したい。それは、手作業でのファイル確認や分割の手間を省き、効率的にIssue情報を把握するためだ。"
+    acceptance_criteria:
+      - "AC-001-01: Web UIにファイルアップロード機能があり、`.md`, `.yml`, `.json` ファイルを1つ以上選択してアップロードできる。"
+      - "AC-001-02: アップロードされたファイルがバックエンドで読み込まれ、初期パーサーとAIパーサーによって`ParsedSourceFileContent`オブジェクトが生成される。"
+      - "AC-001-03: 生成された`ParsedSourceFileContent`内の`IssueData`リストが、Web UI上に一覧形式（例: テーブル、アコーディオン）で表示される。"
+      - "AC-001-04: Issueの主要な情報（タイトル、担当者候補、ラベル候補など）が一覧で確認できる。"
+      - "AC-001-05: ファイル読み込みエラーや解析エラーが発生した場合、適切なエラーメッセージがUIに表示される。"
+    technical_tasks: # issues.yml から関連する具体的なタスクIDをリストアップ
+      - "TASK-WEBUI-FILEUPLOAD-IMPL"
+      - "TASK-CORELOGIC-FILEPARSE-CALL" # issues.yml の TASK-FILEPARSE-IMPL と関連
+      - "TASK-CORELOGIC-AIPARSE-CALL"  # issues.yml の TASK-DATAMAP-IMPL と関連
+      - "TASK-WEBUI-DISPLAY-IMPL"      # issues.yml の TASK-WEBUI-ISSUE-DISPLAY と関連 (サブタスク含む)
+      - "TASK-WEBUI-ISSUE-DISPLAY-VIEW"
+      - "TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE"
+    notes: |
+      - [分割案あり] ファイル形式ごとのパーサー実装 (US-PARSE-MD, US-PARSE-YAML, US-PARSE-JSON) に分割可能かもしれません。
+      - [Decision from issues.yml (TASK-WEBUI-FILEUPLOAD)]: セッションストレージにファイル内容を一時保存する方式を採用。
+    referenced_requirements_ids:
+      - "UC-Web-001 (フロー1-6)"
+      - "FR-WebUI-001"
+      - "FR-File-001"
+      - "FR-Parse-001"
+      - "FR-Display-001"
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-DATAPARSING"]
+    size_estimate: "[SP: 8]"
+    dependencies_guessed:
+      - "TASK-DATAMAP-IMPL" # TASK-CORELOGIC-AIPARSE-CALL の実現に必要
+    status: "Partially Done" # US-WEBUI-SKELETON完了を反映
+    priority: "High"
+
+  - story_id: "US-002"
+    title: "Web UIでの処理対象Issueの選択"
+    description: "開発者として、Web UIに表示されたIssue一覧の中から、GitHubへの登録やローカル保存の対象とするIssueを個別に、または一括で選択したい。これにより、必要なIssueのみを効率的に処理できる。"
+    acceptance_criteria:
+      - "Issue一覧の各項目にチェックボックスが表示され、個別に選択/非選択できる。"
+      - "「すべて選択」「すべて解除」のような一括選択機能がある。"
+      - "選択されたIssueの情報がバックエンドに正しく送信される。"
+    technical_tasks:
+      - "TASK-WEBUI-SELECT-JS"          # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
+      - "TASK-WEBUI-SELECT-BACKEND"     # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    size_estimate: "[SP: 3]"
+    dependencies_guessed:
+      - "US-001"
+    status: "To Do"
+    priority: "High"
+
+  - story_id: "US-003"
+    title: "Web UIからのGitHubへのIssue一括登録"
+    description: "開発者として、Web UIで選択したIssue群を、指定したGitHubリポジトリ（および任意でプロジェクト）に一括で登録したい。ラベル、マイルストーン、担当者も適切に設定されること。DryRunモードも利用したい。"
+    acceptance_criteria:
+      - "UI上でGitHubリポジトリ名（owner/repo形式）を入力できる。"
+      - "UI上で任意でGitHubプロジェクト名（またはID/URL）を入力できる。"
+      - "UI上でDryRunモードのON/OFFを選択できる。"
+      - "「GitHubへ登録」ボタン押下時、選択されたIssueと設定情報がバックエンドに送信される。"
+      - "バックエンド（アプリケーションサービス層経由）で`core_logic`の`CreateGitHubResourcesUseCase`が呼び出される。"
+      - "処理結果（成功、失敗、スキップ、DryRun結果）がUIにフィードバックされる。"
+    technical_tasks:
+      - "TASK-WEBUI-GITHUBFORM-IMPL"    # issues.yml の TASK-WEBUI-GITHUB-ACTION の一部
+      - "TASK-APPSERVICE-GITHUB-CALL"   # issues.yml の TASK-WEBUI-GITHUB-ACTION の一部
+      - "TASK-CORELOGIC-GITHUB-MAIN"    # issues.yml の TASK-CORELOGIC-GITHUB-MAIN
+      - "TASK-GITHUB-CLIENTS-SETUP"   # issues.yml から
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICからGITHUB-INTEGRATIONへ
+    size_estimate: "[SP: 13]"
+    dependencies_guessed:
+      - "US-001"
+      - "US-002"
+      - "TASK-CORELOGIC-AIPARSE-CALL"
+      - "TASK-GITHUB-CLIENTS-SETUP"
+    notes: "[分割案あり] リポジトリ作成、ラベル作成、マイルストーン作成、Issue作成、プロジェクト連携の各機能を個別の（より小さな）ユーザーストーリーとして扱うことも可能かもしれません。"
+    status: "To Do"
+    priority: "High"
+
+  - story_id: "US-004"
+    title: "Web UIからの解析済みIssueのローカル保存"
+    description: "開発者として、Web UIで解析・表示されたIssue情報（または選択したIssue群）を、ローカルファイルシステムにYAML形式で分割保存したい。保存されたファイル群の目次となるindex.htmlも生成されること。"
+    acceptance_criteria:
+      - "UI上でローカル保存アクションをトリガーできる（例: 保存ボタン）。"
+      - "バックエンド（アプリケーションサービス層経由）で`core_logic`のローカル保存用UseCase（仮称 `LocalSaveUseCase`）が呼び出される。"
+      - "指定された（またはデフォルトの）ディレクトリに、IssueごとにYAMLファイルが作成される。"
+      - "保存されたYAMLファイルへのリンクを含む`index.html`が同ディレクトリに作成される。"
+      - "処理結果がUIにフィードバックされる。"
+    technical_tasks:
+      - "TASK-WEBUI-LOCALSAVEFORM-IMPL" # issues.yml の TASK-FILESPLIT-IMPL のUI部分
+      - "TASK-APPSERVICE-LOCALSAVE-CALL" # issues.yml の TASK-FILESPLIT-IMPL のサービス連携部分
+      - "TASK-CORELOGIC-LOCALSAVE-IMPL"  # issues.yml の TASK-FILESPLIT-IMPL のコアロジック部分
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    size_estimate: "[SP: 5]"
+    dependencies_guessed:
+      - "US-001"
+      - "TASK-CORELOGIC-AIPARSE-CALL" # 旧TASK-DATAMAP-IMPL
+    status: "To Do"
+    priority: "Medium"
+
+  - story_id: "US-005"
+    title: "CLIからのIssue一括登録とDryRun"
+    description: "開発者として、CLIからIssue情報ファイルとGitHubリポジトリ名を指定し、Issue、ラベル、マイルストーン等を一括で登録したい。DryRunモードも利用したい。"
+    acceptance_criteria:
+      - "CLIでファイルパス、リポジトリ名、プロジェクト名（任意）、DryRunフラグを指定できる。"
+      - "`core_logic`の`CreateGitHubResourcesUseCase`が呼び出され、処理が実行される。"
+      - "処理結果がコンソールに`CliReporter`を通じて出力される。"
+    technical_tasks:
+      - "TASK-CLI-ARGS-PARSE"         # issues.yml から
+      - "TASK-CLI-CORELOGIC-CALL"     # issues.yml から
+      - "TASK-CLI-REFACTOR"         # issues.yml の TASK-CLI-MAINTENANCE と関連
+    related_epic_ids: ["EPIC-CLI-MAINTENANCE", "EPIC-GITHUB-INTEGRATION"]
+    size_estimate: "[SP: 5]"
+    dependencies_guessed:
+      - "TASK-CORELOGIC-AIPARSE-CALL"
+      - "TASK-CORELOGIC-GITHUB-MAIN" # CreateGitHubResourcesUseCase
+    status: "Partially Done" # issues.yml のステータスを反映
+    priority: "High"
+
+  - story_id: "US-006"
+    title: "Web UIでのDry Runモードの提供とAI設定"
+    description: "開発者として、Web UIでGitHubへの登録処理を実行する際にDry Runモードを選択したい。また、Issue解析に使用するAIプロバイダー、モデル、APIキーをUI上で設定したい。"
+    acceptance_criteria:
+      - "UI上でDryRunモードのON/OFFを選択できる (US-003のフォーム内)。"
+      - "Dry Runモード実行時、作成/設定される予定のリソース情報がUI上にフィードバックされる。"
+      - "UI上にAIプロバイダー選択（OpenAI, Gemini）が表示される。"
+      - "選択プロバイダーに応じたモデル名選択ドロップダウンが動的に更新される。"
+      - "APIキー入力フィールドが表示される。"
+      - "設定されたAI情報がIssue解析時にバックエンドで利用される。"
+    technical_tasks:
+      - "TASK-WEBUI-AICONFIG-FORM-IMPL" # issues.yml から
+      - "TASK-APPSERVICE-AICONFIG-HANDLE" # issues.yml から
+      # DryRun UIは TASK-WEBUI-GITHUBFORM-IMPL に含まれる
+    referenced_requirements_ids:
+      - "UC-Web-001 (DryRun, AI Config)"
+      - "3. スコープ定義 (処理: Dry Runモード)"
+      - "2. システム化の目的とゴール (Web UI機能: AI設定)"
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION", "EPIC-INFRA-CONFIG"]
+    size_estimate: "[SP: 3]"
+    dependencies_guessed:
+      - "US-003"
+    notes: "元のUS-006のWeb UI DryRun部分はUS-003のGitHub登録フォームと統合的に扱う。このUSはAI設定UIに焦点を当てる。"
+    status: "To Do"
+    priority: "Medium"
+
+technical_tasks:
+  # --- docs/issues.yml から移行・整理されたテクニカルタスク ---
+  # 各タスクの詳細説明、関連ユーザーストーリーID、ステータス、担当者、メモなどを充実させる
+
+  - task_id: "TASK-DJANGO-SETUP"
+    title: "Djangoプロジェクト初期セットアップとBootstrap5導入"
+    description: |
+      Djangoアプリケーションの基本的な骨格を構築し、Dockerコンテナ環境での実行基盤を整備しました。
+      - Djangoプロジェクト (`webapp_project`) およびアプリケーション (`app`) の作成と基本設定。
+      - `settings.py` の設定（`INSTALLED_APPS`, 静的ファイル, テンプレート）。
+      - Bootstrap5のCSS/JSファイルの配置。
+      - ベースHTMLテンプレート (`base.html`) とトップページ用テンプレート (`top_page.html`) 作成。
+      - Dockerコンテナ設定 (`docker-compose.yml`, `Dockerfile`)。
+      - 基本的な動作確認テスト (`app/tests.py`)。
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-INFRA-CONFIG"]
+    related_user_story_ids: [] # 直接的なユーザーストーリーはないが、多くのWebUIストーリーの前提
+    status: "Done"
+    priority: "High"
+    resolved_date: "2025-05-24 (JST)"
+    referenced_requirements_ids: ["FR-WebUI-001", "8. 非機能要件 (技術スタック)"]
+    size_estimate: "[SP: 3]"
+    notes: |
+      完了確認: ユーザー報告と提供ファイルに基づき完了。
+      関連ファイル: settings.py, views.py, base.html, top_page.html, tests.py, docker-compose.yml, README.md.
+
+  - task_id: "TASK-FILEPARSE-IMPL"
+    title: "ファイル形式別パーサーの設計と実装"
+    description: |
+      アップロードされたIssue情報ファイル（`.md`, `.yml`, `.json`）をIssue単位のデータ構造に分割するパーサー群を実装。
+      - `AbstractIssueFileParser` 共通インターフェース定義。
+      - `MarkdownIssueParser` (正規表現区切り), `YamlIssueParser` (PyYAML, issues_key対応), `JsonIssueParser` (json, issues_key対応) 実装。
+      - `ParsingError` カスタム例外導入。
+      - 各パーサーのユニットテスト実装 (単一/複数Issue, 空ファイル, 不正フォーマット等)。
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    related_user_story_ids: ["US-001"] # US-001の前提
+    status: "Done"
+    priority: "High"
+    referenced_requirements_ids: ["FR-Parse-001"]
+    notes: |
+      Design Highlights: クリーンアーキテクチャ (adapters層), 共通インターフェース, エラーハンドリング, 柔軟性 (外部からのパターン/キー指定)。
+      Future Considerations: パーサーファクトリ, config.yaml連携強化, AIParser連携。
+      Known Limitations: Markdownパーサーのデフォルト区切り文字。
+    implementation_details: # issues.yml の implementation_tasks の要約
+      - "`AbstractIssueFileParser` 定義済み"
+      - "`MarkdownIssueParser` 実装済み (デフォルト区切り `---`)"
+      - "`YamlIssueParser` 実装済み (デフォルトキー `issues`)"
+      - "`JsonIssueParser` 実装済み (デフォルトキー `issues`)"
+      - "`ParsingError` 定義済み"
+      - "各ユニットテスト実装済み"
+
+  - task_id: "TASK-DATAMAP-IMPL" # US-001, US-003, US-004, US-005 の依存先
+    title: "AI支援データマッピングロジックの設計と実装"
+    description: "パーサーによって分割されたIssueデータと`IssueData`モデルのフィールドを紐付けるデータマッピングロジックをAIを活用して実装する (`AIParser` または `IssueFileInterpreter`)。入力ファイルのキーの揺らぎを吸収し、`ParsedSourceFileContent`を生成する。config.yamlからのマッピングルールも考慮。"
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    related_user_story_ids: ["US-001", "US-003", "US-004", "US-005"] # 間接的に多くのUSが依存
+    status: "To Do"
+    priority: "High"
+    referenced_requirements_ids: ["FR-Map-002", "11. 制約条件・前提条件 (AIとパーサーの役割)", "TASK-CONFIG-DATAMAP-RULES"]
+    dependencies_guessed: ["TASK-FILEPARSE-IMPL", "TASK-CORELOGIC-AIPARSE-CALL"] # AIPARSE-CALLはこれのサブタスクのはずなので整理が必要
+    size_estimate: "[SP: 13]"
+
+  - task_id: "TASK-CONFIG-DATAMAP-RULES"
+    title: "config.yaml: データマッピングルール設定機能の実装"
+    description: "`config.yaml`にユーザーがAIデータマッピングを補助するルールを記述できるセクションを追加し、その設定を読み込んでマッピング処理に反映させる。"
+    related_epic_ids: ["EPIC-DATAPARSING", "EPIC-INFRA-CONFIG"]
+    status: "To Do"
+    priority: "Medium"
+    referenced_requirements_ids: ["11. 制約条件・前提条件 (データマッピングルールの設定)", "2. システムが満たすべき主要な成功基準 (機能: 柔軟性)"]
+    dependencies_guessed: ["TASK-DATAMAP-IMPL"]
+    size_estimate: "[SP: 5]"
+
+  - task_id: "TASK-WEBUI-FILEUPLOAD-IMPL"
+    title: "Web UI: ファイルアップロード機能実装"
+    description: |
+      DjangoとBootstrap5を使用し、Web UIにIssue情報ファイル（単一ファイル限定: `.md`, `.yml`, `.yaml`, `.json`）をアップロードする機能を実装する。
+      - Djangoバックエンド: `FileUploadForm` で拡張子・サイズ検証。`top_page` ビューでファイル受付、検証、セッション格納、リダイレクト、エラー通知。
+      - Djangoフロントエンド: `top_page.html` にアップロードフォーム、送信ボタン、メッセージ表示エリア。
+      - テスト: フォームバリデーション、ビューの正常系・異常系のテスト。
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    status: "Done" # issues.yml の情報に基づく
+    priority: "High"
+    referenced_requirements_ids: ["FR-File-001"]
+    dependencies_guessed: ["TASK-DJANGO-SETUP"]
+    size_estimate: "[SP: 3]"
+    resolved_date: "2025-05-31" # issues.yml から
+
+  - task_id: "TASK-WEBUI-ISSUE-DISPLAY" # 統合された親タスクとして
+    title: "Web UI: Issue一覧表示と選択機能の実装（全体）"
+    description: "バックエンドで解釈されたIssue情報をWeb UIに一覧表示し、各Issueを選択可能にする機能群の親タスク。サブタスクとしてビューロジック、テンプレート、JavaScript実装を含む。"
+    related_user_story_ids: ["US-001", "US-002"]
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    technical_tasks: # サブタスクID
+      - "TASK-WEBUI-ISSUE-DISPLAY-VIEW"
+      - "TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE"
+      - "TASK-WEBUI-ISSUE-DISPLAY-JS"
+    status: "To Do"
+    priority: "High"
+    size_estimate: "[SP: 5]" # サブタスクの合計の目安
+    dependencies_guessed: ["TASK-DJANGO-SETUP", "TASK-CORELOGIC-AIPARSE-CALL"] # Issueデータ生成機能
+
+  - task_id: "TASK-WEBUI-ISSUE-DISPLAY-VIEW"
+    title: "[Adapter-UI] Issue一覧表示のためのDjangoビューロジック改修"
+    description: "`views.py` の `top_page` ビューを改修し、アップロード・解析されたIssue情報 (`ParsedSourceFileContent`) を取得してテンプレートコンテキストに渡す。セッション管理、`core_logic` のサービス呼び出し、エラーハンドリングを含む。"
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    status: "To Do" # issues.yml から
+    priority: "High"
+    dependencies_guessed: ["TASK-CORELOGIC-AIPARSE-CALL"] # 以前の US-001
+    size_estimate: "[SP: 3]" # issues.yml から
+
+  - task_id: "TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE"
+    title: "[Adapter-UI] Issue一覧と詳細表示のテンプレート実装"
+    description: "`top_page.html` を改修し、ビューから渡された `issue_list` と `issue_count` を使用してIssue一覧と詳細（アコーディオン）を動的にレンダリングする。選択用チェックボックス（`value`に`issue.temp_id`）を配置。"
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    status: "To Do" # issues.yml から
+    priority: "High"
+    dependencies_guessed: ["TASK-WEBUI-ISSUE-DISPLAY-VIEW"]
+    size_estimate: "[SP: 2]" # issues.yml から
+
+  - task_id: "TASK-WEBUI-ISSUE-DISPLAY-JS"
+    title: "[Adapter-UI] Issue選択機能のJavaScript実装"
+    description: "`issue_selection.js` を実装し、全選択/解除、個別選択とヘッダーチェックボックスの連動機能を提供。選択されたIssue IDを隠しフィールド `#selected-issue-ids-input` に保持。"
+    related_user_story_ids: ["US-002"]
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    status: "To Do" # issues.yml から
+    priority: "High"
+    dependencies_guessed: ["TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE"]
+    size_estimate: "[SP: 2]" # issues.yml から
+
+  - task_id: "TASK-WEBUI-GITHUB-ACTION" # 統合された親タスクとして
+    title: "Web UI: GitHubリソース登録アクション実装（全体）"
+    description: "Web UI上にGitHub登録フォームと実行ボタンを実装し、バックエンドでCreateGitHubResourcesUseCaseを呼び出し、結果をUIにフィードバックする機能群の親タスク。"
+    related_user_story_ids: ["US-003", "US-006"] # US-006のDryRun UI含む
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION"]
+    technical_tasks:
+      - "TASK-WEBUI-GITHUBFORM-IMPL"
+      - "TASK-APPSERVICE-GITHUB-CALL"
+    status: "To Do"
+    priority: "High"
+    size_estimate: "[SP: 8]" # サブタスク合計目安
+    dependencies_guessed: ["TASK-WEBUI-ISSUE-DISPLAY", "TASK-CORELOGIC-GITHUB-MAIN"]
+
+  - task_id: "TASK-WEBUI-GITHUBFORM-IMPL"
+    title: "Web UI: GitHub登録用フォームの実装"
+    description: "GitHubリポジトリ名、プロジェクト名（任意）、DryRunモード選択チェックボックス、実行ボタンを含むフォームを `top_page.html` に実装する。"
+    related_user_story_ids: ["US-003", "US-006"]
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    status: "To Do"
+    priority: "High"
+    # ... (size_estimate, dependencies_guessed from issues.yml or estimate)
+
+  - task_id: "TASK-APPSERVICE-GITHUB-CALL"
+    title: "Web UI: Django App Service Layer から CreateGitHubResourcesUseCase 呼び出し"
+    description: "(サービス層導入時) Web UIからのGitHub登録リクエストを受け、データ変換後、`CreateGitHubResourcesUseCase`を呼び出すサービスメソッドを実装する。結果をUIにフィードバックする仕組みも含む。"
+    related_user_story_ids: ["US-003"]
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION"]
+    status: "To Do"
+    priority: "High"
+    dependencies_guessed: ["TASK-CORELOGIC-GITHUB-MAIN"]
+    # ...
+
+  - task_id: "TASK-CORELOGIC-GITHUB-MAIN"
+    title: "CoreLogic: CreateGitHubResourcesUseCase の全体オーケストレーション実装"
+    description: "リポジトリ作成/確認、ラベル作成/確認、マイルストーン作成/確認、担当者検証、Issue作成、プロジェクト連携の一連の処理フローを`CreateGitHubResourcesUseCase`内で実装・調整する。"
+    related_user_story_ids: ["US-003", "US-005"]
+    related_epic_ids: ["EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICから変更
+    status: "To Do"
+    priority: "High"
+    # ...
+
+  - task_id: "TASK-FILESPLIT-IMPL" # 統合された親タスクとして
+    title: "CoreLogic & Web UI: ローカルファイル分割・保存機能の実装（全体）"
+    description: "Web UIからの指示に基づき、解析済みのIssueDataを個別のYAMLファイルとしてローカルに保存し、index.htmlを生成する機能群の親タスク。"
+    related_user_story_ids: ["US-004"]
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-CORELOGIC"] # CoreLogicにも関連
+    technical_tasks:
+      - "TASK-WEBUI-LOCALSAVEFORM-IMPL"
+      - "TASK-APPSERVICE-LOCALSAVE-CALL"
+      - "TASK-CORELOGIC-LOCALSAVE-IMPL"
+    status: "To Do"
+    priority: "Medium"
+    size_estimate: "[SP: 5]" # サブタスク合計目安
+    dependencies_guessed: ["TASK-CORELOGIC-AIPARSE-CALL"]
+
+  - task_id: "TASK-WEBUI-LOCALSAVEFORM-IMPL"
+    title: "Web UI: ローカル保存用アクションボタン等の実装"
+    description: "`top_page.html` にローカル保存先ディレクトリ入力フィールド（任意）と「ローカルに分割保存」ボタンを実装する。"
+    related_user_story_ids: ["US-004"]
+    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    status: "To Do"
+    priority: "Medium"
+    # ...
+
+  - task_id: "TASK-APPSERVICE-LOCALSAVE-CALL"
+    title: "Web UI: Django App Service Layer から LocalSaveUseCase 呼び出し"
+    description: "(サービス層導入時) Web UIからのローカル保存リクエストを受け、`LocalSaveUseCase`（仮）を呼び出すサービスメソッドを実装する。"
+    related_user_story_ids: ["US-004"]
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-CORELOGIC"]
+    status: "To Do"
+    priority: "Medium"
+    dependencies_guessed: ["TASK-CORELOGIC-LOCALSAVE-IMPL"]
+    # ...
+
+  - task_id: "TASK-CORELOGIC-LOCALSAVE-IMPL"
+    title: "CoreLogic: LocalSaveUseCase および関連アダプターの実装"
+    description: "`LocalSaveUseCase`（仮）および、ファイルシステムへの書き込みを行う`LocalFileSaverAdp`（仮）を実装する。YAMLシリアライズ、安全なファイル名生成、index.html生成ロジックを含む。"
+    related_user_story_ids: ["US-004"]
+    related_epic_ids: ["EPIC-CORELOGIC"]
+    status: "To Do"
+    priority: "Medium"
+    # ...
+
+  - task_id: "TASK-WEBUI-AICONFIG-FORM-IMPL"
+    title: "Web UI: AI設定用フォームのフロントエンド実装"
+    description: "`top_page.html`のアクションパネル内に、AIプロバイダー選択ラジオボタン、モデル選択ドロップダウン、APIキー入力フィールドを実装する。"
+    related_user_story_ids: ["US-006"]
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-INFRA-CONFIG"]
+    status: "To Do"
+    priority: "Medium"
+    # ...
+
+  - task_id: "TASK-APPSERVICE-AICONFIG-HANDLE"
+    title: "Web UI: 設定されたAI情報のバックエンド処理"
+    description: "(サービス層導入時) Web UIから送信されたAI設定情報（プロバイダー、モデル、APIキー）をバックエンドで受け取り、`AIParser` の初期化や設定に反映させる仕組みを実装する（セッション経由など）。"
+    related_user_story_ids: ["US-006"]
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-INFRA-CONFIG"]
+    status: "To Do"
+    priority: "Medium"
+    dependencies_guessed: ["TASK-CORELOGIC-AIPARSE-CALL"] # AIParser自体
+    # ...
+
+  - task_id: "TASK-CLI-ARGS-PARSE"
+    title: "CLI: Typerを用いたコマンドライン引数の解析処理の実装"
+    description: "`main.py` でTyperを使用し、`--file`, `--repo`, `--project`, `--dry-run`などのコマンドライン引数を解析する処理を実装・確認する。"
+    related_user_story_ids: ["US-005"]
+    related_epic_ids: ["EPIC-CLI-MAINTENANCE"]
+    status: "Done" # issues.ymlから (例)
+    priority: "High"
+    # ...
+
+  - task_id: "TASK-CLI-CORELOGIC-CALL"
+    title: "CLI: CreateGitHubResourcesUseCase呼び出し処理の実装"
+    description: "CLIの`main.py`から、解析された引数を元に`CreateGitHubResourcesUseCase`を適切に呼び出し、結果を`CliReporter`に渡す処理を実装・確認する。"
+    related_user_story_ids: ["US-005"]
+    related_epic_ids: ["EPIC-CLI-MAINTENANCE", "EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICから変更
+    status: "Partially Done" # issues.ymlから (例)
+    priority: "High"
+    dependencies_guessed: ["TASK-CORELOGIC-GITHUB-MAIN"]
+    # ...
+
+  - task_id: "TASK-GITHUB-CLIENTS-SETUP"
+    title: "CoreLogic/Infra: GitHub APIクライアントセットアップと認証確認"
+    description: |
+      `infrastructure/config.py`の`Settings`モデルにて、`GITHUB_PAT`の読み込みと検証を強化。
+      CLI/Web UI両方でのPAT検証・エラーハンドリング、テスト強化。
+      `GitHubRestClient`, `GitHubGraphQLClient`, `AssigneeValidator` の初期化と設定を整備。
+    related_epic_ids: ["EPIC-GITHUB-INTEGRATION", "EPIC-INFRA-CONFIG"]
+    related_user_story_ids: ["US-003"] # GitHub連携を行うUS全般に関連
+    status: "Done"
+    priority: "High"
+    resolved_date: "2025-06-01"
+    size_estimate: "[SP: 2]"
+    notes: |
+      CLIおよびWeb UIのテストケースにより、PAT未設定・空・無効時のエラーハンドリングを確認。
+      `scripts/test_github_connection.py`により、有効なPATでの接続、スコープ、レート制限情報を確認。
+    implementation_details:
+      - "`Settings`モデルでの`GITHUB_PAT`検証強化済み。"
+      - "CLI/Web UIでのエラーハンドリング骨格実装済み。"
+      - "`test_github_connection.py`更新済み。"
+      - "`pyproject.toml`の`pythonpath`設定済み。"
+      - "CLI/Web UIのPAT関連テスト実装済み。"
+
+  - task_id: "TASK-DOMAIN-MODEL-REVIEW"
+    title: "Domain: ドメインモデルのレビューと最終化"
+    description: "`IssueData`, `ParsedSourceFileContent` (旧`ParsedRequirementData`), `LocalFileSplitResult`などのドメインモデルについて、新しいワークフローとの整合性を確認し、最終定義を固める。`ParsedSourceFileContent`のメタ情報フィールドを具体化する。"
+    related_epic_ids: ["EPIC-DATAPARSING"] # EPIC-CORELOGICから変更
+    status: "To Do"
+    priority: "Medium"
+    referenced_requirements_ids: ["6. ドメインモデル"]
+    dependencies_guessed: ["TASK-DATAMAP-IMPL", "TASK-CORELOGIC-LOCALSAVE-IMPL"]
+    size_estimate: "[SP: 1]"
+
+  - task_id: "TASK-LOGGING-REPORTING-WEBUI"
+    title: "Web UI: ロギングとフィードバック機構の設計・実装"
+    description: "Djangoアプリケーションのサーバーサイドロギング設定と、Web UI上でのユーザーへの処理結果フィードバック機構を設計・実装する。Djangoメッセージフレームワークや非同期処理結果の表示方法を検討。"
+    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-INFRA-CONFIG"]
+    status: "To Do"
+    priority: "Medium"
+    referenced_requirements_ids: ["8. 非機能要件 (レポーティング)", "FR-Feedback"]
+    dependencies_guessed: ["TASK-DJANGO-SETUP", "主要なWeb UI機能がある程度実装されていること"]
+    size_estimate: "[SP: 3]"
+
+  - task_id: "TASK-CLI-REFACTOR"
+    title: "CLI: 機能リファクタリングとWeb UIロジック連携"
+    description: "既存CLI機能 (`main.py`) を、Web UIバックエンドで利用される新しいIssue解釈・マッピングロジックおよび`CreateGitHubResourcesUseCase`を利用するようにリファクタリングする。"
+    related_epic_ids: ["EPIC-CLI-MAINTENANCE"]
+    related_user_story_ids: ["US-005"]
+    status: "To Do"
+    priority: "Low"
+    dependencies_guessed: ["TASK-DATAMAP-IMPL", "TASK-CORELOGIC-GITHUB-MAIN"]
+    size_estimate: "[SP: 5]"
+
+  - task_id: "TASK-TESTING-COVERAGE"
+    title: "Chore: 継続的なテスト実装とカバレッジ90%維持"
+    description: "開発される全ての主要機能コンポーネントに対しTDDの原則に従いユニットテストを実装し、全体のコードカバレッジを常に90%以上に維持する。pytestとpytest-covを使用。"
+    related_epic_ids: [] # 全般
+    status: "In Progress" # 継続的
+    priority: "High"
+    referenced_requirements_ids: ["2. システムが満たすべき主要な成功基準 (品質)"]
+    size_estimate: "[SP: (継続的)]"
+
+  - task_id: "TASK-CORELOGIC-IMPORT-FIX"
+    title: "Chore: Pythonパス解決の安定化とインポートパス整理"
+    description: "`webapp/app/` および `webapp/core_logic/` 配下のPythonモジュール間で安定したインポートを実現し、`PYTHONPATH` 環境変数への明示的な依存を解消する。プロジェクトルートから `pytest` 単独で全テストを実行可能にする。"
+    related_epic_ids: ["EPIC-INFRA-CONFIG"]
+    status: "To Do"
+    priority: "Medium"
+    size_estimate: "[SP: 2]"
+    implementation_details:
+      - "`__init__.py` ファイルの確認・作成。"
+      - "インポート文の絶対パス/相対パス統一。"
+      - "`sys.path.insert` の削除。"
+      - "`pyproject.toml` の `pythonpath` 設定確認・修正。"
+      - `README.md` のテスト実行手順更新。

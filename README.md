@@ -7,6 +7,19 @@
 
 取得したPATは、環境変数 `GITHUB_PAT` に設定してください。
 
+## 技術スタック
+
+本プロジェクトで使用されている主要な技術スタックは以下の通りです。
+
+* **Webフレームワーク:** Django
+* **フロントエンド:** Bootstrap 5, JavaScript (最小限)
+* **CLIフレームワーク:** Typer
+* **AI連携:** LangChain, OpenAI API, Google Gemini API
+* **GitHub APIクライアント:** githubkit
+* **設定管理:** Pydantic Settings, YAML
+* **コンテナ技術:** Docker
+* **コアロジック言語:** Python
+
 ## ローカル開発環境での実行と確認
 
 本アプリケーションはDockerコンテナでの実行が推奨されます。
