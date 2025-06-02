@@ -2,17 +2,19 @@
 
 document_info:
   title: "Product Backlog for GitHub Automation Tool"
-  version: "2.0" # agile-practice.yml と issues.yml を完全に統合したためメジャーバージョンアップ
-  last_updated: "2025-06-02 (JST)" # 更新日
-  status: "Consolidated - Ready for Prioritization and Sprint Planning"
-  source_documents_integrated: # 統合済みのドキュメントを明記
+  version: "2.2" # AIパーサー戦略のさらなる明確化を反映
+  last_updated: "2025-06-03 (JST)" # 更新日
+  status: "Refining AI Parser Strategy - Dynamic Rule Inference for Delimiters and Mapping"
+  source_documents_integrated:
     - "docs/agile-practice.yml (v2.3)"
     - "docs/issues.yml (v2.3)"
-  related_documents: # 他の主要ドキュメントへの参照
+  related_documents:
     - "docs/requirements.yml (v2.5+)"
     - "docs/glossary.md"
     - "docs/ui_ux_specifications.md"
     - "docs/github_setup_defaults.yml"
+    - "docs/user-stories/US-001/US-001_activity.md" # US-001のアクティビティ図
+    - "docs/user-stories/US-001/US-001_sequence.md" # US-001のシーケンス図
     - "docs/diagrams/context-diagram.md (To be created)"
     - "docs/diagrams/architecture-diagram.md (To be created)"
 
@@ -28,7 +30,7 @@ development_approach_guidelines:
           プロダクトオーナー（または相当する役割）が中心となり、本バックログのアイテムに優先順位を付け、
           スプリント（または開発イテレーション）で取り組む範囲（スプリントバックログ）を決定する。
           早期に価値を提供しフィードバックを得るため、コアとなる機能フローの確立を優先的に検討する
-          （例: Web UIのファイルアップロード→解析→一覧表示→選択）。
+          （例: Web UIのファイルアップロード→AIによるルール推論と解析→一覧表示→選択）。
       - step_name: "2. Detailed Behavior Clarification for Selected Items"
         description: |
           スプリントバックログに選択されたユーザーストーリーについて、アクセプタンスクライテリアを基に、
@@ -37,13 +39,25 @@ development_approach_guidelines:
       - step_name: "3. Key Data Model Finalization (as needed)"
         description: |
           特に初期のユーザーストーリー（例: US-001）に取り組む際には、主要なデータモデル
-          （例: `ParsedSourceFileContent` のメタ情報フィールド）の具体的な構造をFIXさせる。
+          （例: `ParsedSourceFileContent` のメタ情報フィールド、AIが生成するルール表現形式）の具体的な構造をFIXさせる。
           これにより、コンポーネント間のデータ連携が明確になる。
       - step_name: "4. Service Layer Design (for Web UI, if adopted)"
         description: |
           Web UI向けにアプリケーションサービス層を導入する場合、主要なUIアクションに対応する
           サービスメソッドのインターフェース（入力と出力）を定義する。
 
+    ai_parser_strategy:
+      concept: |
+        AIパーサーの主要な役割は、入力ファイル全体を分析し、以下の2種類のルールを動的に推論・生成することにある。
+        1. **Issue区切りルール:** ファイル内で何がIssueブロック/レコードの開始を示すか（例: 特定のキー、Markdownのヘッダーパターン）。同一ファイル内ではこの開始パターンは共通であると仮定する。
+        2. **フィールドマッピングルール:** 推論された各Issueブロック/レコード内で、どの部分（キーや記述）が`IssueData`のどのフィールドに対応するか。
+        これらの推論されたルールに基づき、後続の処理でファイルが分割され、IssueDataにマッピングされる。
+      key_considerations:
+        - "AI Rule Generation Accuracy: AIが生成するルールの精度と安定性の検証が重要。誤ったルールが生成された場合でも、Web UIでは解析結果をユーザーが確認し、CLIではDryRunや中間出力で確認できる手段を提供する。"
+        - "Rule Representation: AIが生成するルール（区切り、マッピング）の表現形式（例: Regex, JSONPath, Custom DSL）と、それを後続処理が解釈する方法の設計。これはTASK-RULE-REPRESENTATIONで扱う。"
+        - "Prompt Engineering: 高度なルール推論を実現するためのプロンプト設計と、設定ファイルや外部ファイル（TASK-PROMPT-MANAGEMENTで検討）によるプロンプト管理。"
+        - "User Feedback Loop: AIが生成したルールや、それに基づく解析結果をユーザーが確認し、（将来的には）UI上で修正・調整できる仕組みの検討。"
+        - "Processing Steps: ルール推論と、それに基づく分割・マッピングの処理ステップを効率的に行う。AIが一括して推論・構造化出力を試みるか、段階的に処理するか検討。"
     guidelines_for_using_diagrams:
       - diagram_type: "Activity Diagram"
         purpose: "ユーザー操作フロー、システム内部の主要処理ステップ、条件分岐、繰り返し処理を視覚的に明確にする。"
@@ -105,8 +119,8 @@ epics:
       - "US-006" # Web UI DryRun & AI Config
 
   - epic_id: "EPIC-DATAPARSING" # docs/issues.yml からも参照 (旧 EPIC-CORELOGIC の一部)
-    title: "データ解析とマッピング"
-    description: "多様な入力ファイル形式の解析とIssueDataモデルへのデータマッピング機能群。"
+    title: "データ解析とマッピング (AI-driven Rule Inference)" # タイトルにAIの役割を追記
+    description: "多様な入力ファイル形式のAIによる分析、区切りとマッピングのルール推論、およびIssueDataモデルへの変換機能群。"
     user_stories:
       - "US-001" # 解析とマッピングは US-001 の主要部分
 
@@ -131,35 +145,40 @@ epics:
 
 user_stories:
   - story_id: "US-001"
-    title: "Web UIでのIssueファイルのアップロードと一覧表示"
-    description: "開発者として、ブラウザでアクセス可能なWeb UIを通じてIssue情報ファイル（.md, .yml, .json）をアップロードし、内容をIssue単位で一覧表示したい。それは、手作業でのファイル確認や分割の手間を省き、効率的にIssue情報を把握するためだ。"
+    title: "Web UIでのIssueファイルのアップロード、AIによる区切り・マッピングルール推論と解析、一覧表示" # タイトル更新
+    description: "開発者として、Issue情報ファイル（Markdown, YAML, JSON）をWeb UIからアップロードし、AIがファイル内容からIssueの区切り方（各Issueの先頭キー/開始パターン）と各フィールドのマッピングルールを推論し、そのルールに基づいて解析されたIssueの一覧を画面で確認したい。これにより、多様なフォーマットやキーの揺らぎがあるファイルからでも効率的にIssue情報を把握できる。" # description更新
     acceptance_criteria:
-      - "AC-001-01: Web UIにファイルアップロード機能があり、`.md`, `.yml`, `.json` ファイルを1つ以上選択してアップロードできる。"
-      - "AC-001-02: アップロードされたファイルがバックエンドで読み込まれ、初期パーサーとAIパーサーによって`ParsedSourceFileContent`オブジェクトが生成される。"
-      - "AC-001-03: 生成された`ParsedSourceFileContent`内の`IssueData`リストが、Web UI上に一覧形式（例: テーブル、アコーディオン）で表示される。"
-      - "AC-001-04: Issueの主要な情報（タイトル、担当者候補、ラベル候補など）が一覧で確認できる。"
-      - "AC-001-05: ファイル読み込みエラーや解析エラーが発生した場合、適切なエラーメッセージがUIに表示される。"
-    technical_tasks: # issues.yml から関連する具体的なタスクIDをリストアップ
+      - "サポートするファイル形式（.md, .yml, .json）で、10MB以下のファイルをアップロードできる。"
+      - "アップロードされたファイル全体がAIパーサーに渡され、Issueの区切りルール（先頭キー/開始パターン）とフィールドマッピングルールが推論される。"
+      - "推論された区切りルールに基づき、ファイルがIssueブロックに分割される。"
+      - "推論されたフィールドマッピングルールに基づき、各Issueブロックが`IssueData`オブジェクトにマッピングされる。"
+      - "上記の結果が`ParsedSourceFileContent`オブジェクト（`IssueData`リストとファイル全体のメタ情報を含む）として生成される。"
+      - "生成された`ParsedSourceFileContent`内の`IssueData`リストが、Web UI上に一覧形式で表示される。"
+      - "Issueの主要な情報（AIによってマッピングされたタイトル、担当者候補、ラベル候補など）が一覧で確認できる。"
+      - "ファイル読み込みエラーやAIによるルール推論・解析エラーが発生した場合、適切なエラーメッセージがUIに表示される。"
+    technical_tasks:
       - "TASK-WEBUI-FILEUPLOAD-IMPL"
-      - "TASK-CORELOGIC-FILEPARSE-CALL" # issues.yml の TASK-FILEPARSE-IMPL と関連
-      - "TASK-CORELOGIC-AIPARSE-CALL"  # issues.yml の TASK-DATAMAP-IMPL と関連
-      - "TASK-WEBUI-DISPLAY-IMPL"      # issues.yml の TASK-WEBUI-ISSUE-DISPLAY と関連 (サブタスク含む)
-      - "TASK-WEBUI-ISSUE-DISPLAY-VIEW"
-      - "TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE"
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE" # 区切りルールとマッピングルール両方の推論
+      - "TASK-CORELOGIC-RULE-BASED-SPLITTER"
+      - "TASK-CORELOGIC-RULE-BASED-MAPPER"
+      - "TASK-WEBUI-DISPLAY-IMPL" # (サブタスク含む)
     notes: |
-      - [分割案あり] ファイル形式ごとのパーサー実装 (US-PARSE-MD, US-PARSE-YAML, US-PARSE-JSON) に分割可能かもしれません。
-      - [Decision from issues.yml (TASK-WEBUI-FILEUPLOAD)]: セッションストレージにファイル内容を一時保存する方式を採用。
+      - [AI戦略] AIパーサーはファイル全体から「区切りルール（先頭キー/開始パターン）」と「フィールドマッピングルール」を推論する。その後、これらのルールを適用してIssueを分割・構造化する。
+      - [ユーザー確認] WebUIでは、AIによる解析結果（分割・マッピング結果）をユーザーが確認し、問題があれば登録前に認識できる。CLIではDryRunや中間出力で確認手段を提供する。
+      - [プロンプト管理] AIへのプロンプトはTASK-PROMPT-MANAGEMENTで外部ファイル化を検討。
+      - [ルール表現] AIが生成するルールの形式はTASK-RULE-REPRESENTATIONで設計する。
     referenced_requirements_ids:
       - "UC-Web-001 (フロー1-6)"
       - "FR-WebUI-001"
       - "FR-File-001"
-      - "FR-Parse-001"
+      - "FR-Parse-001" # 実現方法がAI中心に大きくシフト
+      - "FR-Map-002"   # 実現方法がAI中心に大きくシフト
       - "FR-Display-001"
     related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-DATAPARSING"]
-    size_estimate: "[SP: 8]"
+    size_estimate: "[SP: 13]" # 変更なし（AI戦略の複雑性を既に考慮）
     dependencies_guessed:
-      - "TASK-DATAMAP-IMPL" # TASK-CORELOGIC-AIPARSE-CALL の実現に必要
-    status: "Partially Done" # US-WEBUI-SKELETON完了を反映
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE" # 以前のTASK-DATAMAP-IMPLがこれに該当
+    status: "To Do"
     priority: "High"
 
   - story_id: "US-002"
@@ -296,304 +315,62 @@ technical_tasks:
       完了確認: ユーザー報告と提供ファイルに基づき完了。
       関連ファイル: settings.py, views.py, base.html, top_page.html, tests.py, docker-compose.yml, README.md.
 
+  - task_id: "TASK-CORELOGIC-AI-RULE-INFERENCE"
+    title: "CoreLogic: AIによる区切りルール(先頭キー/開始パターン)とフィールドマッピングルールの推論エンジン実装" # タイトル更新
+    description: "AIパーサーの中核機能。入力されたファイルコンテンツ全体を分析し、Issueの区切り方（各Issueの先頭キー/開始パターン）と各Issue内のデータからIssueDataフィールドへのマッピングルールを推論・生成する。プロンプトエンジニアリング、AIモデルとの連携、config.yamlからのヒント活用を含む。" # description更新
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "To Do"
+    priority: "High"
+    dependencies_guessed: ["TASK-PROMPT-MANAGEMENT", "TASK-RULE-REPRESENTATION"]
+    size_estimate: "[SP: 8]"
+
+  - task_id: "TASK-CORELOGIC-RULE-BASED-SPLITTER"
+    title: "CoreLogic: AI推論「区切りルール」に基づくIssueブロック分割処理の実装" # タイトル更新
+    description: "AIが推論した「区切りルール（先頭キー/開始パターン）」に基づき、元のファイルコンテンツをIssueブロックのリスト (`IntermediateParsingResult`) に分割するルールベースの処理モジュールを実装する。" # description更新
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "To Do"
+    priority: "High"
+    dependencies_guessed: ["TASK-CORELOGIC-AI-RULE-INFERENCE", "TASK-RULE-REPRESENTATION"]
+    size_estimate: "[SP: 3]"
+
+  - task_id: "TASK-CORELOGIC-RULE-BASED-MAPPER"
+    title: "CoreLogic: AI推論「フィールドマッピングルール」に基づくIssueDataへのマッピング処理の実装" # タイトル更新
+    description: "AIが推論した「フィールドマッピングルール」と、分割されたIssueブロックリストに基づき、各ブロックを`IssueData`オブジェクトに変換し、最終的に`ParsedSourceFileContent`を生成するマッパー処理を実装する。" # description更新
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "To Do"
+    priority: "High"
+    dependencies_guessed: ["TASK-CORELOGIC-AI-RULE-INFERENCE", "TASK-RULE-REPRESENTATION"]
+    size_estimate: "[SP: 5]"
+
+  - task_id: "TASK-PROMPT-MANAGEMENT"
+    title: "Infra: AIプロンプトの外部ファイル管理機構の実装"
+    description: "AIパーサーが使用するプロンプトをコードから分離し、外部ファイル（例: .txt, .md, またはconfig.yaml内の専用セクション）から読み込んで利用できる仕組みを実装する。"
+    related_epic_ids: ["EPIC-INFRA-CONFIG", "EPIC-DATAPARSING"]
+    status: "To Do"
+    priority: "Medium"
+    size_estimate: "[SP: 2]"
+
+  - task_id: "TASK-RULE-REPRESENTATION"
+    title: "Design: AI生成ルールの表現形式の設計と標準化"
+    description: "AIパーサーが生成する「区切りルール（先頭キー/開始パターン）」と「フィールドマッピングルール」を、後続のルールベース処理が解釈可能な一貫したデータ構造または形式（例: JSON Schemaベース、カスタムDSLなど）で表現する方法を設計・定義する。"
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "To Do"
+    priority: "High"
+    dependencies_guessed: ["TASK-CORELOGIC-AI-RULE-INFERENCE"]
+    size_estimate: "[SP: 3]"
+
   - task_id: "TASK-FILEPARSE-IMPL"
-    title: "ファイル形式別パーサーの設計と実装"
-    description: |
-      アップロードされたIssue情報ファイル（`.md`, `.yml`, `.json`）をIssue単位のデータ構造に分割するパーサー群を実装。
-      - `AbstractIssueFileParser` 共通インターフェース定義。
-      - `MarkdownIssueParser` (正規表現区切り), `YamlIssueParser` (PyYAML, issues_key対応), `JsonIssueParser` (json, issues_key対応) 実装。
-      - `ParsingError` カスタム例外導入。
-      - 各パーサーのユニットテスト実装 (単一/複数Issue, 空ファイル, 不正フォーマット等)。
+    title: "ファイル形式別基本パーサー (役割見直し)" # タイトルに役割見直しを追記
+    description: | # description更新
+      AIによるルール推論を前提とし、ファイル形式（MD, YAML, JSON）の基本的な構造を検証したり、
+      AIが処理しやすいように非常に大まかな前処理（例: コメント除去、エンコーディング確認など）を行う最小限のパーサー機能。
+      AIが推論した「区切りルール」を適用する処理は TASK-CORELOGIC-RULE-BASED-SPLITTER が担う。
     related_epic_ids: ["EPIC-DATAPARSING"]
-    related_user_story_ids: ["US-001"] # US-001の前提
-    status: "Done"
-    priority: "High"
-    referenced_requirements_ids: ["FR-Parse-001"]
-    notes: |
-      Design Highlights: クリーンアーキテクチャ (adapters層), 共通インターフェース, エラーハンドリング, 柔軟性 (外部からのパターン/キー指定)。
-      Future Considerations: パーサーファクトリ, config.yaml連携強化, AIParser連携。
-      Known Limitations: Markdownパーサーのデフォルト区切り文字。
-    implementation_details: # issues.yml の implementation_tasks の要約
-      - "`AbstractIssueFileParser` 定義済み"
-      - "`MarkdownIssueParser` 実装済み (デフォルト区切り `---`)"
-      - "`YamlIssueParser` 実装済み (デフォルトキー `issues`)"
-      - "`JsonIssueParser` 実装済み (デフォルトキー `issues`)"
-      - "`ParsingError` 定義済み"
-      - "各ユニットテスト実装済み"
-
-  - task_id: "TASK-DATAMAP-IMPL" # US-001, US-003, US-004, US-005 の依存先
-    title: "AI支援データマッピングロジックの設計と実装"
-    description: "パーサーによって分割されたIssueデータと`IssueData`モデルのフィールドを紐付けるデータマッピングロジックをAIを活用して実装する (`AIParser` または `IssueFileInterpreter`)。入力ファイルのキーの揺らぎを吸収し、`ParsedSourceFileContent`を生成する。config.yamlからのマッピングルールも考慮。"
-    related_epic_ids: ["EPIC-DATAPARSING"]
-    related_user_story_ids: ["US-001", "US-003", "US-004", "US-005"] # 間接的に多くのUSが依存
-    status: "To Do"
-    priority: "High"
-    referenced_requirements_ids: ["FR-Map-002", "11. 制約条件・前提条件 (AIとパーサーの役割)", "TASK-CONFIG-DATAMAP-RULES"]
-    dependencies_guessed: ["TASK-FILEPARSE-IMPL", "TASK-CORELOGIC-AIPARSE-CALL"] # AIPARSE-CALLはこれのサブタスクのはずなので整理が必要
-    size_estimate: "[SP: 13]"
-
-  - task_id: "TASK-CONFIG-DATAMAP-RULES"
-    title: "config.yaml: データマッピングルール設定機能の実装"
-    description: "`config.yaml`にユーザーがAIデータマッピングを補助するルールを記述できるセクションを追加し、その設定を読み込んでマッピング処理に反映させる。"
-    related_epic_ids: ["EPIC-DATAPARSING", "EPIC-INFRA-CONFIG"]
-    status: "To Do"
-    priority: "Medium"
-    referenced_requirements_ids: ["11. 制約条件・前提条件 (データマッピングルールの設定)", "2. システムが満たすべき主要な成功基準 (機能: 柔軟性)"]
-    dependencies_guessed: ["TASK-DATAMAP-IMPL"]
-    size_estimate: "[SP: 5]"
-
-  - task_id: "TASK-WEBUI-FILEUPLOAD-IMPL"
-    title: "Web UI: ファイルアップロード機能実装"
-    description: |
-      DjangoとBootstrap5を使用し、Web UIにIssue情報ファイル（単一ファイル限定: `.md`, `.yml`, `.yaml`, `.json`）をアップロードする機能を実装する。
-      - Djangoバックエンド: `FileUploadForm` で拡張子・サイズ検証。`top_page` ビューでファイル受付、検証、セッション格納、リダイレクト、エラー通知。
-      - Djangoフロントエンド: `top_page.html` にアップロードフォーム、送信ボタン、メッセージ表示エリア。
-      - テスト: フォームバリデーション、ビューの正常系・異常系のテスト。
     related_user_story_ids: ["US-001"]
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
-    status: "Done" # issues.yml の情報に基づく
-    priority: "High"
-    referenced_requirements_ids: ["FR-File-001"]
-    dependencies_guessed: ["TASK-DJANGO-SETUP"]
-    size_estimate: "[SP: 3]"
-    resolved_date: "2025-05-31" # issues.yml から
-
-  - task_id: "TASK-WEBUI-ISSUE-DISPLAY" # 統合された親タスクとして
-    title: "Web UI: Issue一覧表示と選択機能の実装（全体）"
-    description: "バックエンドで解釈されたIssue情報をWeb UIに一覧表示し、各Issueを選択可能にする機能群の親タスク。サブタスクとしてビューロジック、テンプレート、JavaScript実装を含む。"
-    related_user_story_ids: ["US-001", "US-002"]
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
-    technical_tasks: # サブタスクID
-      - "TASK-WEBUI-ISSUE-DISPLAY-VIEW"
-      - "TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE"
-      - "TASK-WEBUI-ISSUE-DISPLAY-JS"
-    status: "To Do"
-    priority: "High"
-    size_estimate: "[SP: 5]" # サブタスクの合計の目安
-    dependencies_guessed: ["TASK-DJANGO-SETUP", "TASK-CORELOGIC-AIPARSE-CALL"] # Issueデータ生成機能
-
-  - task_id: "TASK-WEBUI-ISSUE-DISPLAY-VIEW"
-    title: "[Adapter-UI] Issue一覧表示のためのDjangoビューロジック改修"
-    description: "`views.py` の `top_page` ビューを改修し、アップロード・解析されたIssue情報 (`ParsedSourceFileContent`) を取得してテンプレートコンテキストに渡す。セッション管理、`core_logic` のサービス呼び出し、エラーハンドリングを含む。"
-    related_user_story_ids: ["US-001"]
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
-    status: "To Do" # issues.yml から
-    priority: "High"
-    dependencies_guessed: ["TASK-CORELOGIC-AIPARSE-CALL"] # 以前の US-001
-    size_estimate: "[SP: 3]" # issues.yml から
-
-  - task_id: "TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE"
-    title: "[Adapter-UI] Issue一覧と詳細表示のテンプレート実装"
-    description: "`top_page.html` を改修し、ビューから渡された `issue_list` と `issue_count` を使用してIssue一覧と詳細（アコーディオン）を動的にレンダリングする。選択用チェックボックス（`value`に`issue.temp_id`）を配置。"
-    related_user_story_ids: ["US-001"]
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
-    status: "To Do" # issues.yml から
-    priority: "High"
-    dependencies_guessed: ["TASK-WEBUI-ISSUE-DISPLAY-VIEW"]
-    size_estimate: "[SP: 2]" # issues.yml から
-
-  - task_id: "TASK-WEBUI-ISSUE-DISPLAY-JS"
-    title: "[Adapter-UI] Issue選択機能のJavaScript実装"
-    description: "`issue_selection.js` を実装し、全選択/解除、個別選択とヘッダーチェックボックスの連動機能を提供。選択されたIssue IDを隠しフィールド `#selected-issue-ids-input` に保持。"
-    related_user_story_ids: ["US-002"]
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
-    status: "To Do" # issues.yml から
-    priority: "High"
-    dependencies_guessed: ["TASK-WEBUI-ISSUE-DISPLAY-TEMPLATE"]
-    size_estimate: "[SP: 2]" # issues.yml から
-
-  - task_id: "TASK-WEBUI-GITHUB-ACTION" # 統合された親タスクとして
-    title: "Web UI: GitHubリソース登録アクション実装（全体）"
-    description: "Web UI上にGitHub登録フォームと実行ボタンを実装し、バックエンドでCreateGitHubResourcesUseCaseを呼び出し、結果をUIにフィードバックする機能群の親タスク。"
-    related_user_story_ids: ["US-003", "US-006"] # US-006のDryRun UI含む
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION"]
-    technical_tasks:
-      - "TASK-WEBUI-GITHUBFORM-IMPL"
-      - "TASK-APPSERVICE-GITHUB-CALL"
-    status: "To Do"
-    priority: "High"
-    size_estimate: "[SP: 8]" # サブタスク合計目安
-    dependencies_guessed: ["TASK-WEBUI-ISSUE-DISPLAY", "TASK-CORELOGIC-GITHUB-MAIN"]
-
-  - task_id: "TASK-WEBUI-GITHUBFORM-IMPL"
-    title: "Web UI: GitHub登録用フォームの実装"
-    description: "GitHubリポジトリ名、プロジェクト名（任意）、DryRunモード選択チェックボックス、実行ボタンを含むフォームを `top_page.html` に実装する。"
-    related_user_story_ids: ["US-003", "US-006"]
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
-    status: "To Do"
-    priority: "High"
-    # ... (size_estimate, dependencies_guessed from issues.yml or estimate)
-
-  - task_id: "TASK-APPSERVICE-GITHUB-CALL"
-    title: "Web UI: Django App Service Layer から CreateGitHubResourcesUseCase 呼び出し"
-    description: "(サービス層導入時) Web UIからのGitHub登録リクエストを受け、データ変換後、`CreateGitHubResourcesUseCase`を呼び出すサービスメソッドを実装する。結果をUIにフィードバックする仕組みも含む。"
-    related_user_story_ids: ["US-003"]
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION"]
-    status: "To Do"
-    priority: "High"
-    dependencies_guessed: ["TASK-CORELOGIC-GITHUB-MAIN"]
-    # ...
-
-  - task_id: "TASK-CORELOGIC-GITHUB-MAIN"
-    title: "CoreLogic: CreateGitHubResourcesUseCase の全体オーケストレーション実装"
-    description: "リポジトリ作成/確認、ラベル作成/確認、マイルストーン作成/確認、担当者検証、Issue作成、プロジェクト連携の一連の処理フローを`CreateGitHubResourcesUseCase`内で実装・調整する。"
-    related_user_story_ids: ["US-003", "US-005"]
-    related_epic_ids: ["EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICから変更
-    status: "To Do"
-    priority: "High"
-    # ...
-
-  - task_id: "TASK-FILESPLIT-IMPL" # 統合された親タスクとして
-    title: "CoreLogic & Web UI: ローカルファイル分割・保存機能の実装（全体）"
-    description: "Web UIからの指示に基づき、解析済みのIssueDataを個別のYAMLファイルとしてローカルに保存し、index.htmlを生成する機能群の親タスク。"
-    related_user_story_ids: ["US-004"]
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-CORELOGIC"] # CoreLogicにも関連
-    technical_tasks:
-      - "TASK-WEBUI-LOCALSAVEFORM-IMPL"
-      - "TASK-APPSERVICE-LOCALSAVE-CALL"
-      - "TASK-CORELOGIC-LOCALSAVE-IMPL"
-    status: "To Do"
+    status: "To Re-evaluate" # ステータス変更
     priority: "Medium"
-    size_estimate: "[SP: 5]" # サブタスク合計目安
-    dependencies_guessed: ["TASK-CORELOGIC-AIPARSE-CALL"]
-
-  - task_id: "TASK-WEBUI-LOCALSAVEFORM-IMPL"
-    title: "Web UI: ローカル保存用アクションボタン等の実装"
-    description: "`top_page.html` にローカル保存先ディレクトリ入力フィールド（任意）と「ローカルに分割保存」ボタンを実装する。"
-    related_user_story_ids: ["US-004"]
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
-    status: "To Do"
-    priority: "Medium"
-    # ...
-
-  - task_id: "TASK-APPSERVICE-LOCALSAVE-CALL"
-    title: "Web UI: Django App Service Layer から LocalSaveUseCase 呼び出し"
-    description: "(サービス層導入時) Web UIからのローカル保存リクエストを受け、`LocalSaveUseCase`（仮）を呼び出すサービスメソッドを実装する。"
-    related_user_story_ids: ["US-004"]
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-CORELOGIC"]
-    status: "To Do"
-    priority: "Medium"
-    dependencies_guessed: ["TASK-CORELOGIC-LOCALSAVE-IMPL"]
-    # ...
-
-  - task_id: "TASK-CORELOGIC-LOCALSAVE-IMPL"
-    title: "CoreLogic: LocalSaveUseCase および関連アダプターの実装"
-    description: "`LocalSaveUseCase`（仮）および、ファイルシステムへの書き込みを行う`LocalFileSaverAdp`（仮）を実装する。YAMLシリアライズ、安全なファイル名生成、index.html生成ロジックを含む。"
-    related_user_story_ids: ["US-004"]
-    related_epic_ids: ["EPIC-CORELOGIC"]
-    status: "To Do"
-    priority: "Medium"
-    # ...
-
-  - task_id: "TASK-WEBUI-AICONFIG-FORM-IMPL"
-    title: "Web UI: AI設定用フォームのフロントエンド実装"
-    description: "`top_page.html`のアクションパネル内に、AIプロバイダー選択ラジオボタン、モデル選択ドロップダウン、APIキー入力フィールドを実装する。"
-    related_user_story_ids: ["US-006"]
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-INFRA-CONFIG"]
-    status: "To Do"
-    priority: "Medium"
-    # ...
-
-  - task_id: "TASK-APPSERVICE-AICONFIG-HANDLE"
-    title: "Web UI: 設定されたAI情報のバックエンド処理"
-    description: "(サービス層導入時) Web UIから送信されたAI設定情報（プロバイダー、モデル、APIキー）をバックエンドで受け取り、`AIParser` の初期化や設定に反映させる仕組みを実装する（セッション経由など）。"
-    related_user_story_ids: ["US-006"]
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-INFRA-CONFIG"]
-    status: "To Do"
-    priority: "Medium"
-    dependencies_guessed: ["TASK-CORELOGIC-AIPARSE-CALL"] # AIParser自体
-    # ...
-
-  - task_id: "TASK-CLI-ARGS-PARSE"
-    title: "CLI: Typerを用いたコマンドライン引数の解析処理の実装"
-    description: "`main.py` でTyperを使用し、`--file`, `--repo`, `--project`, `--dry-run`などのコマンドライン引数を解析する処理を実装・確認する。"
-    related_user_story_ids: ["US-005"]
-    related_epic_ids: ["EPIC-CLI-MAINTENANCE"]
-    status: "Done" # issues.ymlから (例)
-    priority: "High"
-    # ...
-
-  - task_id: "TASK-CLI-CORELOGIC-CALL"
-    title: "CLI: CreateGitHubResourcesUseCase呼び出し処理の実装"
-    description: "CLIの`main.py`から、解析された引数を元に`CreateGitHubResourcesUseCase`を適切に呼び出し、結果を`CliReporter`に渡す処理を実装・確認する。"
-    related_user_story_ids: ["US-005"]
-    related_epic_ids: ["EPIC-CLI-MAINTENANCE", "EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICから変更
-    status: "Partially Done" # issues.ymlから (例)
-    priority: "High"
-    dependencies_guessed: ["TASK-CORELOGIC-GITHUB-MAIN"]
-    # ...
-
-  - task_id: "TASK-GITHUB-CLIENTS-SETUP"
-    title: "CoreLogic/Infra: GitHub APIクライアントセットアップと認証確認"
-    description: |
-      `infrastructure/config.py`の`Settings`モデルにて、`GITHUB_PAT`の読み込みと検証を強化。
-      CLI/Web UI両方でのPAT検証・エラーハンドリング、テスト強化。
-      `GitHubRestClient`, `GitHubGraphQLClient`, `AssigneeValidator` の初期化と設定を整備。
-    related_epic_ids: ["EPIC-GITHUB-INTEGRATION", "EPIC-INFRA-CONFIG"]
-    related_user_story_ids: ["US-003"] # GitHub連携を行うUS全般に関連
-    status: "Done"
-    priority: "High"
-    resolved_date: "2025-06-01"
-    size_estimate: "[SP: 2]"
-    notes: |
-      CLIおよびWeb UIのテストケースにより、PAT未設定・空・無効時のエラーハンドリングを確認。
-      `scripts/test_github_connection.py`により、有効なPATでの接続、スコープ、レート制限情報を確認。
-    implementation_details:
-      - "`Settings`モデルでの`GITHUB_PAT`検証強化済み。"
-      - "CLI/Web UIでのエラーハンドリング骨格実装済み。"
-      - "`test_github_connection.py`更新済み。"
-      - "`pyproject.toml`の`pythonpath`設定済み。"
-      - "CLI/Web UIのPAT関連テスト実装済み。"
-
-  - task_id: "TASK-DOMAIN-MODEL-REVIEW"
-    title: "Domain: ドメインモデルのレビューと最終化"
-    description: "`IssueData`, `ParsedSourceFileContent` (旧`ParsedRequirementData`), `LocalFileSplitResult`などのドメインモデルについて、新しいワークフローとの整合性を確認し、最終定義を固める。`ParsedSourceFileContent`のメタ情報フィールドを具体化する。"
-    related_epic_ids: ["EPIC-DATAPARSING"] # EPIC-CORELOGICから変更
-    status: "To Do"
-    priority: "Medium"
-    referenced_requirements_ids: ["6. ドメインモデル"]
-    dependencies_guessed: ["TASK-DATAMAP-IMPL", "TASK-CORELOGIC-LOCALSAVE-IMPL"]
-    size_estimate: "[SP: 1]"
-
-  - task_id: "TASK-LOGGING-REPORTING-WEBUI"
-    title: "Web UI: ロギングとフィードバック機構の設計・実装"
-    description: "Djangoアプリケーションのサーバーサイドロギング設定と、Web UI上でのユーザーへの処理結果フィードバック機構を設計・実装する。Djangoメッセージフレームワークや非同期処理結果の表示方法を検討。"
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-INFRA-CONFIG"]
-    status: "To Do"
-    priority: "Medium"
-    referenced_requirements_ids: ["8. 非機能要件 (レポーティング)", "FR-Feedback"]
-    dependencies_guessed: ["TASK-DJANGO-SETUP", "主要なWeb UI機能がある程度実装されていること"]
-    size_estimate: "[SP: 3]"
-
-  - task_id: "TASK-CLI-REFACTOR"
-    title: "CLI: 機能リファクタリングとWeb UIロジック連携"
-    description: "既存CLI機能 (`main.py`) を、Web UIバックエンドで利用される新しいIssue解釈・マッピングロジックおよび`CreateGitHubResourcesUseCase`を利用するようにリファクタリングする。"
-    related_epic_ids: ["EPIC-CLI-MAINTENANCE"]
-    related_user_story_ids: ["US-005"]
-    status: "To Do"
-    priority: "Low"
-    dependencies_guessed: ["TASK-DATAMAP-IMPL", "TASK-CORELOGIC-GITHUB-MAIN"]
-    size_estimate: "[SP: 5]"
-
-  - task_id: "TASK-TESTING-COVERAGE"
-    title: "Chore: 継続的なテスト実装とカバレッジ90%維持"
-    description: "開発される全ての主要機能コンポーネントに対しTDDの原則に従いユニットテストを実装し、全体のコードカバレッジを常に90%以上に維持する。pytestとpytest-covを使用。"
-    related_epic_ids: [] # 全般
-    status: "In Progress" # 継続的
-    priority: "High"
-    referenced_requirements_ids: ["2. システムが満たすべき主要な成功基準 (品質)"]
-    size_estimate: "[SP: (継続的)]"
-
-  - task_id: "TASK-CORELOGIC-IMPORT-FIX"
-    title: "Chore: Pythonパス解決の安定化とインポートパス整理"
-    description: "`webapp/app/` および `webapp/core_logic/` 配下のPythonモジュール間で安定したインポートを実現し、`PYTHONPATH` 環境変数への明示的な依存を解消する。プロジェクトルートから `pytest` 単独で全テストを実行可能にする。"
-    related_epic_ids: ["EPIC-INFRA-CONFIG"]
-    status: "To Do"
-    priority: "Medium"
-    size_estimate: "[SP: 2]"
-    implementation_details:
-      - "`__init__.py` ファイルの確認・作成。"
-      - "インポート文の絶対パス/相対パス統一。"
-      - "`sys.path.insert` の削除。"
-      - "`pyproject.toml` の `pythonpath` 設定確認・修正。"
-      - `README.md` のテスト実行手順更新。
+    # ... (他のフィールドも見直し)
+  # ... (既存の他のテクニカルタスクも、この新しいAIパーサー戦略との関連を見直す)
