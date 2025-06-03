@@ -12,6 +12,16 @@ from core_logic.github_automation_tool.adapters.ai_parser import AIParser
 from core_logic.github_automation_tool.infrastructure.config import load_settings
 from core_logic.github_automation_tool.domain.models import IssueData, ParsedRequirementData
 from core_logic.github_automation_tool.domain.exceptions import AiParserError, ParsingError
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from githubkit import GitHub
+from core_logic.github_automation_tool.adapters.github_rest_client import GitHubRestClient
+from core_logic.github_automation_tool.adapters.github_graphql_client import GitHubGraphQLClient
+from core_logic.github_automation_tool.adapters.assignee_validator import AssigneeValidator
+from core_logic.github_automation_tool.use_cases.create_repository import CreateRepositoryUseCase
+from core_logic.github_automation_tool.use_cases.create_issues import CreateIssuesUseCase
+from core_logic.github_automation_tool.use_cases.create_github_resources import CreateGitHubResourcesUseCase
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +93,19 @@ def top_page(request):
                     messages.error(request, "Issueデータが見つかりません。ファイルをアップロードしパースしてください。")
                     return render(request, "top_page.html", {'upload_form': form})
                 try:
-                    from github_automation_tool.use_cases.create_github_resources import CreateGitHubResourcesUseCase
-                    usecase = CreateGitHubResourcesUseCase(rest_client=None, graphql_client=None, create_repo_uc=None, create_issues_uc=None)
+                    # --- 依存性注入: main.pyのCLI起動時と同等のロジック ---
+                    github_instance = GitHub(settings.github_pat.get_secret_value())
+                    rest_client = GitHubRestClient(github_instance=github_instance)
+                    graphql_client = GitHubGraphQLClient(github_instance=github_instance)
+                    assignee_validator = AssigneeValidator(rest_client=rest_client)
+                    create_repo_uc = CreateRepositoryUseCase(github_client=rest_client)
+                    create_issues_uc = CreateIssuesUseCase(rest_client=rest_client, assignee_validator=assignee_validator)
+                    usecase = CreateGitHubResourcesUseCase(
+                        rest_client=rest_client,
+                        graphql_client=graphql_client,
+                        create_repo_uc=create_repo_uc,
+                        create_issues_uc=create_issues_uc
+                    )
                     usecase.execute(
                         parsed_data=parsed_issue_data,
                         repo_name_input=repo_name,
@@ -146,3 +167,12 @@ def top_page(request):
     context['issue_list'] = issue_list
     context['issue_count'] = issue_count
     return render(request, "top_page.html", context)
+
+
+@api_view(['GET'])
+def health_check_api_view(request):
+    """
+    シンプルなヘルスチェックAPI。
+    DRFが正しくセットアップされているかを確認するために使用。
+    """
+    return Response({"status": "ok", "message": "Django REST Framework is working!"}, status=status.HTTP_200_OK)

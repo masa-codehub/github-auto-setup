@@ -121,6 +121,9 @@ epics:
     title: "Backend API Services"
     description: "静的フロントエンドやCLIからのリクエストを処理し、コアロジックを実行し、結果を返すためのAPIエンドポイント群を提供する。"
     user_stories: []
+    tasks:
+      - "TASK-BE-DRF-SETUP"
+      # 他のタスク...
   # ... (他のEPICのdescriptionも、API構成を前提とした内容に微調整の可能性あり)
 
 user_stories:
@@ -285,30 +288,38 @@ technical_tasks:
     title: "Backend: Django Rest Framework (DRF) のセットアップと基本設定"
     description: "DjangoプロジェクトにDRFを導入し、API開発のための基本的な設定（ルーティング、デフォルトパーサー/レンダラー、認証クラスなど）を行う。"
     related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
-    status: "To Do"
+    status: "Done" # 完了
     priority: "High"
     size_estimate: "[SP: 2]"
-  - task_id: "TASK-BE-SERIALIZERS"
-    title: "Backend: APIレスポンス用シリアライザーの実装"
-    description: "`ParsedSourceFileContent`, `IssueData`, 各種結果オブジェクトなどをJSON等にシリアライズするためのDRFシリアライザーを実装する。"
-    related_epic_ids: ["EPIC-BACKEND-API"]
-    status: "To Do"
+    acceptance_criteria: |
+      - DRFがDjangoプロジェクトに正しくインストール・設定されていること。
+      - 基本的なDRF設定が settings.py に記述されていること。
+      - テスト用のAPIエンドポイントにアクセスし、DRFのBrowsable API等で応答が確認できること。
+    notes: |
+      - 環境変数の管理の統一: 将来的にアプリケーションサービス層を導入する際、またはより適切なDIメカニズムを検討する際に、View層からの設定ロードやGitHubクライアント初期化のロジックを切り離すことを推奨。
+      - APIバージョン管理: 今後のAPI拡張に備え、URLにバージョンプレフィックス (/api/v1/ など) を導入することを検討。
+      - 品質指標の確認: 単体テストのカバレッジや静的コード解析ツールの結果を継続的にモニタリング・改善する必要がある。
+
+  - task_id: "TASK-DJANGO-SETUP"
+    title: "DjangoプロジェクトのAPIサーバーとしてのセットアップ"
+    description: |
+      Djangoアプリケーションを、静的フロントエンドからのAPIリクエストを受け付けるバックエンドサーバーとしてセットアップする。
+      - API用のURLルーティング設定。
+      - CORS設定（必要であれば）。
+      - 静的ファイル配信の設定（Django開発サーバーから配信する場合、または本番環境での考慮）。
+      - Dockerコンテナ設定のAPIサーバーとしての最適化。
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
+    status: "Done" # "Completed - Re-evaluate" から "Done" に変更
     priority: "High"
-    size_estimate: "[SP: 3]"
-  - task_id: "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
-    title: "Backend API: Issueファイル処理APIエンドポイント実装"
-    description: "アップロードされたIssue情報ファイルを受け付け、`AIParseFileUseCase`を呼び出して解析処理を実行し、結果（`ParsedSourceFileContent`またはエラー情報）をJSONで返すAPIエンドポイントを実装する。"
-    related_user_story_ids: ["US-001"]
+
+  - task_id: "TASK-API-VERSIONING"
+    title: "APIのバージョン管理"
+    status: "Backlog"
+    description: "APIのURLにバージョンプレフィックス (例: /api/v1/) を導入する。"
+    acceptance_criteria: |
+      - APIのURLがバージョン管理されていること。
+      - 既存のAPIとの後方互換性が保たれていること。
     related_epic_ids: ["EPIC-BACKEND-API"]
-    status: "To Do"
-    priority: "High"
-  - task_id: "TASK-BE-API-GITHUB-RESOURCE-ENDPOINT"
-    title: "Backend API: GitHubリソース作成APIエンドポイント実装"
-    description: "フロントエンドから選択されたIssue情報、リポジトリ名、プロジェクト名、DryRunモードなどを受け取り、`CreateGitHubResourcesUseCase`を呼び出し、結果をJSONで返すAPIエンドポイントを実装する。"
-    related_user_story_ids: ["US-003"]
-    related_epic_ids: ["EPIC-BACKEND-API"]
-    status: "To Do"
-    priority: "High"
   # --- Frontend Tasks (新規タスク群) ---
   - task_id: "TASK-FE-SETUP"
     title: "Frontend: 静的フロントエンドプロジェクトのセットアップ"
@@ -338,17 +349,3 @@ technical_tasks:
   # ... (TASK-CORELOGIC-AI-RULE-INFERENCE などは変更なし) ...
   # --- Infrastructure Tasks (変更なし、またはAPI関連の設定追加) ---
   # ... (TASK-PROMPT-MANAGEMENT などは変更なし) ...
-  - task_id: "TASK-DJANGO-SETUP"
-    title: "DjangoプロジェクトのAPIサーバーとしてのセットアップ"
-    description: |
-      Djangoアプリケーションを、静的フロントエンドからのAPIリクエストを受け付けるバックエンドサーバーとしてセットアップする。
-      - DRFの導入と設定 (TASK-BE-DRF-SETUPと重複する可能性あり、整理が必要)。
-      - API用のURLルーティング設定。
-      - CORS設定（必要であれば）。
-      - 静的ファイル配信の設定（Django開発サーバーから配信する場合、または本番環境での考慮）。
-      - Dockerコンテナ設定のAPIサーバーとしての最適化。
-    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
-    status: "To Re-evaluate"
-    priority: "High"
-  # 既存の TASK-WEBUI-*, TASK-APPSERVICE-* は、新しい TASK-FE-*, TASK-BE-API-* に役割を移行するため、
-  # 不要になったものは削除するか、statusを "Obsolete" などに変更する必要がある。
