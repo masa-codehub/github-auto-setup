@@ -6,9 +6,12 @@ services:
     image: ${PROJECT_NAME}_image
     volumes:
       - ./${PROJECT_NAME}:${CONTAINER_VOLUME:-/app}
+      - ../../frontend:/app/frontend
     working_dir: ${CONTAINER_VOLUME:-/app}
     environment:
       - PROJECT_NAME=${PROJECT_NAME}
     # command: ["bash", "run.sh"]
     stdin_open: true
     tty: true
+    ports:
+      - "8000:8000"

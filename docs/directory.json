@@ -10,10 +10,91 @@
         "name": "docs",
         "type": "directory",
         "children": [
-          { "name": "agile-practice.yml", "type": "file" },
+          { "name": "backlog.yml", "type": "file" },
           { "name": "directory.json", "type": "file" },
-          { "name": "issues.yml", "type": "file" },
-          { "name": "requirements.yml", "type": "file" }
+          { "name": "github_setup_defaults.yml", "type": "file" },
+          { "name": "glossary.md", "type": "file" },
+          { "name": "requirements.yml", "type": "file" },
+          { "name": "system-context.md", "type": "file" },
+          { "name": "ui_ux_specifications.yml", "type": "file" },
+          {
+            "name": "diagrams",
+            "type": "directory",
+            "children": [
+              { "name": "architecture-diagram.md", "type": "file" },
+              { "name": "context-diagram.md", "type": "file" }
+            ]
+          },
+          { "name": "epics", "type": "directory" },
+          { "name": "technical-tasks", "type": "directory" },
+          {
+            "name": "user-stories",
+            "type": "directory",
+            "children": [
+              {
+                "name": "US-001",
+                "type": "directory",
+                "children": [
+                  { "name": "US-001_activity.md", "type": "file" },
+                  { "name": "US-001_sequence.md", "type": "file" }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "frontend",
+        "type": "directory",
+        "children": [
+          { "name": "base.html", "type": "file" },
+          { "name": "top_page.html", "type": "file" },
+          {
+            "name": "assets",
+            "type": "directory",
+            "children": [
+              {
+                "name": "css",
+                "type": "directory",
+                "children": [
+                  { "name": "custom.css", "type": "file" }
+                ]
+              },
+              {
+                "name": "js",
+                "type": "directory",
+                "children": [
+                  { "name": "issue_selection.js", "type": "file" }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "vendor",
+            "type": "directory",
+            "children": [
+              {
+                "name": "bootstrap",
+                "type": "directory",
+                "children": [
+                  {
+                    "name": "css",
+                    "type": "directory",
+                    "children": [
+                      { "name": "bootstrap.min.css", "type": "file" }
+                    ]
+                  },
+                  {
+                    "name": "js",
+                    "type": "directory",
+                    "children": [
+                      { "name": "bootstrap.bundle.min.js", "type": "file" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
         ]
       },
       {
@@ -30,6 +111,7 @@
         "name": "webapp",
         "type": "directory",
         "children": [
+          { "name": "db.sqlite3", "type": "file" },
           { "name": "manage.py", "type": "file" },
           {
             "name": "app",
@@ -38,8 +120,10 @@
               { "name": "__init__.py", "type": "file" },
               { "name": "admin.py", "type": "file" },
               { "name": "apps.py", "type": "file" },
+              { "name": "forms.py", "type": "file" },
               { "name": "models.py", "type": "file" },
               { "name": "tests.py", "type": "file" },
+              { "name": "urls.py", "type": "file" },
               { "name": "views.py", "type": "file" },
               {
                 "name": "migrations",
@@ -71,7 +155,11 @@
                       { "name": "cli_reporter.py", "type": "file" },
                       { "name": "github_graphql_client.py", "type": "file" },
                       { "name": "github_rest_client.py", "type": "file" },
-                      { "name": "github_utils.py", "type": "file" }
+                      { "name": "github_utils.py", "type": "file" },
+                      { "name": "issue_file_parser_base.py", "type": "file" },
+                      { "name": "json_issue_parser.py", "type": "file" },
+                      { "name": "markdown_issue_parser.py", "type": "file" },
+                      { "name": "yaml_issue_parser.py", "type": "file" }
                     ]
                   },
                   {

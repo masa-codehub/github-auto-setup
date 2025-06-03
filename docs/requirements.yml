@@ -1,16 +1,16 @@
 document_info:
-  title: "GitHub Automation Tool - System Requirements" # タイトルをより一般的に
-  version: "2.5" # さらにバージョンアップ
-  last_updated: "2025-06-02 (JST)" # 本日
-  status: "Core Requirements Defined - Awaiting Backlog Prioritization" # ステータス変更
-  related_documents: # 新設: 関連ドキュメントへの参照
+  title: "GitHub Automation Tool - System Requirements"
+  version: "2.6" # バージョン更新
+  last_updated: "2025-06-03 (JST)" # 日付更新
+  status: "Core Requirements Defined - Awaiting Backlog Prioritization"
+  related_documents:
     - "docs/backlog.yml (Product Backlog - User Stories, Tasks, Acceptance Criteria)"
     - "docs/glossary.md (Project Glossary)"
     - "docs/ui_ux_specifications.md (UI/UX Specifications)"
-    - "docs/diagrams/context-diagram.md (High-Level context - To be created)" 
-    - "docs/diagrams/architecture-diagram.md (High-Level Architecture - To be created)" # アーキテクチャ図の分離も示唆
+    - "docs/diagrams/context-diagram.md (High-Level context - To be created)"
+    - "docs/diagrams/architecture-diagram.md (High-Level Architecture - To be created)"
     - "docs/github_setup_defaults.yml (GitHub Setup Defaults - Labels, Milestones, etc.)"
-    - "README.md (Project Overview, Setup, and Technical Stack)" # READMEへの参照を追加
+    - "README.md (Project Overview, Setup, and Technical Stack)"
 
 sections:
   - heading: "1. 概要と背景"
@@ -91,7 +91,9 @@ sections:
               - "（オプション）分割されたIssueファイル群（ローカル保存時、YAML形式）。"
           - type: "実行形態"
             details:
-              - "コンテナ上で動作するWebアプリケーション（バックエンド: Python/Django、フロントエンド: Djangoテンプレート/Bootstrap5）。"
+              - "コンテナ上で動作するPython/Django製APIバックエンドアプリケーション。"
+              - "**Bootstrap 5と最小限のJavaScriptで構築された静的なWeb UI。**"
+              - "**Web UIはDjangoアプリケーションが静的ファイルをホスティングし、バックエンドAPIと通信する構成。将来的にGitHub Pagesのような静的サイトホスティングサービスからの利用も可能とする。**"
               - "Python CLIアプリケーション（Typer）。"
       - heading: "対象範囲外（Out of Scope）"
         items:
@@ -101,6 +103,7 @@ sections:
           - "Pull Request の自動作成や連携。"
           - "GitHub以外のプラットフォーム連携 (Jira, GitLab等)。"
           - "高度なAPI呼び出しリトライ機構 (現状)。"
+          - "**Web UIにおけるモダンなJavaScriptフレームワーク（React, Vueなど）の利用。**"
 
   - heading: "4. 主要なステークホルダーと役割"
     content: |
@@ -209,6 +212,7 @@ sections:
       - title: "技術スタック"
         content: |
           主要な技術スタックについては、プロジェクトのルートにある `README.md` の「技術スタック」セクションを参照してください。
+          **Web UIのフロントエンド技術には、HTML、CSS、JavaScript（最小限）およびBootstrap 5を採用し、モダンなJavaScriptフレームワークは使用しない。**
 
   - heading: "9. 受け入れ基準"
     content: |
