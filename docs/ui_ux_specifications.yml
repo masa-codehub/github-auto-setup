@@ -1,0 +1,184 @@
+# UI/UX Specifications (docs/ui_ux_specifications.yml)
+
+document_info:
+  title: "UI/UX Specifications"
+  version: "1.0" # このドキュメント自体のバージョン
+  last_updated: "2025-06-02 (JST)" # 作成日
+  status: "Initial Draft"
+  related_requirements_doc: "docs/requirements.yml (v2.4+)"
+
+global_ui_ux_principles:
+  base_framework: "Bootstrap 5"
+  responsive_design: true
+  navigation:
+    header:
+      position: "Fixed Top"
+      content: "Application Name, Main Links (e.g., Home)"
+      source_file: "webapp/templates/base.html" #
+    footer:
+      position: "Bottom"
+      content: "Copyright Information"
+      source_file: "webapp/templates/base.html" #
+  feedback_mechanism:
+    area_id: "result-notification-area"
+    location: "Below Welcome Message Area"
+    method: "Django Message Framework with Bootstrap Alerts (Success, Info, Warning, Error)"
+    source_file: "webapp/templates/top_page.html" #
+
+top_page_layout:
+  source_file: "webapp/templates/top_page.html" #
+  description: "Main user interface for uploading issue files, previewing, selecting, and triggering actions."
+  sections:
+    - section_name: "Welcome Message Area"
+      id: null # No specific ID, but identifiable by structure
+      placement: "Top of page, below navigation, full-width." #
+      components:
+        - type: "Heading (h1.display-4)"
+          content: "GitHub Automation Tool へようこそ！" #
+        - type: "Lead Paragraph (p.lead)"
+          content: "Brief explanation of the tool's purpose." #
+      ux_intent: "Provide an initial welcome, set context, and act as a visual separator."
+
+    - section_name: "Result Notification Area"
+      id: "result-notification-area" #
+      placement: "Below Welcome Message Area." #
+      components:
+        - type: "Dynamic Alert Area"
+          description: "Displays messages from Django Message Framework styled as Bootstrap Alerts." #
+      ux_intent: "Provide clear feedback on user actions (uploads, parsing, GitHub operations, local save) including success, errors, and warnings."
+
+    - section_name: "Main Interaction Area (2-Column Layout)"
+      description: "Primary area for user input, data display, and action execution." #
+      columns:
+        - column_name: "Left Column (main.col-lg-8)" #
+          description: "Handles information input and display, following a top-to-bottom workflow."
+          sections:
+            - section_name: "Step 1: File Upload"
+              id: "upload-section" #
+              placement: "Top of the left column."
+              components:
+                - type: "Card Header"
+                  content: "1. Upload Issue File" #
+                - type: "Form (id='upload-form')" #
+                  elements:
+                    - type: "CSRF Token" #
+                    - type: "File Input (input#issue-file-input)" #
+                      attributes: "type='file', accepts '.md, .yml, .yaml, .json'"
+                    - type: "Submit Button (button#upload-button)" #
+                      label: "Upload & Preview"
+                    - type: "Help Text (div#fileHelp)" #
+                      content: "Allowed file types and size limits."
+              ux_intent: "Guide user to provide the source issue file as the first step."
+
+            - section_name: "Step 2: Preview & Select Issues"
+              id: "issue-list-section" #
+              placement: "Below file upload section."
+              components:
+                - type: "Card Header"
+                  content: "2. Preview & Select Issues" #
+                  sub_components:
+                    - type: "Button (button#select-all-button)" #
+                      label: "Select All"
+                    - type: "Button (button#deselect-all-button)" #
+                      label: "Deselect All"
+                - type: "Issue Count Indicator (p#issue-count-indicator)" #
+                  format: "X issues found."
+                - type: "Issue Table (table#issue-table)" #
+                  header:
+                    - type: "Checkbox (input#select-all-header-checkbox)" #
+                      purpose: "Select/Deselect all issues in the current view."
+                    - "Title"
+                    - "Assignees"
+                    - "Labels"
+                  body_rows:
+                    - type: "Issue Row"
+                      elements:
+                        - type: "Checkbox (input.issue-checkbox)" #
+                          value: "issue.temp_id (Temporary unique ID)"
+                        - type: "Clickable Title (td.issue-title-clickable)" #
+                          action: "Toggles accordion detail view."
+                          hint: "(Click to expand)"
+                        - "Assignees Display"
+                        - "Labels Display (Badges)"
+                    - type: "Detail View (div.collapse)" #
+                      content: "Issue Description, Tasks, Acceptance Criteria, etc."
+              ux_intent: "Allow users to review parsed issues, understand their content via expandable details, and select issues for subsequent actions."
+
+            - section_name: "Information Cards" #
+              placement: "Bottom of the left column."
+              components:
+                - type: "Card"
+                  title: "機能概要"
+                  content: "Tool's feature summary (placeholder)."
+                - type: "Card"
+                  title: "利用開始"
+                  content: "Getting started guide (placeholder)."
+              ux_intent: "Provide supplementary information and links without cluttering the main workflow."
+
+        - column_name: "Right Column (aside.col-lg-4)" #
+          description: "Contains action execution panel and AI configuration. Sticky to remain visible on scroll."
+          sections:
+            - section_name: "Step 3: Execute Actions"
+              id: "action-panel-section" #
+              placement: "Top of the right column, sticky."
+              components:
+                - type: "Card Header"
+                  content: "3. Execute Actions" #
+                - type: "Form (form#action-form)" #
+                  elements:
+                    - type: "Hidden Input (input#selected-issue-ids-input)" #
+                      purpose: "Stores comma-separated IDs of selected issues, updated by JavaScript."
+                    - group_name: "GitHub Registration"
+                      elements:
+                        - type: "Text Input (input#repo-name-input)" #
+                          label: "Repository"
+                          placeholder: "owner/repo-name"
+                        - type: "Text Input (input#project-name-input)" #
+                          label: "Project Name (Optional)"
+                        - type: "Switch/Checkbox (input#dry-run-checkbox)" #
+                          label: "Dry Run Mode"
+                          default: true
+                        - type: "Submit Button (button#github-submit-button)" #
+                          label: "Create Issues on GitHub"
+                    - group_name: "Local Save"
+                      elements:
+                        - type: "Text Input (input#local-path-input)" #
+                          label: "Save Directory (Optional)"
+                          placeholder: "./output_issues"
+                        - type: "Button (button#local-save-button)" #
+                          label: "Save Issues Locally"
+                    - group_name: "AI Configuration" #
+                      elements:
+                        - type: "Radio Buttons (input[name='ai_provider'])" #
+                          label: "AI Provider:"
+                          options:
+                            - { value: "openai", label: "OpenAI", default: true }
+                            - { value: "gemini", label: "Google Gemini" }
+                        - type: "Select Dropdown (select#openai-model-select)" #
+                          label: "OpenAI Model:"
+                          name: "openai_model_name"
+                          options:
+                            - { value: "gpt-4o", label: "gpt-4o (Default)", default: true }
+                            - { value: "gpt-4", label: "gpt-4" }
+                            - { value: "gpt-3.5-turbo", label: "gpt-3.5-turbo" }
+                          visibility_condition: "AI Provider is OpenAI"
+                        - type: "Select Dropdown (select#gemini-model-select)" #
+                          label: "Gemini Model:"
+                          name: "gemini_model_name"
+                          options:
+                            - { value: "gemini-1.5-flash", label: "gemini-1.5-flash" } # Default option duplicated to match HTML
+                            - { value: "gemini-1.5-flash", label: "gemini-1.5-flash (Default)", default: true }
+                            - { value: "gemini-1.5-pro-latest", label: "gemini-1.5-pro-latest" }
+                            - { value: "gemini-1.0-pro", label: "gemini-1.0-pro" }
+                          visibility_condition: "AI Provider is Google Gemini"
+                        - type: "Password Input (input#api-key-input)" #
+                          label: "API Key"
+                          name: "api_key"
+                          placeholder: "Enter API Key for selected provider"
+              ux_intent: "Enable users to execute primary actions (GitHub registration, local save) on selected issues, and configure AI settings for parsing, with all relevant controls grouped and readily accessible."
+
+future_enhancements_ux:
+  - "Asynchronous processing for long-running tasks (e.g., GitHub registration) with progress indicators."
+  - "Dedicated settings page for more granular AI configurations and data mapping rules."
+  - "In-UI editing capability for parsed issue details before submission."
+  - "Display of existing GitHub resource status (e.g., if repository/project already exists)."

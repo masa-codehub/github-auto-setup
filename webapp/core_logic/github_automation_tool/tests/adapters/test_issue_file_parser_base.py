@@ -4,7 +4,7 @@ import pytest
 
 # sys.pathを調整し、プロジェクトルートをimportパスに追加
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../../../../')))
-from webapp.core_logic.github_automation_tool.adapters.issue_file_parser_base import AbstractIssueFileParser, IntermediateParsingResult
+from ..adapters.issue_file_parser_base import AbstractIssueFileParser, IntermediateParsingResult
 
 class DummyParser(AbstractIssueFileParser):
     def parse(self, file_content: str) -> IntermediateParsingResult:

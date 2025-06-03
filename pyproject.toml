@@ -22,6 +22,7 @@ python_files = ["tests.py", "test_*.py", "*_tests.py"]
 addopts = "-v --maxfail=3"
 pythonpath = ["webapp", "webapp/core_logic"]
 testpaths = ["webapp/app", "webapp/core_logic/tests"]
+django_find_project = false
 
 [tool.coverage.run]
 omit = [

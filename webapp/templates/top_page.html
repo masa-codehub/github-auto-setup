@@ -52,7 +52,7 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted" id="issue-count-indicator">Showing 2 sample issues for display check. This will be updated after file upload.</p>
+                    <p class="text-muted" id="issue-count-indicator">{{ issue_count }} issues found.</p>
                     <div id="issue-list-container" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                         <table id="issue-table" class="table table-hover table-sm">
                             <thead class="table-light sticky-top">
@@ -64,49 +64,38 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr data-bs-toggle="collapse" data-bs-target="#issueDetail1" aria-expanded="false" aria-controls="issueDetail1" class="issue-row-item">
-                                    <td><input type="checkbox" class="form-check-input issue-checkbox" value="dummy-issue-1" onclick="event.stopPropagation();"></td>
-                                    <td class="issue-title-clickable">[UserStory] Implement file upload feature with preview <span class="ms-2 text-muted small">(Click to expand)</span></td>
-                                    <td><code>user-a</code>, <code>user-c</code></td>
-                                    <td><span class="badge bg-primary">feature</span> <span class="badge bg-info text-dark">ui</span></td>
+                            {% for issue in issue_list %}
+                                <tr data-bs-toggle="collapse" data-bs-target="#issueDetail{{ forloop.counter0 }}" aria-expanded="false" aria-controls="issueDetail{{ forloop.counter0 }}" class="issue-row-item">
+                                    <td><input type="checkbox" class="form-check-input issue-checkbox" value="{{ issue.temp_id }}" onclick="event.stopPropagation();"></td>
+                                    <td class="issue-title-clickable">{{ issue.title }} <span class="ms-2 text-muted small">(Click to expand)</span></td>
+                                    <td>{% if issue.assignees %}{% for a in issue.assignees %}<code>{{ a }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</td>
+                                    <td>{% if issue.labels %}{% for l in issue.labels %}<span class="badge bg-secondary">{{ l }}</span> {% endfor %}{% endif %}</td>
                                 </tr>
                                 <tr>
                                     <td colspan="4" class="p-0">
-                                        <div class="collapse" id="issueDetail1">
+                                        <div class="collapse" id="issueDetail{{ forloop.counter0 }}">
                                             <div class="card card-body bg-light">
                                                 <strong>Description:</strong><br>
-                                                This is the detailed description for UserStory: Implement file upload feature with preview. It might contain multiple lines and <strong>markdown</strong> if rendered.<br><br>
+                                                {{ issue.description|linebreaksbr }}<br>
+                                                {% if issue.tasks %}
                                                 <strong>Tasks:</strong>
                                                 <ul>
-                                                    <li>Define API endpoint</li>
-                                                    <li>Implement file parsing logic</li>
-                                                    <li>Write unit tests</li>
+                                                    {% for t in issue.tasks %}<li>{{ t }}</li>{% endfor %}
                                                 </ul>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr data-bs-toggle="collapse" data-bs-target="#issueDetail2" aria-expanded="false" aria-controls="issueDetail2" class="issue-row-item">
-                                    <td><input type="checkbox" class="form-check-input issue-checkbox" value="dummy-issue-2" onclick="event.stopPropagation();"></td>
-                                    <td class="issue-title-clickable">[Bug] Fix login button styling on mobile <span class="ms-2 text-muted small">(Click to expand)</span></td>
-                                    <td><code>user-b</code></td>
-                                    <td><span class="badge bg-danger">bug</span> <span class="badge bg-info text-dark">ui</span> <span class="badge bg-warning text-dark">mobile</span></td>
-                                </tr>
-                                <tr>
-                                    <td colspan="4" class="p-0">
-                                        <div class="collapse" id="issueDetail2">
-                                            <div class="card card-body bg-light">
-                                                <strong>Description:</strong><br>
-                                                The login button does not display correctly on small screens. It needs CSS adjustments for mobile responsiveness.<br><br>
+                                                {% endif %}
+                                                {% if issue.acceptance %}
                                                 <strong>Acceptance Criteria:</strong>
                                                 <ul>
-                                                    <li>Button is centered.</li>
-                                                    <li>Font size is appropriate.</li>
+                                                    {% for ac in issue.acceptance %}<li>{{ ac }}</li>{% endfor %}
                                                 </ul>
+                                                {% endif %}
                                             </div>
                                         </div>
                                     </td>
                                 </tr>
+                            {% empty %}
+                                <!-- データが無い場合 -->
+                            {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -134,6 +123,7 @@
                 </div>
                 <div class="card-body">
                     <form id="action-form">
+                        <input type="hidden" name="selected_issue_ids" id="selected-issue-ids-input">
                         <h6 class="card-title">GitHub Registration</h6>
                         <div class="mb-3">
                             <label for="repo-name-input" class="form-label">Repository</label>

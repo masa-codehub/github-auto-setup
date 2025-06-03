@@ -11,10 +11,14 @@ from github_automation_tool.domain.exceptions import GitHubAuthenticationError
 from unittest import skip
 
 from .forms import FileUploadForm, MAX_UPLOAD_SIZE_BYTES
+from github_automation_tool.domain.models import IssueData, ParsedRequirementData
 
 
 class TopPageViewTest(TestCase):
     """トップページViewのテスト"""
+
+    def setUp(self):
+        self.url = reverse('app:top_page')
 
     def test_top_page_status_code(self):
         """トップページが200を返すことを確認"""
@@ -137,39 +141,32 @@ class TopPageViewTest(TestCase):
         # メッセージ内容やalertクラスは検証しない
 
     def test_issue_list_section_exists(self):
-        """Issue一覧表示エリアのUI骨格要素が存在することを検証"""
-        response = self.client.get(reverse('app:top_page'))
+        """Issue一覧表示エリアのUI骨格要素が存在し、ダミー2件でテーブル・チェックボックス等が出力されることを検証"""
+        mock_issues = [
+            IssueData(title="Test Issue 1", description="Desc 1", labels=["bug"], assignees=["userA"]),
+            IssueData(title="Test Issue 2", description="Desc 2", labels=["feature"], assignees=["userB"])
+        ]
+        with self.settings(DEBUG=True):
+            with self.modify_settings(MIDDLEWARE={"append": "django.contrib.sessions.middleware.SessionMiddleware"}):
+                session = self.client.session
+                session['uploaded_file_content'] = 'dummy content'
+                session['uploaded_file_name'] = 'dummy.md'
+                session.save()
+                with patch('app.views.get_parsed_issues_for_session', return_value=mock_issues):
+                    response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-
-        # セクション全体
-        self.assertContains(response, 'id="issue-list-section"',
-                            msg_prefix="Issue list section not found")
-
-        # 主要なUI要素
-        self.assertContains(response, 'id="select-all-button"',
-                            msg_prefix="Select all button not found")
-        self.assertContains(response, 'id="deselect-all-button"',
-                            msg_prefix="Deselect all button not found")
-        self.assertContains(response, '<table id="issue-table"',
-                            msg_prefix="Issue table not found")
-        self.assertContains(response, '<th scope="col">Title</th>',
-                            msg_prefix="Table header 'Title' not found")
-        self.assertContains(response, 'class="form-check-input issue-checkbox"',
-                            count=2, msg_prefix="Issue row checkboxes not found or not enough samples")
-
-        # --- 詳細表示UIの検証を追加 ---
-        self.assertContains(response, 'data-bs-toggle="collapse" data-bs-target="#issueDetail',
-                            count=2, msg_prefix="Collapse toggle for issue details not found or not enough samples")
-        self.assertContains(response, 'id="issueDetail1"',
-                            msg_prefix="Detail container for first dummy issue not found")
-        self.assertContains(response, 'id="issueDetail2"',
-                            msg_prefix="Detail container for second dummy issue not found")
-        self.assertContains(response, 'class="issue-title-clickable"', count=2,
-                            msg_prefix="Clickable title class not found on dummy issues")
-        self.assertContains(response, "(Click to expand)",
-                            count=2, msg_prefix="Expand hint not found")
-        self.assertContains(response, "<strong>Description:</strong>", count=2,
-                            msg_prefix="Dummy description placeholder not found in details")
+        self.assertContains(response, 'id="issue-list-section"', msg_prefix="Issue list section not found")
+        self.assertContains(response, 'id="select-all-button"', msg_prefix="Select all button not found")
+        self.assertContains(response, 'id="deselect-all-button"', msg_prefix="Deselect all button not found")
+        self.assertContains(response, '<table id="issue-table"', msg_prefix="Issue table not found")
+        self.assertContains(response, '<th scope="col">Title</th>', msg_prefix="Table header 'Title' not found")
+        self.assertContains(response, 'class="form-check-input issue-checkbox"', count=2, msg_prefix="Issue row checkboxes not found or not enough samples")
+        self.assertContains(response, 'data-bs-toggle="collapse" data-bs-target="#issueDetail', count=2, msg_prefix="Collapse toggle for issue details not found or not enough samples")
+        self.assertContains(response, 'id="issueDetail0"', msg_prefix="Detail container for first dummy issue not found")
+        self.assertContains(response, 'id="issueDetail1"', msg_prefix="Detail container for second dummy issue not found")
+        self.assertContains(response, 'class="issue-title-clickable"', count=2, msg_prefix="Clickable title class not found on dummy issues")
+        self.assertContains(response, "(Click to expand)", count=2, msg_prefix="Expand hint not found")
+        self.assertContains(response, "<strong>Description:</strong>", count=2, msg_prefix="Dummy description placeholder not found in details")
 
     def test_ai_configuration_section_exists(self):
         """AI設定エリアのUI骨格要素が存在することを検証"""
@@ -325,7 +322,6 @@ class TopPageViewUploadTests(TestCase):
         storage = get_messages(response.wsgi_request)
         messages = list(storage)
         self.assertTrue(any("File upload failed" in str(m) for m in messages))
-
     def test_post_no_file(self):
         response = self.client.post(reverse('app:top_page'), {})
         self.assertEqual(response.status_code, 200)
@@ -364,7 +360,7 @@ class TopPageViewUploadTests(TestCase):
         response = self.client.post(reverse('app:top_page'), {'issue_file': uploaded_file})
         self.assertEqual(response.status_code, 200)
         messages = list(get_messages(response.wsgi_request))
-        self.assertTrue(any("Failed to decode" in str(m) for m in messages))
+        self.assertTrue(any("File upload failed" in str(m) for m in messages))
 
 
 def test_webui_github_pat_not_set():
@@ -455,3 +451,62 @@ def test_webui_github_pat_empty():
 @skip("トップページGET時にPAT不備でエラー画面にはならないためスキップ")
 def test_webui_github_pat_invalid(monkeypatch):
     pass
+
+
+class IssueListViewTests(TestCase):
+    """Issue一覧表示・選択機能のビュー/テンプレートテスト"""
+    def setUp(self):
+        self.url = reverse('app:top_page')
+
+    def test_issue_list_empty(self):
+        """Issueデータが空の場合、テーブルが空で件数0が表示される"""
+        session = self.client.session
+        session['uploaded_file_content'] = 'dummy content'
+        session['uploaded_file_name'] = 'dummy.md'
+        session.save()
+        with self.settings(DEBUG=True):
+            response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="issue-table"')
+        self.assertContains(response, '0 issues', msg_prefix="件数表示が0件になっているか")
+        # tbody内に<tr>が無いことを確認
+        self.assertNotIn('<tr data-bs-toggle="collapse"', response.content.decode())
+
+    def test_issue_list_single_item(self):
+        """Issueデータが1件の場合、テーブルに1行表示される"""
+        mock_issues = [
+            IssueData(title="Test Issue 1", description="Desc 1", labels=["bug"], assignees=["userA"])
+        ]
+        with self.settings(DEBUG=True):
+            with self.modify_settings(MIDDLEWARE={"append": "django.contrib.sessions.middleware.SessionMiddleware"}):
+                session = self.client.session
+                session['uploaded_file_content'] = 'dummy content'
+                session['uploaded_file_name'] = 'dummy.md'
+                session.save()
+                with patch('app.views.get_parsed_issues_for_session', return_value=mock_issues):
+                    response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="issue-table"')
+        self.assertContains(response, 'Test Issue 1')
+        self.assertContains(response, 'class="form-check-input issue-checkbox"')
+        self.assertContains(response, '1 issues', msg_prefix="件数表示が1件になっているか")
+
+    def test_issue_list_multiple_items(self):
+        """Issueデータが複数件の場合、テーブルに複数行表示される"""
+        mock_issues = [
+            IssueData(title="Test Issue 1", description="Desc 1", labels=["bug"], assignees=["userA"]),
+            IssueData(title="Test Issue 2", description="Desc 2", labels=["feature"], assignees=["userB"])
+        ]
+        with self.settings(DEBUG=True):
+            with self.modify_settings(MIDDLEWARE={"append": "django.contrib.sessions.middleware.SessionMiddleware"}):
+                session = self.client.session
+                session['uploaded_file_content'] = 'dummy content'
+                session['uploaded_file_name'] = 'dummy.md'
+                session.save()
+                with patch('app.views.get_parsed_issues_for_session', return_value=mock_issues):
+                    response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Test Issue 1')
+        self.assertContains(response, 'Test Issue 2')
+        self.assertContains(response, 'class="form-check-input issue-checkbox"', count=2)
+        self.assertContains(response, '2 issues', msg_prefix="件数表示が2件になっているか")

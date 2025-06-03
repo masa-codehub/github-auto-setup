@@ -42,6 +42,8 @@
       </div>
     </footer>
     <script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
-    {% block extra_scripts %}{% endblock extra_scripts %}
+    {% block extra_scripts %}
+    <script src="{% static 'js/issue_selection.js' %}"></script>
+    {% endblock extra_scripts %}
   </body>
 </html>

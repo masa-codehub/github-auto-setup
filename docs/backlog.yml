@@ -1,0 +1,352 @@
+# docs/backlog.yml
+
+document_info:
+  title: "Product Backlog for GitHub Automation Tool"
+  version: "2.6" # 静的フロントエンド + API構成への変更を反映
+  last_updated: "2025-06-03 (JST)"
+  status: "Refining for Static Frontend + API Architecture"
+  source_documents_integrated:
+    - "docs/agile-practice.yml (v2.3) - Archived"
+    - "docs/issues.yml (v2.3) - Archived"
+  related_documents:
+    - "docs/requirements.yml (v2.5+)"
+    - "docs/glossary.md"
+    - "docs/ui_ux_specifications.md"
+    - "docs/github_setup_defaults.yml"
+    - "docs/user-stories/US-001/US-001_activity.md"
+    - "docs/user-stories/US-001/US-001_sequence.md"
+    - "docs/diagrams/context-diagram.md (To be created)"
+    - "docs/diagrams/architecture-diagram.md (Updated for API architecture)"
+    - "docs/api_specifications.md (To be created)"
+
+development_approach_guidelines:
+  preface: |
+    このセクションは、本プロダクトバックログのアイテム（ユーザーストーリーやテクニカルタスク）を
+    具体化し、実装に進む上での基本的な考え方や、設計を支援する図の活用方法についての方針を示す。
+    チームメンバーは、これらの指針を参考に、効果的かつ効率的な開発を心がける。
+  initial_steps_for_implementation:
+    - step_name: "1. Backlog Item Prioritization and Sprint Planning"
+      description: |
+        プロダクトオーナー（または相当する役割）が中心となり、本バックログのアイテムに優先順位を付け、
+        スプリント（または開発イテレーション）で取り組む範囲（スプリントバックログ）を決定する。
+        早期に価値を提供しフィードバックを得るため、コアとなる機能フローの確立を優先的に検討する
+        （例: 静的Web UIからのファイルアップロード→バックエンドAPIでのAIルール推論と解析→API経由での結果表示→選択）。
+    - step_name: "2. Detailed Behavior Clarification for Selected Items"
+      description: |
+        スプリントバックログに選択されたユーザーストーリーについて、アクセプタンスクライテリアを基に、
+        より詳細なシナリオ、期待される動作、正常系・異常系のフローをチーム内で明確に合意する。
+        この段階で、APIエンドポイントの設計、リクエスト/レスポンス形式の定義、および関連するアクティビティ図やシーケンス図の作成が推奨される。
+    - step_name: "3. Key Data Model & API Serialization Finalization"
+      description: |
+        主要なデータモデル（例: `ParsedSourceFileContent`）の構造と、それらをAPIで送受信するための
+        シリアライズ/デシリアライズ方法をFIXさせる。
+    - step_name: "4. API Design and Backend Service Layer for API Requests"
+      description: |
+        バックエンドAPIのエンドポイント設計と、それらのリクエストを処理しコアロジックのUseCaseを呼び出す
+        アプリケーションサービス層（またはDRFのView/ViewSet）の設計を行う。
+  ai_parser_strategy:
+    concept: |
+      AIパーサーの主要な役割は、入力ファイル全体を分析し、以下の2種類のルールを動的に推論・生成することにある。
+      1. **Issue区切りルール（主にファイル内で共通する先頭キー/開始パターンをAIが推論し、Markdownの水平線やヘッダーレベル、YAML/JSONのリスト形式などはフォールバックまたは設定ベースで処理）、および...**
+      2. **キーマッピングルール:** 推論された各Issueブロック/レコード内で、入力ファイル中のどのキーや記述が、`IssueData`の標準フィールド名（例: `title`, `description`）に対応するか、その対応関係を辞書等で示す。
+      これらの推論されたルール（またはフォールバック/設定ルール）に基づき、後続のルールベース処理でファイルが分割され、IssueDataにマッピングされる。
+    key_considerations:
+      - "AI Rule Generation Accuracy: AIが生成するルールの精度と安定性の検証。信頼度判定基準（先頭キーの一貫性、必須フィールド充足率）を設け、信頼度が低い場合は厳格なエラー処理（処理中断とユーザーへの修正依頼）を基本とし、または警告と共に部分的な結果を表示する。"
+      - "Rule Representation: AIが主に推論する「先頭キー」区切りルールと「キーマッピングルール」の表現形式、およびフォールバック/設定用の区切りルール（水平線、ヘッダーレベル、リストアイテム）の表現形式を設計 (`TASK-RULE-REPRESENTATION`)。初期サポート範囲: 区切り(AI推論は`leading_key`のみ、他はルールベースフォールバック/設定)、値抽出(`key_value`, `list_items_under_key`, `plain_text_block`)、値変換(`to_list_by_comma`, `to_list_by_newline`, `extract_mentions`)。"
+      - "Prompt Engineering & Management: 高度なルール推論を実現するためのプロンプト設計を重視する。プロンプト自体は外部ファイル（TASK-PROMPT-MANAGEMENT）で管理し、柔軟な調整を可能にする。`config.yaml` からの複雑なマッピングヒントは導入せず、AIの推論能力とユーザーによる入力ファイル調整、分かりやすいフィードバックに注力する。"
+      - "User Feedback Loop (Web UI & CLI): AIによる解析結果（分割・マッピング結果）をユーザーが確認できるようにする。Web UIでは静的フロントエンドがAPIから結果を取得し表示、CLIではDryRunや中間出力で確認手段を提供する。UI上でのインタラクティブなマッピング修正機能はスコープ外とする。"
+      - "Default Field Mapping Fallback: AIによるフィールドマッピング推論が不調な場合、`github_setup_defaults.yml` に定義された標準的なキーと`IssueData`フィールドの対応リストをフォールバックまたはAI推論の参考情報として活用することを検討する。"
+      - "File-level Meta-information: Issueごとの情報抽出とは別に、ファイル全体から共通のメタ情報（プロジェクト名等）を抽出する方法（プロンプト指示、または規約ベース）も検討するが、マイルストーンとラベルは`github_setup_defaults.yml`との照合を基本とする。"
+  guidelines_for_using_diagrams:
+    - diagram_type: "Activity Diagram"
+      purpose: "ユーザー操作フロー、システム内部の主要処理ステップ、条件分岐、繰り返し処理を視覚的に明確にする。"
+      timing_and_use_case: |
+        - ユーザーストーリーの振る舞いを具体化する初期段階。
+        - 複雑なアルゴリズムやビジネスロジックの内部フローを整理する際。
+        - チーム内で業務プロセスやユーザーシナリオの共通理解を形成する際。
+      how_to_use: "開始/終了点、アクション、判断、マージ、フォーク/ジョインでフローを描画。必要に応じてスイムレーンで担当コンポーネントを区別。"
+
+    - diagram_type: "Sequence Diagram"
+      purpose: "特定の機能を実現するための、オブジェクト（コンポーネント、クラス）間の時間軸に沿ったメッセージ交換と相互作用を詳細に示す。"
+      timing_and_use_case: |
+        - アクティビティ図で大まかな流れを掴んだ後、コンポーネント間の具体的なIF（メソッド呼び出し、データ授受）を設計する際。
+        - 各オブジェクトの責務を明確化する際。
+        - 非同期処理や外部API連携のシーケンスを検討する際。
+        - 特にcore_logicのUseCaseとAdapter間、Adapterと外部API間のインタラクション明確化に有効。
+      how_to_use: "ライフライン、メッセージ（同期/非同期）、活性化区間、応答メッセージで描画。"
+
+    - diagram_type: "Component Diagram (Detailed Level)"
+      purpose: "システムを構成する主要コンポーネント（クラスやモジュール）と、それらの間の静的な依存関係やインターフェースを視覚化する。"
+      timing_and_use_case: |
+        - より詳細なアーキテクチャ設計や議論を行う際。
+        - あるコンポーネント変更時の影響範囲を分析する際。
+        - 新規メンバーへのシステム構成説明。
+      how_to_use: "コンポーネント、インターフェース、依存関係、ポートで描画。"
+
+    - diagram_type: "Data Model Diagram (or Class Diagram for models)"
+      purpose: "システムが扱う主要データ（ドメインモデル）の構造、属性、型、関連性を視覚的に表現する。"
+      timing_and_use_case: |
+        - `ParsedSourceFileContent` や `IssueData` などの詳細設計時。
+        - モデル間の関連性（1対多など）を明確にし、データ整合性を担保する設計を行う際。
+      how_to_use: "エンティティ（クラス）、属性、型、リレーションシップで描画。"
+
+    - diagram_type: "State Transition Diagram (State Machine Diagram)"
+      purpose: "特定のオブジェクトやシステムが時間経過やイベント発生に伴い、どのように状態を変化させるかを示す。"
+      timing_and_use_case: |
+        - Web UIの動的な振る舞い（例: 非同期処理中の状態変化）の設計時。
+        - バックログアイテムのワークフロー（ステータス遷移）定義。
+      how_to_use: "状態、遷移、イベント、アクションで描画。"
+
+  recommended_workflow_for_diagrams: |
+    1. スプリントで取り組むユーザーストーリーを選択する。
+    2. そのユーザーストーリーの主要なフローを **アクティビティ図** で大まかに把握する。
+    3. アクティビティ図で洗い出された主要な処理やコンポーネント間のやり取りを **シーケンス図** で詳細化し、インターフェースやデータフローを明確にする。
+    4. 上記の過程で、扱うデータモデルが複雑であれば **データモデル図** で整理する。
+    5. コンポーネント間の静的な依存関係や全体の構造が複雑であれば **コンポーネント図** で整理する。
+    6. UIの状態遷移や特定のオブジェクトのライフサイクルが複雑であれば **状態遷移図** を描く。
+    7. これらの図を基に、実装タスクを具体化し、本バックログのテクニカルタスクを更新・詳細化する。
+    8. 作成した図はチームで共有し、認識合わせとレビューを行う。図は完璧を目指すより、コミュニケーションと設計の補助を目的とする。
+
+epics:
+  - epic_id: "EPIC-WEBUI"
+    title: "Static Web Frontend Functionality"
+    description: "ユーザーがブラウザを通じてIssue情報ファイルをアップロードし、バックエンドAPIと通信して解釈された内容を確認・選択し、GitHubへの登録やローカル保存アクションをトリガーできる静的なWebフロントエンドを提供する。"
+    user_stories:
+      - "US-001"
+      - "US-002"
+      - "US-003"
+      - "US-004"
+      - "US-WEBUI-AI-CONFIG"
+  - epic_id: "EPIC-BACKEND-API"
+    title: "Backend API Services"
+    description: "静的フロントエンドやCLIからのリクエストを処理し、コアロジックを実行し、結果を返すためのAPIエンドポイント群を提供する。"
+    user_stories: []
+  # ... (他のEPICのdescriptionも、API構成を前提とした内容に微調整の可能性あり)
+
+user_stories:
+  - story_id: "US-001"
+    title: "Web UIでのIssueファイルのアップロード、バックエンドAPI経由でのAI解析、結果の一覧表示"
+    description: "開発者として、静的なWeb UIからIssue情報ファイル（Markdown, YAML, JSON）を選択し、バックエンドAPIに送信してAIによる区切り・キーマッピングルール推論と解析を実行させ、その結果（Issueの一覧）をAPI経由で取得し画面で確認したい。これにより、多様なフォーマットやキーの揺らぎがあるファイルからでも効率的にIssue情報を把握できる。"
+    acceptance_criteria:
+      - "静的Web UIにファイルアップロード機能があり、`.md`, `.yml`, `.json` ファイル（10MB以下）を選択できる。"
+      - "選択されたファイルデータが、フロントエンドからバックエンドのファイルアップロード/解析APIエンドポイントに送信される。"
+      - "バックエンドAPIはファイルを受け取り、AIパーサーによって区切りルールとキーマッピングルールを推論し、それに基づいて`ParsedSourceFileContent`オブジェクトを生成する。"
+      - "解析結果（`ParsedSourceFileContent`内の`IssueData`リストとメタ情報）が、APIエンドポイントからJSON形式などでフロントエンドに返却される。"
+      - "フロントエンドはAPIからのレスポンスを受け取り、`IssueData`リストをWeb UI上に一覧形式で表示する。"
+      - "Issueの主要な情報（タイトル、担当者候補、ラベル候補など）が一覧で確認できる。"
+      - "ファイル検証エラー（API側）、API通信エラー、AI解析エラーが発生した場合、適切なエラーメッセージがフロントエンドのUIに表示される。"
+    technical_tasks:
+      - "TASK-FE-US001-UPLOAD-UI"
+      - "TASK-FE-US001-API-UPLOAD-CALL"
+      - "TASK-FE-US001-DISPLAY-LOGIC"
+      - "TASK-FE-US001-ERROR-HANDLING"
+      - "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
+      - "TASK-CORELOGIC-RULE-BASED-SPLITTER"
+      - "TASK-CORELOGIC-RULE-BASED-MAPPER"
+      - "TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER"
+    notes: |
+      - [アーキテクチャ変更] このユーザーストーリーは静的フロントエンド + バックエンドAPI構成を前提とする。
+      - [API設計] 詳細なAPIエンドポイント、リクエスト/レスポンス形式は `docs/api_specifications.md` を参照。
+    referenced_requirements_ids:
+      - "UC-Web-001 (フロー1-6)"
+      - "FR-WebUI-001"
+      - "FR-File-001"
+      - "FR-Parse-001"
+      - "FR-Map-002"
+      - "FR-Display-001"
+    related_epic_ids: ["EPIC-WEBUI", "EPIC-DATAPARSING", "EPIC-BACKEND-API"]
+    size_estimate: "[SP: 13]"
+    dependencies_guessed:
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
+      - "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
+    status: "To Do"
+    priority: "High"
+
+  - story_id: "US-002"
+    title: "Web UIでの処理対象Issueの選択"
+    description: "開発者として、Web UIに表示されたIssue一覧の中から、GitHubへの登録やローカル保存の対象とするIssueを個別に、または一括で選択したい。これにより、必要なIssueのみを効率的に処理できる。"
+    acceptance_criteria:
+      - "Issue一覧の各項目にチェックボックスが表示され、個別に選択/非選択できる。"
+      - "「すべて選択」「すべて解除」のような一括選択機能がある。"
+      - "選択されたIssueの情報がバックエンドに正しく送信される。"
+    technical_tasks:
+      - "TASK-WEBUI-SELECT-JS"          # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
+      - "TASK-WEBUI-SELECT-BACKEND"     # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
+    related_epic_ids: ["EPIC-WEBUI"]
+    size_estimate: "[SP: 3]"
+    dependencies_guessed:
+      - "US-001"
+    status: "To Do"
+    priority: "High"
+
+  - story_id: "US-003"
+    title: "Web UIからのGitHubへのIssue一括登録"
+    description: "開発者として、Web UIで選択したIssue群を、指定したGitHubリポジトリ（および任意でプロジェクト）に一括で登録したい。ラベル、マイルストーン、担当者も適切に設定されること。DryRunモードも利用したい。"
+    acceptance_criteria:
+      - "UI上でGitHubリポジトリ名（owner/repo形式）を入力できる。"
+      - "UI上で任意でGitHubプロジェクト名（またはID/URL）を入力できる。"
+      - "UI上でDryRunモードのON/OFFを選択できる。"
+      - "「GitHubへ登録」ボタン押下時、選択されたIssueと設定情報がバックエンドに送信される。"
+      - "バックエンド（アプリケーションサービス層経由）で`core_logic`の`CreateGitHubResourcesUseCase`が呼び出される。"
+      - "処理結果（成功、失敗、スキップ、DryRun結果）がUIにフィードバックされる。"
+    technical_tasks:
+      - "TASK-WEBUI-GITHUBFORM-IMPL"    # issues.yml の TASK-WEBUI-GITHUB-ACTION の一部
+      - "TASK-APPSERVICE-GITHUB-CALL"   # issues.yml の TASK-WEBUI-GITHUB-ACTION の一部
+      - "TASK-CORELOGIC-GITHUB-MAIN"    # issues.yml の TASK-CORELOGIC-GITHUB-MAIN
+      - "TASK-GITHUB-CLIENTS-SETUP"   # issues.yml から
+    related_epic_ids: ["EPIC-WEBUI", "EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICからGITHUB-INTEGRATIONへ
+    size_estimate: "[SP: 13]"
+    dependencies_guessed:
+      - "US-001"
+      - "US-002"
+      - "TASK-CORELOGIC-AIPARSE-CALL"
+      - "TASK-GITHUB-CLIENTS-SETUP"
+    notes: "[分割案あり] リポジトリ作成、ラベル作成、マイルストーン作成、Issue作成、プロジェクト連携の各機能を個別の（より小さな）ユーザーストーリーとして扱うことも可能かもしれません。"
+    status: "To Do"
+    priority: "High"
+
+  - story_id: "US-004"
+    title: "Web UIからの解析済みIssueのローカル保存"
+    description: "開発者として、Web UIで解析・表示されたIssue情報（または選択したIssue群）を、ローカルファイルシステムにYAML形式で分割保存したい。保存されたファイル群の目次となるindex.htmlも生成されること。"
+    acceptance_criteria:
+      - "UI上でローカル保存アクションをトリガーできる（例: 保存ボタン）。"
+      - "バックエンド（アプリケーションサービス層経由）で`core_logic`のローカル保存用UseCase（仮称 `LocalSaveUseCase`）が呼び出される。"
+      - "指定された（またはデフォルトの）ディレクトリに、IssueごとにYAMLファイルが作成される。"
+      - "保存されたYAMLファイルへのリンクを含む`index.html`が同ディレクトリに作成される。"
+      - "処理結果がUIにフィードバックされる。"
+    technical_tasks:
+      - "TASK-WEBUI-LOCALSAVEFORM-IMPL" # issues.yml の TASK-FILESPLIT-IMPL のUI部分
+      - "TASK-APPSERVICE-LOCALSAVE-CALL" # issues.yml の TASK-FILESPLIT-IMPL のサービス連携部分
+      - "TASK-CORELOGIC-LOCALSAVE-IMPL"  # issues.yml の TASK-FILESPLIT-IMPL のコアロジック部分
+    related_epic_ids: ["EPIC-WEBUI"]
+    size_estimate: "[SP: 5]"
+    dependencies_guessed:
+      - "US-001"
+      - "TASK-CORELOGIC-AIPARSE-CALL" # 旧TASK-DATAMAP-IMPL
+    status: "To Do"
+    priority: "Medium"
+
+  - story_id: "US-005"
+    title: "CLIからのIssue一括登録とDryRun"
+    description: "開発者として、CLIからIssue情報ファイルとGitHubリポジトリ名を指定し、Issue、ラベル、マイルストーン等を一括で登録したい。DryRunモードも利用したい。"
+    acceptance_criteria:
+      - "CLIでファイルパス、リポジトリ名、プロジェクト名（任意）、DryRunフラグを指定できる。"
+      - "`core_logic`の`CreateGitHubResourcesUseCase`が呼び出され、処理が実行される。"
+      - "処理結果がコンソールに`CliReporter`を通じて出力される。"
+    technical_tasks:
+      - "TASK-CLI-ARGS-PARSE"         # issues.yml から
+      - "TASK-CLI-CORELOGIC-CALL"     # issues.yml から
+      - "TASK-CLI-REFACTOR"         # issues.yml の TASK-CLI-MAINTENANCE と関連
+    related_epic_ids: ["EPIC-CLI-MAINTENANCE", "EPIC-GITHUB-INTEGRATION"]
+    size_estimate: "[SP: 5]"
+    dependencies_guessed:
+      - "TASK-CORELOGIC-AIPARSE-CALL"
+      - "TASK-CORELOGIC-GITHUB-MAIN" # CreateGitHubResourcesUseCase
+    status: "Partially Done" # issues.yml のステータスを反映
+    priority: "High"
+
+  - story_id: "US-006"
+    title: "Web UIでのDry Runモードの提供とAI設定"
+    description: "開発者として、Web UIでGitHubへの登録処理を実行する際にDry Runモードを選択したい。また、Issue解析に使用するAIプロバイダー、モデル、APIキーをUI上で設定したい。"
+    acceptance_criteria:
+      - "UI上でDryRunモードのON/OFFを選択できる (US-003のフォーム内)。"
+      - "Dry Runモード実行時、作成/設定される予定のリソース情報がUI上にフィードバックされる。"
+      - "UI上にAIプロバイダー選択（OpenAI, Gemini）が表示される。"
+      - "選択プロバイダーに応じたモデル名選択ドロップダウンが動的に更新される。"
+      - "APIキー入力フィールドが表示される。"
+      - "設定されたAI情報がIssue解析時にバックエンドで利用される。"
+    technical_tasks:
+      - "TASK-WEBUI-AICONFIG-FORM-IMPL" # issues.yml から
+      - "TASK-APPSERVICE-AICONFIG-HANDLE" # issues.yml から
+      # DryRun UIは TASK-WEBUI-GITHUBFORM-IMPL に含まれる
+    referenced_requirements_ids:
+      - "UC-Web-001 (DryRun, AI Config)"
+      - "3. スコープ定義 (処理: Dry Runモード)"
+      - "2. システム化の目的とゴール (Web UI機能: AI設定)"
+    related_epic_ids: ["EPIC-WEBUI", "EPIC-GITHUB-INTEGRATION", "EPIC-INFRA-CONFIG"]
+    size_estimate: "[SP: 3]"
+    dependencies_guessed:
+      - "US-003"
+    notes: "元のUS-006のWeb UI DryRun部分はUS-003のGitHub登録フォームと統合的に扱う。このUSはAI設定UIに焦点を当てる。"
+    status: "To Do"
+    priority: "Medium"
+
+technical_tasks:
+  # --- Backend API Tasks (新規または既存タスクの役割変更) ---
+  - task_id: "TASK-BE-API-DESIGN"
+    title: "Backend: APIエンドポイント全体の設計と仕様定義"
+    description: "ファイル処理、GitHubリソース操作、ローカル保存指示など、フロントエンドやCLIから利用される全APIエンドポイントのURL、HTTPメソッド、リクエスト/レスポンス形式、認証方式などを設計し、`docs/api_specifications.md` に文書化する。"
+    related_epic_ids: ["EPIC-BACKEND-API"]
+    status: "To Do"
+    priority: "Very High"
+    size_estimate: "[SP: 5]"
+  - task_id: "TASK-BE-DRF-SETUP"
+    title: "Backend: Django Rest Framework (DRF) のセットアップと基本設定"
+    description: "DjangoプロジェクトにDRFを導入し、API開発のための基本的な設定（ルーティング、デフォルトパーサー/レンダラー、認証クラスなど）を行う。"
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
+    status: "To Do"
+    priority: "High"
+    size_estimate: "[SP: 2]"
+  - task_id: "TASK-BE-SERIALIZERS"
+    title: "Backend: APIレスポンス用シリアライザーの実装"
+    description: "`ParsedSourceFileContent`, `IssueData`, 各種結果オブジェクトなどをJSON等にシリアライズするためのDRFシリアライザーを実装する。"
+    related_epic_ids: ["EPIC-BACKEND-API"]
+    status: "To Do"
+    priority: "High"
+    size_estimate: "[SP: 3]"
+  - task_id: "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
+    title: "Backend API: Issueファイル処理APIエンドポイント実装"
+    description: "アップロードされたIssue情報ファイルを受け付け、`AIParseFileUseCase`を呼び出して解析処理を実行し、結果（`ParsedSourceFileContent`またはエラー情報）をJSONで返すAPIエンドポイントを実装する。"
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-BACKEND-API"]
+    status: "To Do"
+    priority: "High"
+  - task_id: "TASK-BE-API-GITHUB-RESOURCE-ENDPOINT"
+    title: "Backend API: GitHubリソース作成APIエンドポイント実装"
+    description: "フロントエンドから選択されたIssue情報、リポジトリ名、プロジェクト名、DryRunモードなどを受け取り、`CreateGitHubResourcesUseCase`を呼び出し、結果をJSONで返すAPIエンドポイントを実装する。"
+    related_user_story_ids: ["US-003"]
+    related_epic_ids: ["EPIC-BACKEND-API"]
+    status: "To Do"
+    priority: "High"
+  # --- Frontend Tasks (新規タスク群) ---
+  - task_id: "TASK-FE-SETUP"
+    title: "Frontend: 静的フロントエンドプロジェクトのセットアップ"
+    description: "選択された技術（例: React/Vite, Vue/Vite, または素のHTML/CSS/JS + ビルドツール）でフロントエンドプロジェクトの基本構成をセットアップする。"
+    related_epic_ids: ["EPIC-WEBUI"]
+    status: "To Do"
+    priority: "High"
+    size_estimate: "[SP: 3]"
+  - task_id: "TASK-FE-API-CLIENT"
+    title: "Frontend: バックエンドAPIクライアント/ラッパーの実装"
+    description: "バックエンドAPIと通信するための汎用的なクライアントコード（例: fetchやaxiosのラッパー、エラーハンドリング共通化など）を実装する。"
+    related_epic_ids: ["EPIC-WEBUI"]
+    status: "To Do"
+    priority: "Medium"
+    size_estimate: "[SP: 2]"
+  - task_id: "TASK-FE-US001-UPLOAD-UI"
+    title: "Frontend: US-001 ファイルアップロードUIコンポーネント実装"
+    description: "ファイル選択input、アップロードボタン、ヘルプテキストなどを含むUIコンポーネントを実装する。"
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-WEBUI"]
+    status: "To Do"
+    priority: "High"
+  # ... (他のWeb UI関連の既存TASK-WEBUI-* タスクは、対応するTASK-FE-* に置き換わるか、役割が変化)
+  # --- Core Logic Tasks (API経由で呼び出されるため、大きな変更はないが、呼び出し元が変わることを意識) ---
+  # ... (TASK-CORELOGIC-AI-RULE-INFERENCE などは変更なし) ...
+  # --- Infrastructure Tasks (変更なし、またはAPI関連の設定追加) ---
+  # ... (TASK-PROMPT-MANAGEMENT などは変更なし) ...
+  - task_id: "TASK-DJANGO-SETUP"
+    title: "DjangoプロジェクトのAPIサーバーとしてのセットアップ"
+    description: |
+      Djangoアプリケーションを、静的フロントエンドからのAPIリクエストを受け付けるバックエンドサーバーとしてセットアップする。
+      - DRFの導入と設定 (TASK-BE-DRF-SETUPと重複する可能性あり、整理が必要)。
+      - API用のURLルーティング設定。
+      - CORS設定（必要であれば）。
+      - 静的ファイル配信の設定（Django開発サーバーから配信する場合、または本番環境での考慮）。
+      - Dockerコンテナ設定のAPIサーバーとしての最適化。
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
+    status: "To Re-evaluate"
+    priority: "High"
+  # 既存の TASK-WEBUI-*, TASK-APPSERVICE-* は、新しい TASK-FE-*, TASK-BE-API-* に役割を移行するため、
+  # 不要になったものは削除するか、statusを "Obsolete" などに変更する必要がある。

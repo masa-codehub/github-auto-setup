@@ -1,8 +1,8 @@
 import pytest
 import logging
-from webapp.core_logic.github_automation_tool.adapters.yaml_issue_parser import YamlIssueParser
-from webapp.core_logic.github_automation_tool.adapters.json_issue_parser import JsonIssueParser
-from webapp.core_logic.github_automation_tool.domain.exceptions import ParsingError
+from ..adapters.yaml_issue_parser import YamlIssueParser
+from ..adapters.json_issue_parser import JsonIssueParser
+from ..domain.exceptions import ParsingError
 
 def test_parse_simple_yaml_list():
     content = """- title: Issue 1\n  desc: foo\n- title: Issue 2\n  desc: bar"""

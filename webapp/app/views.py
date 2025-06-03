@@ -2,8 +2,67 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from .forms import FileUploadForm
 import logging
+import os
+
+# core_logicの必要なモジュールを直接import
+from core_logic.github_automation_tool.adapters.markdown_issue_parser import MarkdownIssueParser
+from core_logic.github_automation_tool.adapters.yaml_issue_parser import YamlIssueParser
+from core_logic.github_automation_tool.adapters.json_issue_parser import JsonIssueParser
+from core_logic.github_automation_tool.adapters.ai_parser import AIParser
+from core_logic.github_automation_tool.infrastructure.config import load_settings
+from core_logic.github_automation_tool.domain.models import IssueData, ParsedRequirementData
+from core_logic.github_automation_tool.domain.exceptions import AiParserError, ParsingError
 
 logger = logging.getLogger(__name__)
+
+
+def get_parsed_issues_for_session(request):
+    """
+    セッションに格納されたファイル名・内容を取得し、
+    拡張子ごとにパーサーを呼び出し、AIパーサーでParsedRequirementDataを得てissue_listを返す。
+    例外時は空リストを返す。
+    """
+    file_name = request.session.get('uploaded_file_name')
+    file_content = request.session.get('uploaded_file_content')
+    if not file_name or not file_content:
+        return []
+    ext = os.path.splitext(file_name)[1].lower()
+    try:
+        # 1. 拡張子で初期パーサーを選択
+        if ext in ['.md', '.markdown']:
+            initial_parser = MarkdownIssueParser()
+        elif ext in ['.yml', '.yaml']:
+            initial_parser = YamlIssueParser()
+        elif ext == '.json':
+            initial_parser = JsonIssueParser()
+        else:
+            messages.error(request, f"Unsupported file extension: {ext}")
+            return []
+        raw_issue_blocks = initial_parser.parse(file_content)
+        if not raw_issue_blocks:
+            messages.warning(request, "ファイルからIssueブロックが抽出できませんでした。")
+            return []
+        # 2. AIパーサーで構造化データに変換
+        settings = load_settings()
+        ai_parser = AIParser(settings=settings)
+        # Markdownの場合は結合、YAML/JSONはリストをそのまま
+        if ext in ['.md', '.markdown']:
+            combined_content = '\n---\n'.join(raw_issue_blocks)
+            parsed_data: ParsedRequirementData = ai_parser.parse(combined_content)
+        else:
+            # YAML/JSONはAIパーサーがリストも受け付ける前提。もし違えばここで変換。
+            import yaml
+            combined_content = yaml.dump(raw_issue_blocks, allow_unicode=True)
+            parsed_data: ParsedRequirementData = ai_parser.parse(combined_content)
+        return parsed_data.issues
+    except (ParsingError, AiParserError) as e:
+        logger.error(f"Issueファイル解析エラー: {e}", exc_info=True)
+        messages.error(request, f"ファイル解析中にエラーが発生しました: {e}")
+        return []
+    except Exception as e:
+        logger.exception(f"予期せぬエラー: {e}")
+        messages.error(request, f"予期せぬエラーが発生しました: {e}")
+        return []
 
 
 def top_page(request):
@@ -13,8 +72,6 @@ def top_page(request):
     if request.method == 'POST':
         form = FileUploadForm(request.POST, request.FILES)
         try:
-            from github_automation_tool.infrastructure.config import load_settings
-            from github_automation_tool.domain.exceptions import GitHubAuthenticationError
             # --- GitHub連携アクション ---
             if 'github_submit' in request.POST:
                 settings = load_settings()
@@ -26,7 +83,6 @@ def top_page(request):
                     messages.error(request, "Issueデータが見つかりません。ファイルをアップロードしパースしてください。")
                     return render(request, "top_page.html", {'upload_form': form})
                 try:
-                    # UseCase生成とexecuteはテスト時にpatchされる
                     from github_automation_tool.use_cases.create_github_resources import CreateGitHubResourcesUseCase
                     usecase = CreateGitHubResourcesUseCase(rest_client=None, graphql_client=None, create_repo_uc=None, create_issues_uc=None)
                     usecase.execute(
@@ -36,11 +92,7 @@ def top_page(request):
                         dry_run=dry_run
                     )
                     messages.success(request, "GitHub連携アクションが正常に完了しました。")
-                except GitHubAuthenticationError as e:
-                    messages.error(request, f"GitHub認証に失敗しました。PATが無効か、必要な権限がありません。詳細: {e}")
-                    logger.error(f"GitHub authentication error: {e}", exc_info=True)
                 except Exception as e:
-                    # テスト時TypeErrorもここで捕捉し、認証エラー風メッセージを追加
                     if "rest_client must be an instance" in str(e):
                         messages.error(request, "GitHub認証に失敗しました（テスト用ダミー）。PATまたは設定を確認してください。")
                     else:
@@ -82,20 +134,15 @@ def top_page(request):
             logger.exception(f"予期せぬエラー: {e}")
     else:
         form = FileUploadForm()
-        # Retrieve and clear file content from session if it exists (e.g., after a redirect)
-        # This is for demonstration; actual display logic might be different.
         if 'uploaded_file_name' in request.session:
             uploaded_file_name = request.session.pop('uploaded_file_name')
-            uploaded_file_content = request.session.pop('uploaded_file_content', None) # Content might be large
-            # For demonstration, we might add a message or pass this to context
-            # if we intend to display something about the previously uploaded file.
-            # messages.info(request, f"Ready to process: {uploaded_file_name}")
-
+            uploaded_file_content = request.session.pop('uploaded_file_content', None)
 
     context = {
         'upload_form': form,
-        # Optionally pass uploaded file info to template for display, if needed
-        # 'uploaded_file_name': uploaded_file_name,
-        # 'uploaded_file_content_preview': uploaded_file_content[:200] if uploaded_file_content else None, # Preview
     }
+    issue_list = get_parsed_issues_for_session(request)
+    issue_count = len(issue_list)
+    context['issue_list'] = issue_list
+    context['issue_count'] = issue_count
     return render(request, "top_page.html", context)
