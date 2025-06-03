@@ -2,14 +2,14 @@
 
 document_info:
   title: "Product Backlog for GitHub Automation Tool"
-  version: "2.6" # 静的フロントエンド + API構成への変更を反映
+  version: "2.7" # バージョン更新
   last_updated: "2025-06-03 (JST)"
   status: "Refining for Static Frontend + API Architecture"
   source_documents_integrated:
     - "docs/agile-practice.yml (v2.3) - Archived"
     - "docs/issues.yml (v2.3) - Archived"
   related_documents:
-    - "docs/requirements.yml (v2.5+)"
+    - "docs/requirements.yml (v2.6+)" # requirements.ymlのバージョンも更新
     - "docs/glossary.md"
     - "docs/ui_ux_specifications.md"
     - "docs/github_setup_defaults.yml"
@@ -312,7 +312,9 @@ technical_tasks:
   # --- Frontend Tasks (新規タスク群) ---
   - task_id: "TASK-FE-SETUP"
     title: "Frontend: 静的フロントエンドプロジェクトのセットアップ"
-    description: "選択された技術（例: React/Vite, Vue/Vite, または素のHTML/CSS/JS + ビルドツール）でフロントエンドプロジェクトの基本構成をセットアップする。"
+    description: |
+      Bootstrap 5と最小限のJavaScriptでフロントエンドプロジェクトの基本構成をセットアップする。
+      **リンター（ESLintなど）、フォーマッター（Prettierなど）の導入は見送る。**
     related_epic_ids: ["EPIC-WEBUI"]
     status: "To Do"
     priority: "High"

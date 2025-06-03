@@ -22,6 +22,7 @@
     * ファイル形式に応じた初期パーサー（`MarkdownIssueParser`, `YamlIssueParser`, `JsonIssueParser`）によるIssueブロックへの分割。
     * `AIParser`を用いた、Issueブロックから構造化データモデル`ParsedSourceFileContent`（内部に`IssueData`リストおよびファイル全体のメタ情報を含む）への解釈・マッピング。キーの揺らぎ吸収も担う。
 * **Web UI機能:**
+    * **HTML, CSS, JavaScript（最小限）およびBootstrap 5で構築された静的Web UI。**
     * アップロードされたファイルのIssue一覧プレビューと詳細表示（アコーディオン）。
     * 処理対象Issueの選択（個別、一括）。
     * GitHub登録アクション（リポジトリ名、プロジェクト名指定、Dry Runモード）。
@@ -45,14 +46,16 @@
 * Issueの更新機能（現在は新規作成を優先）。
 * Markdownファイル自体の生成・編集支援。
 * Pull Requestの自動作成や連携。
+* GitHub以外のプラットフォーム連携 (Jira, GitLab等)。
+* **Web UIにおけるモダンなJavaScriptフレームワーク（React, Vueなど）の利用。**
 
 ### 4. システム構造とコンポーネント
 
 * **プレゼンテーション層:**
-    * **Web UI (Django `webapp/app`):** ユーザーとのインタラクションを担当。`views.py` がリクエストを処理し、`forms.py` で入力を検証、`templates/` で画面をレンダリング。静的ファイル（CSS, JS）も含む。
+    * **Web UI (静的HTML/CSS/JS):** **ユーザーとのインタラクションを担当する静的なHTML/CSS/JavaScriptファイル群。Bootstrap 5を利用。Djangoはこれらの静的ファイルをホスティングし、APIリクエストを処理する。**
     * **CLI (`webapp/core_logic/github_automation_tool/main.py`):** Typer を使用したコマンドラインインターフェース。
 * **アプリケーションサービス層 (検討中):**
-    * Django アプリケーション内にサービス層（例: `webapp/app/services.py`）を設け、UIからのリクエストをビジネスロジック（UseCase）に橋渡しする役割。設定情報の管理やUseCaseの呼び出し調整などを担当。
+    * Django アプリケーション内にサービス層（例: `webapp/app/services.py`）を設け、UIからのAPIリクエストをビジネスロジック（UseCase）に橋渡しする役割。設定情報の管理やUseCaseの呼び出し調整などを担当。
 * **ドメイン/ユースケース層 (`webapp/core_logic/github_automation_tool/`):**
     * **Use Cases:** アプリケーションのコアなビジネスフローを実装 (`CreateGitHubResourcesUseCase`, `CreateIssuesUseCase`, `CreateRepositoryUseCase`など)。
     * **Domain Models:** システムの中核となるデータ構造とバリデーションルールを定義 (`IssueData`, `ParsedSourceFileContent`, `CreateIssuesResult`など)。
@@ -89,13 +92,14 @@
     4.  `ParsedSourceFileContent`とユーザー指示（リポジトリ名、プロジェクト名、DryRunなど）に基づき、GitHubリソース（リポジトリ、ラベル、マイルストーン、Issue、プロジェクト連携）を作成・設定する機能。
     5.  `ParsedSourceFileContent`に基づき、Issue情報をローカルファイルシステムにYAML形式で分割保存する機能。
 * **Web UIが提供する機能（上記コア機能の利用 + UI固有機能）:**
-    * ファイルアップロードインターフェース。
+    * **静的HTMLページからのファイルアップロードインターフェース。**
     * 解析結果（Issueリスト、メタ情報）のインタラクティブなプレビューと詳細表示。
     * 処理対象Issueの視覚的な選択（個別、一括）。
     * GitHub登録情報（リポジトリ名、プロジェクト名、DryRun）のフォーム入力。
     * AI設定（プロバイダー、モデル、APIキー）のUI。
     * ローカル保存先ディレクトリ指定UI。
     * 処理結果の動的なフィードバック表示。
+    * **（将来的に）GitHub Pagesなどの静的サイトホスティングサービスからのAPI呼び出しに対応。**
 * **CLIが提供する機能（上記コア機能の利用 + CLI固有機能）:**
     * コマンドライン引数によるファイルパス、リポジトリ名、プロジェクト名、DryRunなどの指定。
     * （将来的に）設定ファイルや環境変数を通じたAIパラメータの指定。
