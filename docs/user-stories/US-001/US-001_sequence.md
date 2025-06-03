@@ -1,84 +1,99 @@
-**シーケンス図案: US-001 Web UIでのIssueファイルのアップロード、AIによる区切り・マッピングルール推論と解析、一覧表示**
+# US-001: Web UIでのIssueファイルのアップロード、AIによる区切り・キーマッピングルール推論と解析、一覧表示 - シーケンス図
+
+このドキュメントは、ユーザーストーリー US-001 の主要なコンポーネント間のインタラクションを時系列で図示します。
 
 ```mermaid
 sequenceDiagram
-    actor User as ユーザー
-    participant WebUI as Web UI (Django View/Form)
-    participant AppService as App Service Layer (Optional)
-    participant AIParsingService as AI Parsing Service (Core Logic)
-    participant AIRuleInferenceEngine as AI Rule Inference Engine (Core Logic - AIParser内)
+    participant User as ユーザー
+    participant StaticFrontend as 静的フロントエンド (JS)
+    participant BackendAPI as バックエンドAPI (Django/DRF)
+    participant AIParsingOrchestrator as AI Parsing Orchestrator (Core Logic)
+    participant AIRuleInferenceEngine as AI Rule Inference Engine (Core Logic)
+    participant AIServiceAPI as AI Service API (External)
     participant RuleBasedSplitter as Rule-based Splitter (Core Logic)
     participant RuleBasedMapper as Rule-based Mapper (Core Logic)
-    participant AIServiceAPI as AI Service API (External)
+    participant LabelMilestoneNormalizer as Label/Milestone Normalizer (Core Logic)
+    participant DefaultsLoader as Defaults Loader (Infra)
+    participant ConfigLoader as Config Loader (Infra)
 
-    User->>WebUI: 1. Issue情報ファイルを選択し、「アップロード＆プレビュー」実行
-    activate WebUI
-    WebUI->>WebUI: 2. ファイル検証 (形式、サイズ)
-    alt ファイル検証NG
-        WebUI-->>User: 2a. エラーメッセージ表示
-    else ファイル検証OK
-        WebUI->>AppService: 3. ファイル内容処理要求 (ファイル内容)
-        activate AppService
-        AppService->>AIParsingService: 4. Issue解析要求 (ファイル内容全体)
-        activate AIParsingService
-        AIParsingService->>AIRuleInferenceEngine: 5. ルール推論実行 (ファイル内容全体)
-        activate AIRuleInferenceEngine
-        AIRuleInferenceEngine->>AIServiceAPI: 6. AIにルール推論を問い合わせ
-        activate AIServiceAPI
-        AIServiceAPI-->>AIRuleInferenceEngine: 7. 推論されたルール (区切りルール, マッピングルール)
-        deactivate AIServiceAPI
-        AIRuleInferenceEngine-->>AIParsingService: 8. 推論ルール返却
-        deactivate AIRuleInferenceEngine
+    User->>StaticFrontend: 1. Issue情報ファイルを選択し、「アップロード＆プレビュー」実行
+    activate StaticFrontend
+    StaticFrontend->>StaticFrontend: 2. ファイルデータ準備
+    StaticFrontend->>BackendAPI: 3. POST /api/v1/parse-file (ファイルデータ)
+    activate BackendAPI
 
-        alt ルール推論失敗
-            AIParsingService-->>AppService: 8a. 解析エラー情報返却
-        else ルール推論成功
-            AIParsingService->>RuleBasedSplitter: 9. 推論された「区切りルール」とファイル内容でIssueブロックに分割
-            activate RuleBasedSplitter
-            RuleBasedSplitter-->>AIParsingService: 10. 分割されたIssueブロックリスト (`IntermediateParsingResult`)
-            deactivate RuleBasedSplitter
+    BackendAPI->>AIParsingOrchestrator: 4. Issue解析要求 (ファイル内容全体)
+    activate AIParsingOrchestrator
+    AIParsingOrchestrator->>ConfigLoader: 5. プロンプトテンプレートパス等取得
+    activate ConfigLoader
+    ConfigLoader-->>AIParsingOrchestrator: 6. 設定情報 (プロンプトパス等)
+    deactivate ConfigLoader
 
-            AIParsingService->>RuleBasedMapper: 11. 推論された「マッピングルール」とIssueブロックリストで`IssueData`へマッピング
-            activate RuleBasedMapper
-            RuleBasedMapper-->>AIParsingService: 12. マッピング済み`IssueData`リストとメタ情報 (`ParsedSourceFileContent`)
-            deactivate RuleBasedMapper
+    AIParsingOrchestrator->>AIRuleInferenceEngine: 7. 区切りルール(先頭キー)とキーマッピングルール推論実行
+    activate AIRuleInferenceEngine
+    AIRuleInferenceEngine->>AIServiceAPI: 8. AIにルール推論を問い合わせ
+    activate AIServiceAPI
+    AIServiceAPI-->>AIRuleInferenceEngine: 9. 推論されたルール, 信頼度
+    deactivate AIServiceAPI
+    AIRuleInferenceEngine-->>AIParsingOrchestrator: 10. 推論ルールと信頼度返却
+    deactivate AIRuleInferenceEngine
 
-            AIParsingService-->>AppService: 13. 解析成功 (`ParsedSourceFileContent`) 返却
+    alt ルール推論失敗 or 先頭キー特定不可 or 信頼度低
+        AIParsingOrchestrator->>ConfigLoader: 10a. フォールバック区切りルール指定取得
+        activate ConfigLoader
+        ConfigLoader-->>AIParsingOrchestrator: 10b. フォールバック区切りルール (あれば)
+        deactivate ConfigLoader
+        alt フォールバック区切りルールもなし or 適用不可
+             AIParsingOrchestrator-->>BackendAPI: 10c. 解析エラー/警告情報生成
+        else フォールバック区切りルール適用
+             AIParsingOrchestrator->>AIParsingOrchestrator: 10d. フォールバック区切りルールを「決定された区切りルール」とする
         end
-        deactivate AIParsingService
-        AppService-->>WebUI: 14. 処理結果 (ParsedSourceFileContent or エラー情報)
-        deactivate AppService
-
-        alt 解析成功
-            WebUI->>WebUI: 15. Issue一覧表示準備 (テンプレートへデータ渡し)
-            WebUI-->>User: 16. Issue一覧画面表示
-        else 解析失敗
-            WebUI->>WebUI: 15a. エラー表示準備
-            WebUI-->>User: 16a. エラーメッセージ表示
-        end
+    else ルール推論成功 (先頭キー特定)
+        AIParsingOrchestrator->>AIParsingOrchestrator: 10e. AI推論の区切りルールを「決定された区切りルール」とする
     end
-    deactivate WebUI
 
+    AIParsingOrchestrator->>RuleBasedSplitter: 11. 「決定された区切りルール」とファイル内容でIssueブロック分割
+    activate RuleBasedSplitter
+    RuleBasedSplitter-->>AIParsingOrchestrator: 12. 分割されたIssueブロックリスト
+    deactivate RuleBasedSplitter
+
+    AIParsingOrchestrator->>RuleBasedMapper: 13. 推論「キーマッピングルール」とIssueブロックリストでIssueDataへ粗マッピング
+    activate RuleBasedMapper
+    RuleBasedMapper-->>AIParsingOrchestrator: 14. 粗マッピング済みIssueDataリスト
+    deactivate RuleBasedMapper
+
+    AIParsingOrchestrator->>DefaultsLoader: 15. デフォルトのラベル・マイルストーン定義取得
+    activate DefaultsLoader
+    DefaultsLoader-->>AIParsingOrchestrator: 16. 定義済みラベル・マイルストーンリスト
+    deactivate DefaultsLoader
+
+    AIParsingOrchestrator->>LabelMilestoneNormalizer: 17. 粗マッピング済みIssueDataと定義済みリストでラベル・マイルストーン正規化
+    activate LabelMilestoneNormalizer
+    LabelMilestoneNormalizer-->>AIParsingOrchestrator: 18. 正規化済みIssueDataリスト
+    deactivate LabelMilestoneNormalizer
+
+    AIParsingOrchestrator->>AIParsingOrchestrator: 19. ParsedSourceFileContent 生成
+    AIParsingOrchestrator-->>BackendAPI: 20. 解析成功 (`ParsedSourceFileContent` or エラー/警告情報)
+    deactivate AIParsingOrchestrator
+
+    BackendAPI-->>StaticFrontend: 21. HTTPレスポンス (JSON with ParsedSourceFileContent or エラーJSON)
+    deactivate BackendAPI
+
+    StaticFrontend->>StaticFrontend: 22. レスポンスJSONを解釈
+    alt 解析成功
+        StaticFrontend->>StaticFrontend: 23. Issue一覧をUIに描画 (警告もあれば表示)
+        StaticFrontend-->>User: 24. Issue一覧表示 (警告も表示)
+    else 解析失敗/エラー
+        StaticFrontend->>StaticFrontend: 23a. エラーメッセージをUIに表示
+        StaticFrontend-->>User: 24a. エラーメッセージ表示
+    end
+    deactivate StaticFrontend
 ```
 
-**シーケンス図の説明:**
-
-1.  **ユーザー**がWeb UI上でファイルを選択し、アップロードアクションを実行します。
-2.  **Web UI (Django View/Form)** は受け取ったファイルを検証します（形式、サイズ）。
-    * 検証NGの場合、ユーザーにエラーメッセージを表示します。
-3.  ファイル検証OKの場合、**Web UI** は（導入されていれば）**App Service Layer** にファイル内容の処理を要求します。
-    * *サービス層がない場合は、Web UI が直接 AI Parsing Service を呼び出す形になります。*
-4.  **App Service Layer** は、**AI Parsing Service**（コアロジック内の中核サービス）にIssue解析を要求し、ファイル内容全体を渡します。
-5.  **AI Parsing Service** は、まず内部の **AI Rule Inference Engine** にファイル内容全体を渡し、区切りルールとフィールドマッピングルールの推論を実行させます。
-6.  **AI Rule Inference Engine** は、設定されたAIモデル（OpenAI/Gemini）の**AI Service API** と通信し、ルールを推論します。
-7.  **AI Service API** は推論結果（区切りルール、マッピングルール）を返します。
-8.  **AI Rule Inference Engine** は推論されたルールを **AI Parsing Service** に返します。
-    * ルール推論に失敗した場合、エラー情報が返されます。
-9.  **AI Parsing Service** は、AIが推論した「区切りルール」とファイル内容を **Rule-based Splitter** に渡し、Issueブロックのリスト (`IntermediateParsingResult`) を生成させます。
-10. **Rule-based Splitter** は分割結果を返します。
-11. **AI Parsing Service** は、AIが推論した「フィールドマッピングルール」と、分割されたIssueブロックリストを **Rule-based Mapper** に渡し、各ブロックを `IssueData` オブジェクトに変換させ、最終的に `ParsedSourceFileContent` を生成します。
-12. **Rule-based Mapper** は `ParsedSourceFileContent` を返します。
-13. **AI Parsing Service** は、処理結果（成功なら `ParsedSourceFileContent`、失敗ならエラー情報）を **App Service Layer** に返します。
-14. **App Service Layer** は、その結果を **Web UI (Django View)** に返します。
-15. **Web UI** は、結果に応じてIssue一覧表示の準備、またはエラー表示の準備を行います。
-16. **Web UI** は、最終的な画面を**ユーザー**に表示します。
+**シーケンス図の修正ポイント:**
+* 参加者を「User」「静的フロントエンド (JS)」「バックエンドAPI (Django/DRF)」とし、その後のコアロジックコンポーネントはバックエンドAPI内部で呼び出される形としました。
+* ユーザーの最初のインタラクションは静的フロントエンドに対して行われます。
+* 静的フロントエンドとバックエンドAPI間の通信は、HTTPリクエスト（例: `POST /api/v1/parse-file`）とHTTPレスポンス（JSONデータ）で表現しました。
+* バックエンドAPIがコアロジックの `AIParsingOrchestrator` を呼び出し、解析結果やエラー情報を受け取ります。
+* 静的フロントエンドがAPIからのレスポンスを処理し、UIを更新してユーザーに結果を表示する流れを明確にしました。
+* メッセージの番号を振り直しました。

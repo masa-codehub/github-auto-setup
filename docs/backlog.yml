@@ -2,182 +2,164 @@
 
 document_info:
   title: "Product Backlog for GitHub Automation Tool"
-  version: "2.2" # AIパーサー戦略のさらなる明確化を反映
-  last_updated: "2025-06-03 (JST)" # 更新日
-  status: "Refining AI Parser Strategy - Dynamic Rule Inference for Delimiters and Mapping"
+  version: "2.6" # 静的フロントエンド + API構成への変更を反映
+  last_updated: "2025-06-03 (JST)"
+  status: "Refining for Static Frontend + API Architecture"
   source_documents_integrated:
-    - "docs/agile-practice.yml (v2.3)"
-    - "docs/issues.yml (v2.3)"
+    - "docs/agile-practice.yml (v2.3) - Archived"
+    - "docs/issues.yml (v2.3) - Archived"
   related_documents:
     - "docs/requirements.yml (v2.5+)"
     - "docs/glossary.md"
     - "docs/ui_ux_specifications.md"
     - "docs/github_setup_defaults.yml"
-    - "docs/user-stories/US-001/US-001_activity.md" # US-001のアクティビティ図
-    - "docs/user-stories/US-001/US-001_sequence.md" # US-001のシーケンス図
+    - "docs/user-stories/US-001/US-001_activity.md"
+    - "docs/user-stories/US-001/US-001_sequence.md"
     - "docs/diagrams/context-diagram.md (To be created)"
-    - "docs/diagrams/architecture-diagram.md (To be created)"
+    - "docs/diagrams/architecture-diagram.md (Updated for API architecture)"
+    - "docs/api_specifications.md (To be created)"
 
 development_approach_guidelines:
-    preface: |
-      このセクションは、本プロダクトバックログのアイテム（ユーザーストーリーやテクニカルタスク）を
-      具体化し、実装に進む上での基本的な考え方や、設計を支援する図の活用方法についての方針を示す。
-      チームメンバーは、これらの指針を参考に、効果的かつ効率的な開発を心がける。
+  preface: |
+    このセクションは、本プロダクトバックログのアイテム（ユーザーストーリーやテクニカルタスク）を
+    具体化し、実装に進む上での基本的な考え方や、設計を支援する図の活用方法についての方針を示す。
+    チームメンバーは、これらの指針を参考に、効果的かつ効率的な開発を心がける。
+  initial_steps_for_implementation:
+    - step_name: "1. Backlog Item Prioritization and Sprint Planning"
+      description: |
+        プロダクトオーナー（または相当する役割）が中心となり、本バックログのアイテムに優先順位を付け、
+        スプリント（または開発イテレーション）で取り組む範囲（スプリントバックログ）を決定する。
+        早期に価値を提供しフィードバックを得るため、コアとなる機能フローの確立を優先的に検討する
+        （例: 静的Web UIからのファイルアップロード→バックエンドAPIでのAIルール推論と解析→API経由での結果表示→選択）。
+    - step_name: "2. Detailed Behavior Clarification for Selected Items"
+      description: |
+        スプリントバックログに選択されたユーザーストーリーについて、アクセプタンスクライテリアを基に、
+        より詳細なシナリオ、期待される動作、正常系・異常系のフローをチーム内で明確に合意する。
+        この段階で、APIエンドポイントの設計、リクエスト/レスポンス形式の定義、および関連するアクティビティ図やシーケンス図の作成が推奨される。
+    - step_name: "3. Key Data Model & API Serialization Finalization"
+      description: |
+        主要なデータモデル（例: `ParsedSourceFileContent`）の構造と、それらをAPIで送受信するための
+        シリアライズ/デシリアライズ方法をFIXさせる。
+    - step_name: "4. API Design and Backend Service Layer for API Requests"
+      description: |
+        バックエンドAPIのエンドポイント設計と、それらのリクエストを処理しコアロジックのUseCaseを呼び出す
+        アプリケーションサービス層（またはDRFのView/ViewSet）の設計を行う。
+  ai_parser_strategy:
+    concept: |
+      AIパーサーの主要な役割は、入力ファイル全体を分析し、以下の2種類のルールを動的に推論・生成することにある。
+      1. **Issue区切りルール（主にファイル内で共通する先頭キー/開始パターンをAIが推論し、Markdownの水平線やヘッダーレベル、YAML/JSONのリスト形式などはフォールバックまたは設定ベースで処理）、および...**
+      2. **キーマッピングルール:** 推論された各Issueブロック/レコード内で、入力ファイル中のどのキーや記述が、`IssueData`の標準フィールド名（例: `title`, `description`）に対応するか、その対応関係を辞書等で示す。
+      これらの推論されたルール（またはフォールバック/設定ルール）に基づき、後続のルールベース処理でファイルが分割され、IssueDataにマッピングされる。
+    key_considerations:
+      - "AI Rule Generation Accuracy: AIが生成するルールの精度と安定性の検証。信頼度判定基準（先頭キーの一貫性、必須フィールド充足率）を設け、信頼度が低い場合は厳格なエラー処理（処理中断とユーザーへの修正依頼）を基本とし、または警告と共に部分的な結果を表示する。"
+      - "Rule Representation: AIが主に推論する「先頭キー」区切りルールと「キーマッピングルール」の表現形式、およびフォールバック/設定用の区切りルール（水平線、ヘッダーレベル、リストアイテム）の表現形式を設計 (`TASK-RULE-REPRESENTATION`)。初期サポート範囲: 区切り(AI推論は`leading_key`のみ、他はルールベースフォールバック/設定)、値抽出(`key_value`, `list_items_under_key`, `plain_text_block`)、値変換(`to_list_by_comma`, `to_list_by_newline`, `extract_mentions`)。"
+      - "Prompt Engineering & Management: 高度なルール推論を実現するためのプロンプト設計を重視する。プロンプト自体は外部ファイル（TASK-PROMPT-MANAGEMENT）で管理し、柔軟な調整を可能にする。`config.yaml` からの複雑なマッピングヒントは導入せず、AIの推論能力とユーザーによる入力ファイル調整、分かりやすいフィードバックに注力する。"
+      - "User Feedback Loop (Web UI & CLI): AIによる解析結果（分割・マッピング結果）をユーザーが確認できるようにする。Web UIでは静的フロントエンドがAPIから結果を取得し表示、CLIではDryRunや中間出力で確認手段を提供する。UI上でのインタラクティブなマッピング修正機能はスコープ外とする。"
+      - "Default Field Mapping Fallback: AIによるフィールドマッピング推論が不調な場合、`github_setup_defaults.yml` に定義された標準的なキーと`IssueData`フィールドの対応リストをフォールバックまたはAI推論の参考情報として活用することを検討する。"
+      - "File-level Meta-information: Issueごとの情報抽出とは別に、ファイル全体から共通のメタ情報（プロジェクト名等）を抽出する方法（プロンプト指示、または規約ベース）も検討するが、マイルストーンとラベルは`github_setup_defaults.yml`との照合を基本とする。"
+  guidelines_for_using_diagrams:
+    - diagram_type: "Activity Diagram"
+      purpose: "ユーザー操作フロー、システム内部の主要処理ステップ、条件分岐、繰り返し処理を視覚的に明確にする。"
+      timing_and_use_case: |
+        - ユーザーストーリーの振る舞いを具体化する初期段階。
+        - 複雑なアルゴリズムやビジネスロジックの内部フローを整理する際。
+        - チーム内で業務プロセスやユーザーシナリオの共通理解を形成する際。
+      how_to_use: "開始/終了点、アクション、判断、マージ、フォーク/ジョインでフローを描画。必要に応じてスイムレーンで担当コンポーネントを区別。"
 
-    initial_steps_for_implementation:
-      - step_name: "1. Backlog Item Prioritization and Sprint Planning"
-        description: |
-          プロダクトオーナー（または相当する役割）が中心となり、本バックログのアイテムに優先順位を付け、
-          スプリント（または開発イテレーション）で取り組む範囲（スプリントバックログ）を決定する。
-          早期に価値を提供しフィードバックを得るため、コアとなる機能フローの確立を優先的に検討する
-          （例: Web UIのファイルアップロード→AIによるルール推論と解析→一覧表示→選択）。
-      - step_name: "2. Detailed Behavior Clarification for Selected Items"
-        description: |
-          スプリントバックログに選択されたユーザーストーリーについて、アクセプタンスクライテリアを基に、
-          より詳細なシナリオ、期待される動作、正常系・異常系のフローをチーム内で明確に合意する。
-          この段階で、アクティビティ図やシーケンス図の作成が推奨される。
-      - step_name: "3. Key Data Model Finalization (as needed)"
-        description: |
-          特に初期のユーザーストーリー（例: US-001）に取り組む際には、主要なデータモデル
-          （例: `ParsedSourceFileContent` のメタ情報フィールド、AIが生成するルール表現形式）の具体的な構造をFIXさせる。
-          これにより、コンポーネント間のデータ連携が明確になる。
-      - step_name: "4. Service Layer Design (for Web UI, if adopted)"
-        description: |
-          Web UI向けにアプリケーションサービス層を導入する場合、主要なUIアクションに対応する
-          サービスメソッドのインターフェース（入力と出力）を定義する。
+    - diagram_type: "Sequence Diagram"
+      purpose: "特定の機能を実現するための、オブジェクト（コンポーネント、クラス）間の時間軸に沿ったメッセージ交換と相互作用を詳細に示す。"
+      timing_and_use_case: |
+        - アクティビティ図で大まかな流れを掴んだ後、コンポーネント間の具体的なIF（メソッド呼び出し、データ授受）を設計する際。
+        - 各オブジェクトの責務を明確化する際。
+        - 非同期処理や外部API連携のシーケンスを検討する際。
+        - 特にcore_logicのUseCaseとAdapter間、Adapterと外部API間のインタラクション明確化に有効。
+      how_to_use: "ライフライン、メッセージ（同期/非同期）、活性化区間、応答メッセージで描画。"
 
-    ai_parser_strategy:
-      concept: |
-        AIパーサーの主要な役割は、入力ファイル全体を分析し、以下の2種類のルールを動的に推論・生成することにある。
-        1. **Issue区切りルール:** ファイル内で何がIssueブロック/レコードの開始を示すか（例: 特定のキー、Markdownのヘッダーパターン）。同一ファイル内ではこの開始パターンは共通であると仮定する。
-        2. **フィールドマッピングルール:** 推論された各Issueブロック/レコード内で、どの部分（キーや記述）が`IssueData`のどのフィールドに対応するか。
-        これらの推論されたルールに基づき、後続の処理でファイルが分割され、IssueDataにマッピングされる。
-      key_considerations:
-        - "AI Rule Generation Accuracy: AIが生成するルールの精度と安定性の検証が重要。誤ったルールが生成された場合でも、Web UIでは解析結果をユーザーが確認し、CLIではDryRunや中間出力で確認できる手段を提供する。"
-        - "Rule Representation: AIが生成するルール（区切り、マッピング）の表現形式（例: Regex, JSONPath, Custom DSL）と、それを後続処理が解釈する方法の設計。これはTASK-RULE-REPRESENTATIONで扱う。"
-        - "Prompt Engineering: 高度なルール推論を実現するためのプロンプト設計と、設定ファイルや外部ファイル（TASK-PROMPT-MANAGEMENTで検討）によるプロンプト管理。"
-        - "User Feedback Loop: AIが生成したルールや、それに基づく解析結果をユーザーが確認し、（将来的には）UI上で修正・調整できる仕組みの検討。"
-        - "Processing Steps: ルール推論と、それに基づく分割・マッピングの処理ステップを効率的に行う。AIが一括して推論・構造化出力を試みるか、段階的に処理するか検討。"
-    guidelines_for_using_diagrams:
-      - diagram_type: "Activity Diagram"
-        purpose: "ユーザー操作フロー、システム内部の主要処理ステップ、条件分岐、繰り返し処理を視覚的に明確にする。"
-        timing_and_use_case: |
-          - ユーザーストーリーの振る舞いを具体化する初期段階。
-          - 複雑なアルゴリズムやビジネスロジックの内部フローを整理する際。
-          - チーム内で業務プロセスやユーザーシナリオの共通理解を形成する際。
-        how_to_use: "開始/終了点、アクション、判断、マージ、フォーク/ジョインでフローを描画。必要に応じてスイムレーンで担当コンポーネントを区別。"
+    - diagram_type: "Component Diagram (Detailed Level)"
+      purpose: "システムを構成する主要コンポーネント（クラスやモジュール）と、それらの間の静的な依存関係やインターフェースを視覚化する。"
+      timing_and_use_case: |
+        - より詳細なアーキテクチャ設計や議論を行う際。
+        - あるコンポーネント変更時の影響範囲を分析する際。
+        - 新規メンバーへのシステム構成説明。
+      how_to_use: "コンポーネント、インターフェース、依存関係、ポートで描画。"
 
-      - diagram_type: "Sequence Diagram"
-        purpose: "特定の機能を実現するための、オブジェクト（コンポーネント、クラス）間の時間軸に沿ったメッセージ交換と相互作用を詳細に示す。"
-        timing_and_use_case: |
-          - アクティビティ図で大まかな流れを掴んだ後、コンポーネント間の具体的なIF（メソッド呼び出し、データ授受）を設計する際。
-          - 各オブジェクトの責務を明確化する際。
-          - 非同期処理や外部API連携のシーケンスを検討する際。
-          - 特にcore_logicのUseCaseとAdapter間、Adapterと外部API間のインタラクション明確化に有効。
-        how_to_use: "ライフライン、メッセージ（同期/非同期）、活性化区間、応答メッセージで描画。"
+    - diagram_type: "Data Model Diagram (or Class Diagram for models)"
+      purpose: "システムが扱う主要データ（ドメインモデル）の構造、属性、型、関連性を視覚的に表現する。"
+      timing_and_use_case: |
+        - `ParsedSourceFileContent` や `IssueData` などの詳細設計時。
+        - モデル間の関連性（1対多など）を明確にし、データ整合性を担保する設計を行う際。
+      how_to_use: "エンティティ（クラス）、属性、型、リレーションシップで描画。"
 
-      - diagram_type: "Component Diagram (Detailed Level)"
-        purpose: "システムを構成する主要コンポーネント（クラスやモジュール）と、それらの間の静的な依存関係やインターフェースを視覚化する。"
-        timing_and_use_case: |
-          - より詳細なアーキテクチャ設計や議論を行う際。
-          - あるコンポーネント変更時の影響範囲を分析する際。
-          - 新規メンバーへのシステム構成説明。
-        how_to_use: "コンポーネント、インターフェース、依存関係、ポートで描画。"
+    - diagram_type: "State Transition Diagram (State Machine Diagram)"
+      purpose: "特定のオブジェクトやシステムが時間経過やイベント発生に伴い、どのように状態を変化させるかを示す。"
+      timing_and_use_case: |
+        - Web UIの動的な振る舞い（例: 非同期処理中の状態変化）の設計時。
+        - バックログアイテムのワークフロー（ステータス遷移）定義。
+      how_to_use: "状態、遷移、イベント、アクションで描画。"
 
-      - diagram_type: "Data Model Diagram (or Class Diagram for models)"
-        purpose: "システムが扱う主要データ（ドメインモデル）の構造、属性、型、関連性を視覚的に表現する。"
-        timing_and_use_case: |
-          - `ParsedSourceFileContent` や `IssueData` などの詳細設計時。
-          - モデル間の関連性（1対多など）を明確にし、データ整合性を担保する設計を行う際。
-        how_to_use: "エンティティ（クラス）、属性、型、リレーションシップで描画。"
-
-      - diagram_type: "State Transition Diagram (State Machine Diagram)"
-        purpose: "特定のオブジェクトやシステムが時間経過やイベント発生に伴い、どのように状態を変化させるかを示す。"
-        timing_and_use_case: |
-          - Web UIの動的な振る舞い（例: 非同期処理中の状態変化）の設計時。
-          - バックログアイテムのワークフロー（ステータス遷移）定義。
-        how_to_use: "状態、遷移、イベント、アクションで描画。"
-
-    recommended_workflow_for_diagrams: |
-      1. スプリントで取り組むユーザーストーリーを選択する。
-      2. そのユーザーストーリーの主要なフローを **アクティビティ図** で大まかに把握する。
-      3. アクティビティ図で洗い出された主要な処理やコンポーネント間のやり取りを **シーケンス図** で詳細化し、インターフェースやデータフローを明確にする。
-      4. 上記の過程で、扱うデータモデルが複雑であれば **データモデル図** で整理する。
-      5. コンポーネント間の静的な依存関係や全体の構造が複雑であれば **コンポーネント図** で整理する。
-      6. UIの状態遷移や特定のオブジェクトのライフサイクルが複雑であれば **状態遷移図** を描く。
-      7. これらの図を基に、実装タスクを具体化し、本バックログのテクニカルタスクを更新・詳細化する。
-      8. 作成した図はチームで共有し、認識合わせとレビューを行う。図は完璧を目指すより、コミュニケーションと設計の補助を目的とする。
+  recommended_workflow_for_diagrams: |
+    1. スプリントで取り組むユーザーストーリーを選択する。
+    2. そのユーザーストーリーの主要なフローを **アクティビティ図** で大まかに把握する。
+    3. アクティビティ図で洗い出された主要な処理やコンポーネント間のやり取りを **シーケンス図** で詳細化し、インターフェースやデータフローを明確にする。
+    4. 上記の過程で、扱うデータモデルが複雑であれば **データモデル図** で整理する。
+    5. コンポーネント間の静的な依存関係や全体の構造が複雑であれば **コンポーネント図** で整理する。
+    6. UIの状態遷移や特定のオブジェクトのライフサイクルが複雑であれば **状態遷移図** を描く。
+    7. これらの図を基に、実装タスクを具体化し、本バックログのテクニカルタスクを更新・詳細化する。
+    8. 作成した図はチームで共有し、認識合わせとレビューを行う。図は完璧を目指すより、コミュニケーションと設計の補助を目的とする。
 
 epics:
-  - epic_id: "EPIC-WEBUI-CORE" # docs/issues.yml からも参照
-    title: "Web UI基本機能"
-    description: "ファイル読込、Issue表示・選択、ローカル保存など、Web UIのコア機能群。"
+  - epic_id: "EPIC-WEBUI"
+    title: "Static Web Frontend Functionality"
+    description: "ユーザーがブラウザを通じてIssue情報ファイルをアップロードし、バックエンドAPIと通信して解釈された内容を確認・選択し、GitHubへの登録やローカル保存アクションをトリガーできる静的なWebフロントエンドを提供する。"
     user_stories:
       - "US-001"
       - "US-002"
-      - "US-004"
-      - "US-006" # Web UI DryRun & AI Config
-
-  - epic_id: "EPIC-DATAPARSING" # docs/issues.yml からも参照 (旧 EPIC-CORELOGIC の一部)
-    title: "データ解析とマッピング (AI-driven Rule Inference)" # タイトルにAIの役割を追記
-    description: "多様な入力ファイル形式のAIによる分析、区切りとマッピングのルール推論、およびIssueDataモデルへの変換機能群。"
-    user_stories:
-      - "US-001" # 解析とマッピングは US-001 の主要部分
-
-  - epic_id: "EPIC-GITHUB-INTEGRATION" # docs/issues.yml からも参照 (旧 EPIC-CORELOGIC の一部)
-    title: "GitHub連携機能"
-    description: "GitHubリソース（リポジトリ、Issue、ラベル、マイルストーン、プロジェクト）の作成・連携機能群。"
-    user_stories:
       - "US-003"
-      - "US-006" # Web UI DryRun
-
-  - epic_id: "EPIC-CLI-MAINTENANCE" # docs/issues.yml からも参照
-    title: "CLI機能の維持と同期"
-    description: "既存CLI機能の維持と、Web UIで開発されたコアロジックへの追従。"
-    user_stories:
-      - "US-005" # CLI DryRun を含む
-
-  - epic_id: "EPIC-INFRA-CONFIG" # docs/issues.yml からも参照
-    title: "設定管理・実行環境整備"
-    description: "アプリケーションの設定管理、実行環境（コンテナ、認証等）の整備。"
-    user_stories:
-      - "US-006" # Web UI AI Config
+      - "US-004"
+      - "US-WEBUI-AI-CONFIG"
+  - epic_id: "EPIC-BACKEND-API"
+    title: "Backend API Services"
+    description: "静的フロントエンドやCLIからのリクエストを処理し、コアロジックを実行し、結果を返すためのAPIエンドポイント群を提供する。"
+    user_stories: []
+  # ... (他のEPICのdescriptionも、API構成を前提とした内容に微調整の可能性あり)
 
 user_stories:
   - story_id: "US-001"
-    title: "Web UIでのIssueファイルのアップロード、AIによる区切り・マッピングルール推論と解析、一覧表示" # タイトル更新
-    description: "開発者として、Issue情報ファイル（Markdown, YAML, JSON）をWeb UIからアップロードし、AIがファイル内容からIssueの区切り方（各Issueの先頭キー/開始パターン）と各フィールドのマッピングルールを推論し、そのルールに基づいて解析されたIssueの一覧を画面で確認したい。これにより、多様なフォーマットやキーの揺らぎがあるファイルからでも効率的にIssue情報を把握できる。" # description更新
+    title: "Web UIでのIssueファイルのアップロード、バックエンドAPI経由でのAI解析、結果の一覧表示"
+    description: "開発者として、静的なWeb UIからIssue情報ファイル（Markdown, YAML, JSON）を選択し、バックエンドAPIに送信してAIによる区切り・キーマッピングルール推論と解析を実行させ、その結果（Issueの一覧）をAPI経由で取得し画面で確認したい。これにより、多様なフォーマットやキーの揺らぎがあるファイルからでも効率的にIssue情報を把握できる。"
     acceptance_criteria:
-      - "サポートするファイル形式（.md, .yml, .json）で、10MB以下のファイルをアップロードできる。"
-      - "アップロードされたファイル全体がAIパーサーに渡され、Issueの区切りルール（先頭キー/開始パターン）とフィールドマッピングルールが推論される。"
-      - "推論された区切りルールに基づき、ファイルがIssueブロックに分割される。"
-      - "推論されたフィールドマッピングルールに基づき、各Issueブロックが`IssueData`オブジェクトにマッピングされる。"
-      - "上記の結果が`ParsedSourceFileContent`オブジェクト（`IssueData`リストとファイル全体のメタ情報を含む）として生成される。"
-      - "生成された`ParsedSourceFileContent`内の`IssueData`リストが、Web UI上に一覧形式で表示される。"
-      - "Issueの主要な情報（AIによってマッピングされたタイトル、担当者候補、ラベル候補など）が一覧で確認できる。"
-      - "ファイル読み込みエラーやAIによるルール推論・解析エラーが発生した場合、適切なエラーメッセージがUIに表示される。"
+      - "静的Web UIにファイルアップロード機能があり、`.md`, `.yml`, `.json` ファイル（10MB以下）を選択できる。"
+      - "選択されたファイルデータが、フロントエンドからバックエンドのファイルアップロード/解析APIエンドポイントに送信される。"
+      - "バックエンドAPIはファイルを受け取り、AIパーサーによって区切りルールとキーマッピングルールを推論し、それに基づいて`ParsedSourceFileContent`オブジェクトを生成する。"
+      - "解析結果（`ParsedSourceFileContent`内の`IssueData`リストとメタ情報）が、APIエンドポイントからJSON形式などでフロントエンドに返却される。"
+      - "フロントエンドはAPIからのレスポンスを受け取り、`IssueData`リストをWeb UI上に一覧形式で表示する。"
+      - "Issueの主要な情報（タイトル、担当者候補、ラベル候補など）が一覧で確認できる。"
+      - "ファイル検証エラー（API側）、API通信エラー、AI解析エラーが発生した場合、適切なエラーメッセージがフロントエンドのUIに表示される。"
     technical_tasks:
-      - "TASK-WEBUI-FILEUPLOAD-IMPL"
-      - "TASK-CORELOGIC-AI-RULE-INFERENCE" # 区切りルールとマッピングルール両方の推論
+      - "TASK-FE-US001-UPLOAD-UI"
+      - "TASK-FE-US001-API-UPLOAD-CALL"
+      - "TASK-FE-US001-DISPLAY-LOGIC"
+      - "TASK-FE-US001-ERROR-HANDLING"
+      - "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
       - "TASK-CORELOGIC-RULE-BASED-SPLITTER"
       - "TASK-CORELOGIC-RULE-BASED-MAPPER"
-      - "TASK-WEBUI-DISPLAY-IMPL" # (サブタスク含む)
+      - "TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER"
     notes: |
-      - [AI戦略] AIパーサーはファイル全体から「区切りルール（先頭キー/開始パターン）」と「フィールドマッピングルール」を推論する。その後、これらのルールを適用してIssueを分割・構造化する。
-      - [ユーザー確認] WebUIでは、AIによる解析結果（分割・マッピング結果）をユーザーが確認し、問題があれば登録前に認識できる。CLIではDryRunや中間出力で確認手段を提供する。
-      - [プロンプト管理] AIへのプロンプトはTASK-PROMPT-MANAGEMENTで外部ファイル化を検討。
-      - [ルール表現] AIが生成するルールの形式はTASK-RULE-REPRESENTATIONで設計する。
+      - [アーキテクチャ変更] このユーザーストーリーは静的フロントエンド + バックエンドAPI構成を前提とする。
+      - [API設計] 詳細なAPIエンドポイント、リクエスト/レスポンス形式は `docs/api_specifications.md` を参照。
     referenced_requirements_ids:
       - "UC-Web-001 (フロー1-6)"
       - "FR-WebUI-001"
       - "FR-File-001"
-      - "FR-Parse-001" # 実現方法がAI中心に大きくシフト
-      - "FR-Map-002"   # 実現方法がAI中心に大きくシフト
+      - "FR-Parse-001"
+      - "FR-Map-002"
       - "FR-Display-001"
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-DATAPARSING"]
-    size_estimate: "[SP: 13]" # 変更なし（AI戦略の複雑性を既に考慮）
+    related_epic_ids: ["EPIC-WEBUI", "EPIC-DATAPARSING", "EPIC-BACKEND-API"]
+    size_estimate: "[SP: 13]"
     dependencies_guessed:
-      - "TASK-CORELOGIC-AI-RULE-INFERENCE" # 以前のTASK-DATAMAP-IMPLがこれに該当
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
+      - "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
     status: "To Do"
     priority: "High"
 
@@ -191,7 +173,7 @@ user_stories:
     technical_tasks:
       - "TASK-WEBUI-SELECT-JS"          # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
       - "TASK-WEBUI-SELECT-BACKEND"     # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    related_epic_ids: ["EPIC-WEBUI"]
     size_estimate: "[SP: 3]"
     dependencies_guessed:
       - "US-001"
@@ -213,7 +195,7 @@ user_stories:
       - "TASK-APPSERVICE-GITHUB-CALL"   # issues.yml の TASK-WEBUI-GITHUB-ACTION の一部
       - "TASK-CORELOGIC-GITHUB-MAIN"    # issues.yml の TASK-CORELOGIC-GITHUB-MAIN
       - "TASK-GITHUB-CLIENTS-SETUP"   # issues.yml から
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICからGITHUB-INTEGRATIONへ
+    related_epic_ids: ["EPIC-WEBUI", "EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICからGITHUB-INTEGRATIONへ
     size_estimate: "[SP: 13]"
     dependencies_guessed:
       - "US-001"
@@ -237,7 +219,7 @@ user_stories:
       - "TASK-WEBUI-LOCALSAVEFORM-IMPL" # issues.yml の TASK-FILESPLIT-IMPL のUI部分
       - "TASK-APPSERVICE-LOCALSAVE-CALL" # issues.yml の TASK-FILESPLIT-IMPL のサービス連携部分
       - "TASK-CORELOGIC-LOCALSAVE-IMPL"  # issues.yml の TASK-FILESPLIT-IMPL のコアロジック部分
-    related_epic_ids: ["EPIC-WEBUI-CORE"]
+    related_epic_ids: ["EPIC-WEBUI"]
     size_estimate: "[SP: 5]"
     dependencies_guessed:
       - "US-001"
@@ -282,7 +264,7 @@ user_stories:
       - "UC-Web-001 (DryRun, AI Config)"
       - "3. スコープ定義 (処理: Dry Runモード)"
       - "2. システム化の目的とゴール (Web UI機能: AI設定)"
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-GITHUB-INTEGRATION", "EPIC-INFRA-CONFIG"]
+    related_epic_ids: ["EPIC-WEBUI", "EPIC-GITHUB-INTEGRATION", "EPIC-INFRA-CONFIG"]
     size_estimate: "[SP: 3]"
     dependencies_guessed:
       - "US-003"
@@ -291,86 +273,80 @@ user_stories:
     priority: "Medium"
 
 technical_tasks:
-  # --- docs/issues.yml から移行・整理されたテクニカルタスク ---
-  # 各タスクの詳細説明、関連ユーザーストーリーID、ステータス、担当者、メモなどを充実させる
-
-  - task_id: "TASK-DJANGO-SETUP"
-    title: "Djangoプロジェクト初期セットアップとBootstrap5導入"
-    description: |
-      Djangoアプリケーションの基本的な骨格を構築し、Dockerコンテナ環境での実行基盤を整備しました。
-      - Djangoプロジェクト (`webapp_project`) およびアプリケーション (`app`) の作成と基本設定。
-      - `settings.py` の設定（`INSTALLED_APPS`, 静的ファイル, テンプレート）。
-      - Bootstrap5のCSS/JSファイルの配置。
-      - ベースHTMLテンプレート (`base.html`) とトップページ用テンプレート (`top_page.html`) 作成。
-      - Dockerコンテナ設定 (`docker-compose.yml`, `Dockerfile`)。
-      - 基本的な動作確認テスト (`app/tests.py`)。
-    related_epic_ids: ["EPIC-WEBUI-CORE", "EPIC-INFRA-CONFIG"]
-    related_user_story_ids: [] # 直接的なユーザーストーリーはないが、多くのWebUIストーリーの前提
-    status: "Done"
-    priority: "High"
-    resolved_date: "2025-05-24 (JST)"
-    referenced_requirements_ids: ["FR-WebUI-001", "8. 非機能要件 (技術スタック)"]
-    size_estimate: "[SP: 3]"
-    notes: |
-      完了確認: ユーザー報告と提供ファイルに基づき完了。
-      関連ファイル: settings.py, views.py, base.html, top_page.html, tests.py, docker-compose.yml, README.md.
-
-  - task_id: "TASK-CORELOGIC-AI-RULE-INFERENCE"
-    title: "CoreLogic: AIによる区切りルール(先頭キー/開始パターン)とフィールドマッピングルールの推論エンジン実装" # タイトル更新
-    description: "AIパーサーの中核機能。入力されたファイルコンテンツ全体を分析し、Issueの区切り方（各Issueの先頭キー/開始パターン）と各Issue内のデータからIssueDataフィールドへのマッピングルールを推論・生成する。プロンプトエンジニアリング、AIモデルとの連携、config.yamlからのヒント活用を含む。" # description更新
-    related_user_story_ids: ["US-001"]
-    related_epic_ids: ["EPIC-DATAPARSING"]
+  # --- Backend API Tasks (新規または既存タスクの役割変更) ---
+  - task_id: "TASK-BE-API-DESIGN"
+    title: "Backend: APIエンドポイント全体の設計と仕様定義"
+    description: "ファイル処理、GitHubリソース操作、ローカル保存指示など、フロントエンドやCLIから利用される全APIエンドポイントのURL、HTTPメソッド、リクエスト/レスポンス形式、認証方式などを設計し、`docs/api_specifications.md` に文書化する。"
+    related_epic_ids: ["EPIC-BACKEND-API"]
     status: "To Do"
-    priority: "High"
-    dependencies_guessed: ["TASK-PROMPT-MANAGEMENT", "TASK-RULE-REPRESENTATION"]
-    size_estimate: "[SP: 8]"
-
-  - task_id: "TASK-CORELOGIC-RULE-BASED-SPLITTER"
-    title: "CoreLogic: AI推論「区切りルール」に基づくIssueブロック分割処理の実装" # タイトル更新
-    description: "AIが推論した「区切りルール（先頭キー/開始パターン）」に基づき、元のファイルコンテンツをIssueブロックのリスト (`IntermediateParsingResult`) に分割するルールベースの処理モジュールを実装する。" # description更新
-    related_user_story_ids: ["US-001"]
-    related_epic_ids: ["EPIC-DATAPARSING"]
-    status: "To Do"
-    priority: "High"
-    dependencies_guessed: ["TASK-CORELOGIC-AI-RULE-INFERENCE", "TASK-RULE-REPRESENTATION"]
-    size_estimate: "[SP: 3]"
-
-  - task_id: "TASK-CORELOGIC-RULE-BASED-MAPPER"
-    title: "CoreLogic: AI推論「フィールドマッピングルール」に基づくIssueDataへのマッピング処理の実装" # タイトル更新
-    description: "AIが推論した「フィールドマッピングルール」と、分割されたIssueブロックリストに基づき、各ブロックを`IssueData`オブジェクトに変換し、最終的に`ParsedSourceFileContent`を生成するマッパー処理を実装する。" # description更新
-    related_user_story_ids: ["US-001"]
-    related_epic_ids: ["EPIC-DATAPARSING"]
-    status: "To Do"
-    priority: "High"
-    dependencies_guessed: ["TASK-CORELOGIC-AI-RULE-INFERENCE", "TASK-RULE-REPRESENTATION"]
+    priority: "Very High"
     size_estimate: "[SP: 5]"
-
-  - task_id: "TASK-PROMPT-MANAGEMENT"
-    title: "Infra: AIプロンプトの外部ファイル管理機構の実装"
-    description: "AIパーサーが使用するプロンプトをコードから分離し、外部ファイル（例: .txt, .md, またはconfig.yaml内の専用セクション）から読み込んで利用できる仕組みを実装する。"
-    related_epic_ids: ["EPIC-INFRA-CONFIG", "EPIC-DATAPARSING"]
+  - task_id: "TASK-BE-DRF-SETUP"
+    title: "Backend: Django Rest Framework (DRF) のセットアップと基本設定"
+    description: "DjangoプロジェクトにDRFを導入し、API開発のための基本的な設定（ルーティング、デフォルトパーサー/レンダラー、認証クラスなど）を行う。"
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
+    status: "To Do"
+    priority: "High"
+    size_estimate: "[SP: 2]"
+  - task_id: "TASK-BE-SERIALIZERS"
+    title: "Backend: APIレスポンス用シリアライザーの実装"
+    description: "`ParsedSourceFileContent`, `IssueData`, 各種結果オブジェクトなどをJSON等にシリアライズするためのDRFシリアライザーを実装する。"
+    related_epic_ids: ["EPIC-BACKEND-API"]
+    status: "To Do"
+    priority: "High"
+    size_estimate: "[SP: 3]"
+  - task_id: "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
+    title: "Backend API: Issueファイル処理APIエンドポイント実装"
+    description: "アップロードされたIssue情報ファイルを受け付け、`AIParseFileUseCase`を呼び出して解析処理を実行し、結果（`ParsedSourceFileContent`またはエラー情報）をJSONで返すAPIエンドポイントを実装する。"
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-BACKEND-API"]
+    status: "To Do"
+    priority: "High"
+  - task_id: "TASK-BE-API-GITHUB-RESOURCE-ENDPOINT"
+    title: "Backend API: GitHubリソース作成APIエンドポイント実装"
+    description: "フロントエンドから選択されたIssue情報、リポジトリ名、プロジェクト名、DryRunモードなどを受け取り、`CreateGitHubResourcesUseCase`を呼び出し、結果をJSONで返すAPIエンドポイントを実装する。"
+    related_user_story_ids: ["US-003"]
+    related_epic_ids: ["EPIC-BACKEND-API"]
+    status: "To Do"
+    priority: "High"
+  # --- Frontend Tasks (新規タスク群) ---
+  - task_id: "TASK-FE-SETUP"
+    title: "Frontend: 静的フロントエンドプロジェクトのセットアップ"
+    description: "選択された技術（例: React/Vite, Vue/Vite, または素のHTML/CSS/JS + ビルドツール）でフロントエンドプロジェクトの基本構成をセットアップする。"
+    related_epic_ids: ["EPIC-WEBUI"]
+    status: "To Do"
+    priority: "High"
+    size_estimate: "[SP: 3]"
+  - task_id: "TASK-FE-API-CLIENT"
+    title: "Frontend: バックエンドAPIクライアント/ラッパーの実装"
+    description: "バックエンドAPIと通信するための汎用的なクライアントコード（例: fetchやaxiosのラッパー、エラーハンドリング共通化など）を実装する。"
+    related_epic_ids: ["EPIC-WEBUI"]
     status: "To Do"
     priority: "Medium"
     size_estimate: "[SP: 2]"
-
-  - task_id: "TASK-RULE-REPRESENTATION"
-    title: "Design: AI生成ルールの表現形式の設計と標準化"
-    description: "AIパーサーが生成する「区切りルール（先頭キー/開始パターン）」と「フィールドマッピングルール」を、後続のルールベース処理が解釈可能な一貫したデータ構造または形式（例: JSON Schemaベース、カスタムDSLなど）で表現する方法を設計・定義する。"
-    related_epic_ids: ["EPIC-DATAPARSING"]
+  - task_id: "TASK-FE-US001-UPLOAD-UI"
+    title: "Frontend: US-001 ファイルアップロードUIコンポーネント実装"
+    description: "ファイル選択input、アップロードボタン、ヘルプテキストなどを含むUIコンポーネントを実装する。"
+    related_user_story_ids: ["US-001"]
+    related_epic_ids: ["EPIC-WEBUI"]
     status: "To Do"
     priority: "High"
-    dependencies_guessed: ["TASK-CORELOGIC-AI-RULE-INFERENCE"]
-    size_estimate: "[SP: 3]"
-
-  - task_id: "TASK-FILEPARSE-IMPL"
-    title: "ファイル形式別基本パーサー (役割見直し)" # タイトルに役割見直しを追記
-    description: | # description更新
-      AIによるルール推論を前提とし、ファイル形式（MD, YAML, JSON）の基本的な構造を検証したり、
-      AIが処理しやすいように非常に大まかな前処理（例: コメント除去、エンコーディング確認など）を行う最小限のパーサー機能。
-      AIが推論した「区切りルール」を適用する処理は TASK-CORELOGIC-RULE-BASED-SPLITTER が担う。
-    related_epic_ids: ["EPIC-DATAPARSING"]
-    related_user_story_ids: ["US-001"]
-    status: "To Re-evaluate" # ステータス変更
-    priority: "Medium"
-    # ... (他のフィールドも見直し)
-  # ... (既存の他のテクニカルタスクも、この新しいAIパーサー戦略との関連を見直す)
+  # ... (他のWeb UI関連の既存TASK-WEBUI-* タスクは、対応するTASK-FE-* に置き換わるか、役割が変化)
+  # --- Core Logic Tasks (API経由で呼び出されるため、大きな変更はないが、呼び出し元が変わることを意識) ---
+  # ... (TASK-CORELOGIC-AI-RULE-INFERENCE などは変更なし) ...
+  # --- Infrastructure Tasks (変更なし、またはAPI関連の設定追加) ---
+  # ... (TASK-PROMPT-MANAGEMENT などは変更なし) ...
+  - task_id: "TASK-DJANGO-SETUP"
+    title: "DjangoプロジェクトのAPIサーバーとしてのセットアップ"
+    description: |
+      Djangoアプリケーションを、静的フロントエンドからのAPIリクエストを受け付けるバックエンドサーバーとしてセットアップする。
+      - DRFの導入と設定 (TASK-BE-DRF-SETUPと重複する可能性あり、整理が必要)。
+      - API用のURLルーティング設定。
+      - CORS設定（必要であれば）。
+      - 静的ファイル配信の設定（Django開発サーバーから配信する場合、または本番環境での考慮）。
+      - Dockerコンテナ設定のAPIサーバーとしての最適化。
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
+    status: "To Re-evaluate"
+    priority: "High"
+  # 既存の TASK-WEBUI-*, TASK-APPSERVICE-* は、新しい TASK-FE-*, TASK-BE-API-* に役割を移行するため、
+  # 不要になったものは削除するか、statusを "Obsolete" などに変更する必要がある。
