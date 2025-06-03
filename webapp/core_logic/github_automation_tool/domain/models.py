@@ -113,3 +113,6 @@ class CreateGitHubResourcesResult(BaseModel):
 
     # 全体的な致命的エラー
     fatal_error: str | None = Field(default=None, description="処理を中断させた致命的なエラーメッセージ")
+
+    # dry_runフラグを追加
+    dry_run: bool = Field(default=False, description="ドライランかどうか")

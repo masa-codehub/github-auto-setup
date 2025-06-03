@@ -61,7 +61,7 @@ ROOT_URLCONF = 'webapp_project.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates', BASE_DIR.parent / 'frontend'],
+        'DIRS': [],  # HTMLテンプレートは参照しない
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -122,7 +122,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [BASE_DIR.parent / 'frontend']
+# DjangoはAPIバックエンド専用のため、STATICFILES_DIRSは設定しません。
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
