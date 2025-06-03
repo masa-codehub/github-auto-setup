@@ -2,20 +2,20 @@
 
 document_info:
   title: "Product Backlog for GitHub Automation Tool"
-  version: "2.8" # バージョンを更新
+  version: "2.10" # バージョンを更新
   last_updated: "2025-06-03 (JST)" # 日付を更新
-  status: "Refining for Static Frontend + API Architecture"
+  status: "Static Frontend + API Architecture - Backend API Core Established" # ステータスを更新
   source_documents_integrated:
     - "docs/agile-practice.yml (v2.3) - Archived"
     - "docs/issues.yml (v2.3) - Archived"
   related_documents:
     - "docs/requirements.yml (v2.6+)"
     - "docs/glossary.md"
-    - "docs/ui_ux_specifications.md"
+    - "docs/ui_ux_specifications.yml"
     - "docs/github_setup_defaults.yml"
     - "docs/user-stories/US-001/US-001_activity.md"
     - "docs/user-stories/US-001/US-001_sequence.md"
-    - "docs/diagrams/context-diagram.md (To be created)"
+    - "docs/diagrams/context-diagram.md"
     - "docs/diagrams/architecture-diagram.md (Updated for API architecture)"
     - "docs/api_specifications.md (To be created)"
 
@@ -117,13 +117,25 @@ epics:
       - "US-003"
       - "US-004"
       - "US-WEBUI-AI-CONFIG"
+    tasks:
+      - "TASK-FE-SETUP"
+      - "TASK-FE-API-CLIENT"
+      - "TASK-FE-US001-UPLOAD-UI"
+      - "TASK-FE-API-INTEGRATION"
   - epic_id: "EPIC-BACKEND-API"
     title: "Backend API Services"
     description: "静的フロントエンドやCLIからのリクエストを処理し、コアロジックを実行し、結果を返すためのAPIエンドポイント群を提供する。"
     user_stories: []
     tasks:
       - "TASK-BE-DRF-SETUP"
-      # 他のタスク...
+      - "TASK-DJANGO-SETUP"
+      - "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
+      - "TASK-BE-API-GITHUB-RESOURCE-CREATION"
+      - "TASK-BE-API-TEMPORARY-DATA-STORAGE"
+      - "TASK-DOC-API-SPEC"
+      - "TASK-BE-DB-CACHE-EXPIRES-AT-MIGRATION"
+      - "TASK-BE-API-ERROR-STANDARDIZATION"
+      - "TASK-BE-API-TEST-COVERAGE-IMPROVEMENT"
   # ... (他のEPICのdescriptionも、API構成を前提とした内容に微調整の可能性あり)
 
 user_stories:
@@ -134,8 +146,8 @@ user_stories:
       - "静的Web UIにファイルアップロード機能があり、`.md`, `.yml`, `.json` ファイル（10MB以下）を選択できる。"
       - "選択されたファイルデータが、フロントエンドからバックエンドのファイルアップロード/解析APIエンドポイントに送信される。"
       - "バックエンドAPIはファイルを受け取り、AIパーサーによって区切りルールとキーマッピングルールを推論し、それに基づいて`ParsedSourceFileContent`オブジェクトを生成する。"
-      - "解析結果（`ParsedSourceFileContent`内の`IssueData`リストとメタ情報）が、APIエンドポイントからJSON形式などでフロントエンドに返却される。"
-      - "フロントエンドはAPIからのレスポンスを受け取り、`IssueData`リストをWeb UI上に一覧形式で表示する。"
+      - "解析結果がサーバーサイドで一時保存され、その`session_id`と、Issueの選択に必要な最小限の情報（タイトル、temp_idなど）がJSON形式でフロントエンドに返却される。"
+      - "フロントエンドはAPIからのレスポンスを受け取り、`session_id`を保持し、`IssueData`リストをWeb UI上に一覧形式で表示する。"
       - "Issueの主要な情報（タイトル、担当者候補、ラベル候補など）が一覧で確認できる。"
       - "ファイル検証エラー（API側）、API通信エラー、AI解析エラーが発生した場合、適切なエラーメッセージがフロントエンドのUIに表示される。"
     technical_tasks:
@@ -148,24 +160,11 @@ user_stories:
       - "TASK-CORELOGIC-RULE-BASED-SPLITTER"
       - "TASK-CORELOGIC-RULE-BASED-MAPPER"
       - "TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER"
+      - "TASK-BE-API-TEMPORARY-DATA-STORAGE"
     notes: |
       - [アーキテクチャ変更] このユーザーストーリーは静的フロントエンド + バックエンドAPI構成を前提とする。
       - [API設計] 詳細なAPIエンドポイント、リクエスト/レスポンス形式は `docs/api_specifications.md` を参照。
-    referenced_requirements_ids:
-      - "UC-Web-001 (フロー1-6)"
-      - "FR-WebUI-001"
-      - "FR-File-001"
-      - "FR-Parse-001"
-      - "FR-Map-002"
-      - "FR-Display-001"
-    related_epic_ids: ["EPIC-WEBUI", "EPIC-DATAPARSING", "EPIC-BACKEND-API"]
-    size_estimate: "[SP: 13]"
-    dependencies_guessed:
-      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
-      - "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
-    status: "To Do"
-    priority: "High"
-
+      - [データフロー変更] ファイルアップロード後の全Issueデータはバックエンドで一時保存され、UIとはIDベースでやり取りするよう変更されました。
   - story_id: "US-002"
     title: "Web UIでの処理対象Issueの選択"
     description: "開発者として、Web UIに表示されたIssue一覧の中から、GitHubへの登録やローカル保存の対象とするIssueを個別に、または一括で選択したい。これにより、必要なIssueのみを効率的に処理できる。"
@@ -187,28 +186,19 @@ user_stories:
     title: "Web UIからのGitHubへのIssue一括登録"
     description: "開発者として、Web UIで選択したIssue群を、指定したGitHubリポジトリ（および任意でプロジェクト）に一括で登録したい。ラベル、マイルストーン、担当者も適切に設定されること。DryRunモードも利用したい。"
     acceptance_criteria:
-      - "UI上でGitHubリポジトリ名（owner/repo形式）を入力できる。"
+      - "UI上でGitHubリポジリポジトリ名（owner/repo形式）を入力できる。"
       - "UI上で任意でGitHubプロジェクト名（またはID/URL）を入力できる。"
       - "UI上でDryRunモードのON/OFFを選択できる。"
-      - "「GitHubへ登録」ボタン押下時、選択されたIssueと設定情報がバックエンドに送信される。"
+      - "「GitHubへ登録」ボタン押下時、選択されたIssueの`session_id`と`temp_id`リスト、および設定情報がバックエンドに送信される。"
       - "バックエンド（アプリケーションサービス層経由）で`core_logic`の`CreateGitHubResourcesUseCase`が呼び出される。"
       - "処理結果（成功、失敗、スキップ、DryRun結果）がUIにフィードバックされる。"
     technical_tasks:
-      - "TASK-WEBUI-GITHUBFORM-IMPL"    # issues.yml の TASK-WEBUI-GITHUB-ACTION の一部
-      - "TASK-APPSERVICE-GITHUB-CALL"   # issues.yml の TASK-WEBUI-GITHUB-ACTION の一部
-      - "TASK-CORELOGIC-GITHUB-MAIN"    # issues.yml の TASK-CORELOGIC-GITHUB-MAIN
-      - "TASK-GITHUB-CLIENTS-SETUP"   # issues.yml から
-    related_epic_ids: ["EPIC-WEBUI", "EPIC-GITHUB-INTEGRATION"] # EPIC-CORELOGICからGITHUB-INTEGRATIONへ
-    size_estimate: "[SP: 13]"
-    dependencies_guessed:
-      - "US-001"
-      - "US-002"
-      - "TASK-CORELOGIC-AIPARSE-CALL"
+      - "TASK-WEBUI-GITHUBFORM-IMPL"
+      - "TASK-APPSERVICE-GITHUB-CALL"
+      - "TASK-CORELOGIC-GITHUB-MAIN"
       - "TASK-GITHUB-CLIENTS-SETUP"
-    notes: "[分割案あり] リポジトリ作成、ラベル作成、マイルストーン作成、Issue作成、プロジェクト連携の各機能を個別の（より小さな）ユーザーストーリーとして扱うことも可能かもしれません。"
-    status: "To Do"
-    priority: "High"
-
+      - "TASK-BE-API-GITHUB-RESOURCE-CREATION"
+      - "TASK-BE-API-TEMPORARY-DATA-STORAGE"
   - story_id: "US-004"
     title: "Web UIからの解析済みIssueのローカル保存"
     description: "開発者として、Web UIで解析・表示されたIssue情報（または選択したIssue群）を、ローカルファイルシステムにYAML形式で分割保存したい。保存されたファイル群の目次となるindex.htmlも生成されること。"
@@ -278,74 +268,72 @@ user_stories:
 technical_tasks:
   # --- Backend API Tasks (新規または既存タスクの役割変更) ---
   - task_id: "TASK-BE-API-DESIGN"
-    title: "Backend: APIエンドポイント全体の設計と仕様定義"
-    description: "ファイル処理、GitHubリソース操作、ローカル保存指示など、フロントエンドやCLIから利用される全APIエンドポイントのURL、HTTPメソッド、リクエスト/レスポンス形式、認証方式などを設計し、`docs/api_specifications.md` に文書化する。"
-    related_epic_ids: ["EPIC-BACKEND-API"]
     status: "To Do"
     priority: "Very High"
-    size_estimate: "[SP: 5]"
   - task_id: "TASK-BE-DRF-SETUP"
-    title: "Backend: Django Rest Framework (DRF) のセットアップと基本設定"
-    description: "DjangoプロジェクトにDRFを導入し、API開発のための基本的な設定（ルーティング、デフォルトパーサー/レンダラー、認証クラスなど）を行う。"
-    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
     status: "Done" # 完了
-    priority: "High"
-    size_estimate: "[SP: 2]"
-    acceptance_criteria: |
-      - DRFがDjangoプロジェクトに正しくインストール・設定されていること。
-      - 基本的なDRF設定が settings.py に記述されていること。
-      - テスト用のAPIエンドポイントにアクセスし、DRFのBrowsable API等で応答が確認できること。
-    notes: |
-      - 環境変数の管理の統一: 将来的にアプリケーションサービス層を導入する際、またはより適切なDIメカニズムを検討する際に、View層からの設定ロードやGitHubクライアント初期化のロジックを切り離すことを推奨。
-      - APIバージョン管理: 今後のAPI拡張に備え、URLにバージョンプレフィックス (/api/v1/ など) を導入することを検討。
-      - 品質指標の確認: 単体テストのカバレッジや静的コード解析ツールの結果を継続的にモニタリング・改善する必要がある。
-
   - task_id: "TASK-DJANGO-SETUP"
-    title: "DjangoプロジェクトのAPIサーバーとしてのセットアップ"
+    status: "Done" # "Completed - Re-evaluate" から "Done" に変更
     description: |
       Djangoアプリケーションを、静的フロントエンドからのAPIリクエストを受け付けるバックエンドサーバーとしてセットアップする。
       - API用のURLルーティング設定。
       - CORS設定（必要であれば）。
-      - 静的ファイル配信の設定（Django開発サーバーから配信する場合、または本番環境での考慮）。
+      - 静的ファイル配信の設定（Django開発サーバーから配信しない設定）。
       - Dockerコンテナ設定のAPIサーバーとしての最適化。
+      - **`ParsedDataCache` モデルの導入とデータベースマイグレーションの実行**
+  - task_id: "TASK-BE-API-US001-FILE-PROCESS-ENDPOINT"
+    title: "Backend: US-001 ファイル処理APIエンドポイントの実装"
+    description: "Web UIからのファイルアップロードを受け付け、AIパーサーで解析し、結果を一時保存して最小限の情報を返すAPIエンドポイント（`/api/upload-issue-file/`）を実装する。"
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-DATAPARSING"]
+    status: "Done"
+    priority: "High"
+    size_estimate: "[SP: 8]"
+  - task_id: "TASK-BE-API-GITHUB-RESOURCE-CREATION"
+    title: "Backend: GitHubリソース作成APIエンドポイントの実装"
+    description: "Web UIから提供された`session_id`と`selected_issue_temp_ids`に基づき、一時保存されたIssueデータをロードし、GitHubリポジトリ、Issue等を一括作成するAPIエンドポイント（`/api/create-github-resources/`）を実装する。"
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-GITHUB-INTEGRATION"]
+    status: "Done"
+    priority: "High"
+    size_estimate: "[SP: 8]"
+  - task_id: "TASK-BE-API-TEMPORARY-DATA-STORAGE"
+    title: "Backend: パース済みIssueデータの一時保存機能"
+    description: "ファイルアップロード時にパースされたIssueデータをサーバーサイドで一時的に保存し、IDベースで参照可能にする機能（`ParsedDataCache` モデルなど）を実装する。データの有効期限管理を含む。"
     related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
-    status: "Done" # "Completed - Re-evaluate" から "Done" に変更
+    status: "Done"
     priority: "High"
-
-  - task_id: "TASK-API-VERSIONING"
-    title: "APIのバージョン管理"
-    status: "Backlog"
-    description: "APIのURLにバージョンプレフィックス (例: /api/v1/) を導入する。"
-    acceptance_criteria: |
-      - APIのURLがバージョン管理されていること。
-      - 既存のAPIとの後方互換性が保たれていること。
-    related_epic_ids: ["EPIC-BACKEND-API"]
-  # --- Frontend Tasks (新規タスク群) ---
-  - task_id: "TASK-FE-SETUP"
-    title: "Frontend: 静的フロントエンドプロジェクトのセットアップ"
-    description: |
-      Bootstrap 5と最小限のJavaScriptでフロントエンドプロジェクトの基本構成をセットアップする。
-      **リンター（ESLintなど）、フォーマッター（Prettierなど）の導入は見送る。**
-    related_epic_ids: ["EPIC-WEBUI"]
-    status: "Done" # タスク完了としてステータスを更新
-    priority: "High"
+    size_estimate: "[SP: 5]"
+  - task_id: "TASK-DOC-API-SPEC"
+    title: "Document: API仕様書の作成"
+    description: "今回実装されたバックエンドAPIの全エンドポイント（URL、メソッド、リクエスト/レスポンス形式、認証、エラー形式など）を`docs/api_specifications.md`に詳細に文書化する。"
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA-CONFIG"]
+    status: "To Do"
+    priority: "Very High"
     size_estimate: "[SP: 3]"
-  - task_id: "TASK-FE-API-CLIENT"
-    title: "Frontend: バックエンドAPIクライアント/ラッパーの実装"
-    description: "バックエンドAPIと通信するための汎用的なクライアントコード（例: fetchやaxiosのラッパー、エラーハンドリング共通化など）を実装する。"
-    related_epic_ids: ["EPIC-WEBUI"]
+  - task_id: "TASK-FE-API-INTEGRATION"
+    title: "Frontend: バックエンドAPI連携の更新"
+    description: "Web UIのファイルアップロードおよびGitHubリソース作成機能が、新しいIDベースのAPI（`session_id`, `selected_issue_temp_ids`）と連携するようにフロントエンドのJavaScriptロジックを更新する。"
+    related_epic_ids: ["EPIC-WEBUI", "EPIC-BACKEND-API"]
+    status: "To Do"
+    priority: "Very High"
+    size_estimate: "[SP: 8]"
+  - task_id: "TASK-BE-DB-CACHE-EXPIRES-AT-MIGRATION"
+    title: "Backend: `ParsedDataCache` モデルのマイグレーションと`expires_at`ロジック改善"
+    description: "`ParsedDataCache.expires_at`フィールドを`null=True, blank=True`に変更し、既存のデータベースにマイグレーションを適用する。`save`メソッドの自動設定ロジックをより堅牢にする。"
+    related_epic_ids: ["EPIC-BACKEND-API", "EPIC-INFRA"]
+    status: "To Do"
+    priority: "Medium"
+    size_estimate: "[SP: 1]"
+  - task_id: "TASK-BE-API-ERROR-STANDARDIZATION"
+    title: "Backend: エラーレスポンスの標準化と詳細化"
+    description: "APIエラーレスポンスを`detail`キーだけでなく、より詳細なエラーコードや構造化されたメッセージで返すように標準化する。DRFの例外ハンドラのカスタマイズを検討する。"
+    related_epic_ids: ["EPIC-BACKEND-API"]
     status: "To Do"
     priority: "Medium"
     size_estimate: "[SP: 2]"
-  - task_id: "TASK-FE-US001-UPLOAD-UI"
-    title: "Frontend: US-001 ファイルアップロードUIコンポーネント実装"
-    description: "ファイル選択input、アップロードボタン、ヘルプテキストなどを含むUIコンポーネントを実装する。"
-    related_user_story_ids: ["US-001"]
-    related_epic_ids: ["EPIC-WEBUI"]
+  - task_id: "TASK-BE-API-TEST-COVERAGE-IMPROVEMENT"
+    title: "Backend: APIテストのカバレッジ向上"
+    description: "新しいAPIビューについて、より多様な異常系（AIパーサーAPIエラー、GitHub APIレート制限エラー、無効なPATなど）に対するテストケースを追加し、エラーハンドリングの堅牢性を確保する。特に、Issue作成結果に関するテストケースを追加する。"
+    related_epic_ids: ["EPIC-BACKEND-API"]
     status: "To Do"
-    priority: "High"
-  # ... (他のWeb UI関連の既存TASK-WEBUI-* タスクは、対応するTASK-FE-* に置き換わるか、役割が変化)
-  # --- Core Logic Tasks (API経由で呼び出されるため、大きな変更はないが、呼び出し元が変わることを意識) ---
-  # ... (TASK-CORELOGIC-AI-RULE-INFERENCE などは変更なし) ...
-  # --- Infrastructure Tasks (変更なし、またはAPI関連の設定追加) ---
-  # ... (TASK-PROMPT-MANAGEMENT などは変更なし) ...
+    priority: "Medium"
+    size_estimate: "[SP: 3]"
