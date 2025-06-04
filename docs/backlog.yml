@@ -337,3 +337,46 @@ technical_tasks:
     status: "To Do"
     priority: "Medium"
     size_estimate: "[SP: 3]"
+  - task_id: "TT-006"
+    title: "[TechnicalTask][Enhancement] docs/directory.json の自動生成スクリプト導入検討"
+    description: |
+      現在手動で管理されている `docs/directory.json` は、プロジェクトのファイル構造変更時に陳腐化しやすい。
+      `tree`コマンドの出力整形やカスタムスクリプト等を利用して、このファイルを自動生成・更新する仕組みを導入する。
+      これにより、ドキュメントの正確性を維持し、手動更新の手間を削減する。
+    status: "提案"
+    priority: "中"
+    related_epic_ids: ["E-003"]
+    dependencies: []
+    notes: |
+      - CI/CDパイプラインに組み込み、コミット時やPR時に自動更新することも検討。
+      - プロジェクト構造の可視化と理解の助けとなる。
+
+  - task_id: "TT-007"
+    title: "[TechnicalTask][Refactor] core_logic 配下のテストディレクトリ構造の統一性向上"
+    description: |
+      現在、`webapp/core_logic/github_automation_tool/tests/` と `webapp/core_logic/tests/` にテスト関連ファイルが分散している可能性がある。
+      これを `webapp/core_logic/tests/` 配下に集約し、テスト対象のモジュール構造に対応した一貫性のある配置に整理する。
+      これにより、テストコードの可読性とメンテナンス性を向上させる。
+    status: "提案"
+    priority: "中"
+    related_epic_ids: ["E-003"]
+    dependencies:
+      - "TT-001" # フォルダ構成見直しのフォローアップ
+    notes: |
+      - クリーンアーキテクチャの各レイヤーに対応したテスト構造を意識する。
+      - `pytest` の設定やカバレッジ計測への影響も考慮する。
+
+  - task_id: "TT-008"
+    title: "[TechnicalTask][Optimization] Dockerfile及びコンテナ起動スクリプトの最適化検討"
+    description: |
+      Dockerfileに関して、ビルドキャッシュの効率化やマルチステージビルドによる最終的なイメージサイズの削減を検討する。
+      また、コンテナ起動時に `run.sh` で実行されるリポジトリクローン処理 (`clone-repositories.sh`) の必要性や、
+      ビルドプロセスへの移行、あるいは開発環境に応じた条件分岐などを検討し、コンテナのビルド時間短縮と起動プロセスの効率化を図る。
+    status: "提案"
+    priority: "低"
+    related_epic_ids: ["E-003"]
+    dependencies:
+      - "TT-001" # 開発環境整理のフォローアップ
+    notes: |
+      - 特に開発サイクルを高速化するための改善。
+      - 本番環境と開発環境でDockerfileを分けるか、ARGで制御するかも検討点。

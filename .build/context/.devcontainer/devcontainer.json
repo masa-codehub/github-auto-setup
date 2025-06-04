@@ -1,6 +1,6 @@
 {
     "name": "name",
-    "service": "service-name",
+    "service": "github-auto-setup",
     "workspaceFolder": "/app",
     "dockerComposeFile": "../docker-compose.yml",
     "customizations": {
@@ -9,10 +9,8 @@
                 "workbench.colorTheme": "Visual Studio Light",
                 "editor.formatOnSave": true,
                 "editor.formatOnType": true,
-                "editor.defaultFormatter": "ms-python.autopep8",
                 "git.enableSmartCommit": true,
-                "git.autofetch": true,
-                "github.copilot.editor.enableAutoCompletions": true
+                "git.autofetch": true
             },
             "extensions": [
                 "github.copilot",
