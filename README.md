@@ -20,6 +20,22 @@
 * **コンテナ技術:** Docker
 * **コアロジック言語:** Python
 
+## ディレクトリ構成とクリーンアーキテクチャ
+
+本プロジェクトのバックエンド（`webapp/core_logic/github_automation_tool/`）は、クリーンアーキテクチャの原則に基づき、以下の4レイヤー構造で整理されています。
+
+```
+webapp/core_logic/github_automation_tool/
+├── adapters/         # 外部API・サービス連携、パーサー等
+├── domain/           # ドメインモデル・ビジネスルール
+├── infrastructure/   # 設定・ファイルIO等の技術詳細
+├── use_cases/        # ユースケース（アプリケーション固有の業務フロー）
+├── main.py           # CLIエントリーポイント
+```
+
+- 各レイヤーの責務や依存関係は `docs/diagrams/architecture-diagram.md` を参照してください。
+- `webapp/app/` はAPIエンドポイント提供に特化し、コアロジックは `core_logic` に集約されています。
+
 ## ローカル開発環境での実行と確認
 
 本アプリケーションはDockerコンテナでの実行が推奨されます。

@@ -1,4 +1,4 @@
-from ..adapters.markdown_issue_parser import MarkdownIssueParser
+from core_logic.github_automation_tool.adapters.markdown_issue_parser import MarkdownIssueParser
 
 def test_parse_single_issue():
     content = """# Issue Title\nDescription of the issue."""
