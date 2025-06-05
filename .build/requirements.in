@@ -33,3 +33,7 @@ mypy                    # 静的型チェッカー
 # pre-commit
 # ipython
 # pytest-cov
+
+django-cors-headers
+# Gunicornは本番WSGI用
+gunicorn
