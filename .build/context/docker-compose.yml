@@ -6,12 +6,25 @@ services:
     image: ${PROJECT_NAME}_image
     volumes:
       - ./${PROJECT_NAME}:${CONTAINER_VOLUME:-/app}
-      - ../../frontend:/app/frontend
     working_dir: ${CONTAINER_VOLUME:-/app}
     environment:
       - PROJECT_NAME=${PROJECT_NAME}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-django-insecure-default-key}
+      # - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE:-app.settings.development}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-True}
+      - DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      - DATABASE_URL=${PG_ENDPOINT:-postgres://postgres:postgres@db:5432/deepread}
+      - GITHUB_PAT=${GITHUB_PAT:-my_github_pat}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-my_openai_api_key}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-my_gemini_api_key}
+      - AI_MODEL=${AI_MODEL:-openai} # openai or gemini
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4o}
+      - GEMINI_MODEL_NAME=${GEMINI_MODEL_NAME:-gemini-2.0-flash}
+      - PYTHONPATH=webapp/core_logic:${PYTHONPATH:-.}
+    command: ["bash", "/app/scripts/run-prod.sh"]
+    ports:
+      - ${DJANGO_HOST_PORT:-8000}:${DJANGO_CON_PORT:-8000}
+
     # command: ["bash", "run.sh"]
     stdin_open: true
     tty: true
-    ports:
-      - "8000:8000"

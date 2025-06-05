@@ -2,9 +2,9 @@
 
 document_info:
   title: "Product Backlog for GitHub Automation Tool"
-  version: "2.10" # バージョンを更新
-  last_updated: "2025-06-03 (JST)" # 日付を更新
-  status: "Static Frontend + API Architecture - Backend API Core Established" # ステータスを更新
+  version: "2.11" # バージョンを更新
+  last_updated: "2025-06-05 (JST)" # 日付を更新
+  status: "API Server Setup Mostly Complete, Docker/Gunicorn Finalization Pending" # ステータスを更新
   source_documents_integrated:
     - "docs/agile-practice.yml (v2.3) - Archived"
     - "docs/issues.yml (v2.3) - Archived"
@@ -16,8 +16,8 @@ document_info:
     - "docs/user-stories/US-001/US-001_activity.md"
     - "docs/user-stories/US-001/US-001_sequence.md"
     - "docs/diagrams/context-diagram.md"
-    - "docs/diagrams/architecture-diagram.md (Updated for API architecture)"
-    - "docs/api_specifications.md (To be created)"
+    - "docs/diagrams/architecture-diagram.md"
+    - "docs/api_specifications.md (To be created/updated)"
 
 development_approach_guidelines:
   preface: |
@@ -47,7 +47,7 @@ development_approach_guidelines:
   ai_parser_strategy:
     concept: |
       AIパーサーの主要な役割は、入力ファイル全体を分析し、以下の2種類のルールを動的に推論・生成することにある。
-      1. **Issue区切りルール（主にファイル内で共通する先頭キー/開始パターンをAIが推論し、Markdownの水平線やヘッダーレベル、YAML/JSONのリスト形式などはフォールバックまたは設定ベースで処理）、および...**
+      1. **Issue区切りルール:** ファイル内で何がIssueブロック/レコードの開始を示すか。AIは主に各Issueの「先頭キー/開始パターン」を推論する。Markdownの水平線 (`---`) や特定のヘッダーレベル、YAML/JSONのリスト構造などは、AI推論のフォールバックまたは設定ベースのルールとして扱われる。
       2. **キーマッピングルール:** 推論された各Issueブロック/レコード内で、入力ファイル中のどのキーや記述が、`IssueData`の標準フィールド名（例: `title`, `description`）に対応するか、その対応関係を辞書等で示す。
       これらの推論されたルール（またはフォールバック/設定ルール）に基づき、後続のルールベース処理でファイルが分割され、IssueDataにマッピングされる。
     key_considerations:
@@ -55,8 +55,8 @@ development_approach_guidelines:
       - "Rule Representation: AIが主に推論する「先頭キー」区切りルールと「キーマッピングルール」の表現形式、およびフォールバック/設定用の区切りルール（水平線、ヘッダーレベル、リストアイテム）の表現形式を設計 (`TASK-RULE-REPRESENTATION`)。初期サポート範囲: 区切り(AI推論は`leading_key`のみ、他はルールベースフォールバック/設定)、値抽出(`key_value`, `list_items_under_key`, `plain_text_block`)、値変換(`to_list_by_comma`, `to_list_by_newline`, `extract_mentions`)。"
       - "Prompt Engineering & Management: 高度なルール推論を実現するためのプロンプト設計を重視する。プロンプト自体は外部ファイル（TASK-PROMPT-MANAGEMENT）で管理し、柔軟な調整を可能にする。`config.yaml` からの複雑なマッピングヒントは導入せず、AIの推論能力とユーザーによる入力ファイル調整、分かりやすいフィードバックに注力する。"
       - "User Feedback Loop (Web UI & CLI): AIによる解析結果（分割・マッピング結果）をユーザーが確認できるようにする。Web UIでは静的フロントエンドがAPIから結果を取得し表示、CLIではDryRunや中間出力で確認手段を提供する。UI上でのインタラクティブなマッピング修正機能はスコープ外とする。"
-      - "Default Field Mapping Fallback: AIによるフィールドマッピング推論が不調な場合、`github_setup_defaults.yml` に定義された標準的なキーと`IssueData`フィールドの対応リストをフォールバックまたはAI推論の参考情報として活用することを検討する。"
-      - "File-level Meta-information: Issueごとの情報抽出とは別に、ファイル全体から共通のメタ情報（プロジェクト名等）を抽出する方法（プロンプト指示、または規約ベース）も検討するが、マイルストーンとラベルは`github_setup_defaults.yml`との照合を基本とする。"
+      - "Default Field Mapping Fallback: AIによるフィールドマッピング推論が不調な場合、`docs/github_setup_defaults.yml` に定義された標準的なキーと`IssueData`フィールドの対応リストをフォールバックまたはAI推論の参考情報として活用することを検討する。"
+      - "File-level Meta-information: Issueごとの情報抽出とは別に、ファイル全体から共通のメタ情報（プロジェクト名等）を抽出する方法（プロンプト指示、または規約ベース）も検討するが、マイルストーンとラベルは`docs/github_setup_defaults.yml`との照合を基本とする。"
   guidelines_for_using_diagrams:
     - diagram_type: "Activity Diagram"
       purpose: "ユーザー操作フロー、システム内部の主要処理ステップ、条件分岐、繰り返し処理を視覚的に明確にする。"

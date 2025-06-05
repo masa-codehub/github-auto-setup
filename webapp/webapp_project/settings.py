@@ -36,23 +36,25 @@ else:
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
+    # 'django.contrib.admin',  # 管理画面不要ならコメントアウト
     'django.contrib.auth',
     'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    'django.contrib.sessions',  # API認証のため必要
+    # 'django.contrib.messages', # メッセージフレームワーク不要
+    # 'django.contrib.staticfiles', # 静的ファイル配信不要なら
     'app',
-    'rest_framework',  # 追加: Django REST Framework
+    'rest_framework',
+    'corsheaders',  # 追加
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # 追加
+    'django.contrib.sessions.middleware.SessionMiddleware',  # 認証ミドルウェアの前に追加
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    # 'django.middleware.csrf.CsrfViewMiddleware',  # APIのみなら不要
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
+    # 'django.contrib.messages.middleware.MessageMiddleware', # 不要
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -122,7 +124,20 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-# DjangoはAPIバックエンド専用のため、STATICFILES_DIRSは設定しません。
+# STATIC_ROOT = os.path.join(BASE_DIR, 'static')  # Uncomment if you want to use STATIC_ROOT
+
+# CORS設定
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    # "https://your-frontend-domain.com",
+]
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+
+# セキュリティヘッダー例
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = 'DENY'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -140,11 +155,10 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.FormParser',
         'rest_framework.parsers.MultiPartParser',
     ],
-    # 'DEFAULT_AUTHENTICATION_CLASSES': [
-    #     'rest_framework.authentication.SessionAuthentication',
-    #     'rest_framework.authentication.BasicAuthentication',
-    # ],
-    # 'DEFAULT_PERMISSION_CLASSES': [
-    #     'rest_framework.permissions.AllowAny', # 開発中はAllowAnyでOK
-    # ]
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ]
 }

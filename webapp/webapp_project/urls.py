@@ -16,13 +16,11 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from app.views import health_check_api_view, api_root, FileUploadAPIView, CreateGitHubResourcesAPIView
+from app.views import api_root
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('', api_root, name='api_root'),
-    path('api/healthcheck/', health_check_api_view, name='health_check_api'),
-    path('api/upload-issue-file/', FileUploadAPIView.as_view(), name='upload_issue_file_api'),
-    path('api/create-github-resources/', CreateGitHubResourcesAPIView.as_view(), name='create_github_resources_api'),
-    path('api/', include('rest_framework.urls', namespace='rest_framework')),
+    # path('admin/', admin.site.urls),  # 管理画面不要ならコメントアウト
+    path('', api_root, name='api_root_base'),
+    path('api/v1/', include(('app.urls', 'api_v1'), namespace='api_v1')),
+    path('api/', include('rest_framework.urls', namespace='rest_framework_docs')),
 ]
