@@ -1,0 +1,39 @@
+# TASK-BE-API-US001-FILE-PROCESS-ENDPOINT 実装計画
+
+issue_id: TASK-BE-API-US001-FILE-PROCESS-ENDPOINT
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/181
+title: "[BE][Task] US-001: Issueファイル処理APIエンドポイント実装"
+description: |
+  フロントエンドからアップロードされたIssue情報ファイルを受け付け、コアロジック（AIParser）を呼び出して解析し、結果またはエラー情報をJSONで返すAPIエンドポイントをDjango REST Frameworkで実装する。
+  受け入れ基準・テスト要件は test_requirements.md を参照。
+
+implementation_steps:
+  - step: 1
+    title: "APIエンドポイントのURLパターン追加"
+    command: "APIのURLパターンを webapp/app/urls.py に追加する"
+    verification: "/api/v1/parse-file でルーティングされることを確認する"
+  - step: 2
+    title: "APIViewの作成とファイルアップロード処理の実装"
+    command: "webapp/app/views.py に FileUploadAPIView を作成し、multipart/form-data でファイルを受け付ける処理を実装する"
+    verification: "有効なファイルをPOSTした際に200が返ることをcurl等で確認する"
+  - step: 3
+    title: "ファイルバリデーションの実装"
+    command: "ファイル形式・サイズ上限(10MB)のバリデーションをDRFシリアライザーで実装する"
+    verification: "不正なファイルや10MB超過時に400エラーとなることを確認する"
+  - step: 4
+    title: "AIParser呼び出しロジックの実装"
+    command: "受信ファイル内容をAIParserまたはUseCaseに渡し、解析結果を取得する処理を追加する"
+    verification: "AIParserのモックを使い、正常時に解析結果が返ることをテストする"
+  - step: 5
+    title: "レスポンスシリアライズと例外ハンドリング"
+    command: "解析結果またはエラー情報をDRFシリアライザーでJSON化し、例外時は適切なHTTPエラーを返すようにする"
+    verification: "AIParserError, ParsingError, Exception発生時に400/500が返ることをテストする"
+  - step: 6
+    title: "単体テストの実装 (TDD)"
+    command: "webapp/app/tests.py に正常系・異常系のAPIテストを追加する"
+    verification: "test_requirements.md の全要件を満たすテストがパスすることを確認する"
+
+notes:
+  - クリーンアーキテクチャ・TDD・一貫性原則を厳守
+  - 既存のParsedDataCacheモデルを活用し、セッション管理・キャッシュも考慮
+  - 例外時のレスポンス仕様はAPI設計方針に従う

@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import ParsedDataCache
 from django.utils import timezone
@@ -34,6 +34,9 @@ import os
 import uuid
 
 logger = logging.getLogger(__name__)
+
+settings = load_settings()
+ai_parser = AIParser(settings=settings)
 
 
 @api_view(['GET'])
@@ -69,24 +72,27 @@ def _parse_uploaded_file_content(file_name: str, file_content_bytes: bytes) -> P
     raw_issue_blocks = initial_parser.parse(file_content)
     if not raw_issue_blocks:
         return ParsedRequirementData(issues=[])
-    settings = load_settings()
-    ai_parser = AIParser(settings=settings)
+    # settings, ai_parserはモジュールレベルで初期化済み
     if ext in ['.md', '.markdown']:
         combined_content = '\n---\n'.join(raw_issue_blocks)
         parsed_data: ParsedRequirementData = ai_parser.parse(combined_content)
     else:
-        # YAML/JSONはPythonオブジェクトをそのまま渡す
         parsed_data: ParsedRequirementData = ai_parser.parse(raw_issue_blocks)
     return parsed_data
 
 
 class FileUploadAPIView(APIView):
     parser_classes = [MultiPartParser]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         uploaded_file = request.FILES.get('issue_file')
         if not uploaded_file:
             return Response({"detail": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+        # 10MB超過チェック
+        max_size = 10 * 1024 * 1024  # 10MB
+        if uploaded_file.size > max_size:
+            return Response({"detail": "File size exceeds 10MB limit."}, status=status.HTTP_400_BAD_REQUEST)
         try:
             parsed_data = _parse_uploaded_file_content(
                 uploaded_file.name, uploaded_file.read())
