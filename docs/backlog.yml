@@ -382,3 +382,15 @@ technical_tasks:
     notes: |
       - 特に開発サイクルを高速化するための改善。
       - 本番環境と開発環境でDockerfileを分けるか、ARGで制御するかも検討点。
+
+  - task_id: "TASK-FE-US001-UPLOAD-UI"
+    title: "[FE][Task] US-001: ファイルアップロードUIコンポーネント実装"
+    description: "Web UIにファイルアップロードコンポーネントを実装し、クライアントサイドでの拡張子とサイズのバリデーションを行う。"
+    related_epic_ids: ["EPIC-WEBUI"]
+    status: "Done"
+    priority: "High"
+    size_estimate: "[SP: 3]"
+    notes: |
+      クライアントサイドでのファイルバリデーション（拡張子・サイズ）を実装完了。
+      テスト容易性を考慮し、バリデーションロジックはUIから分離済み。
+      サーバーサイドでの二重チェックが必須である点を申し送り。

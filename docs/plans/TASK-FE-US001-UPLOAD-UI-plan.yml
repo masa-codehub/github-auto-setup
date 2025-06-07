@@ -1,0 +1,40 @@
+# TASK-FE-US001-UPLOAD-UI-plan.yml
+issue_id: TASK-FE-US001-UPLOAD-UI
+issue_title: "[FE][Task] US-001: ファイルアップロードUIコンポーネント実装"
+issue_url: "https://github.com/masa-codehub/github-auto-setup/issues/177"
+user_story: US-001
+context:
+  - 受け入れ基準・完了定義・UI/UX仕様（docs/ui_ux_specifications.yml）を厳守
+  - クリーンアーキテクチャ・TDD・一貫性原則を適用
+  - 既存のAPI/BE要件と重複しない形でUI要件を追加
+  - 主要参照: docs/test_requirements.md, docs/ui_ux_specifications.yml
+
+implementation_steps:
+  - step: 1
+    title: "UI仕様・要件の再確認と設計方針の明文化"
+    command: "仕様・受け入れ基準・既存HTML/JS構造を確認し、設計方針を内部メモにまとめる"
+    verification: "設計方針メモが作成されていることを確認"
+
+  - step: 2
+    title: "HTML構造の拡張（ファイルアップロードUI追加）"
+    command: "frontend/top_page.htmlに、accept属性付きfile input・アップロードボタン・ヘルプテキストを追加"
+    verification: "UIがBootstrap 5仕様で正しく表示され、accept属性が正しいことを目視・DOM検証"
+
+  - step: 3
+    title: "クライアントサイドバリデーションJSの新規実装"
+    command: "frontend/assets/js/file_upload.jsを新規作成し、拡張子・サイズバリデーションとエラー表示ロジックを実装"
+    verification: "不正ファイル選択時にエラーが表示され、正しいファイルのみアップロード可能なことを手動・自動テストで確認"
+
+  - step: 4
+    title: "単体テスト（TDD）: バリデーションロジックのテスト実装"
+    command: "frontend/assets/js/tests/file_upload.test.jsに、各バリデーション・エラー表示のテストケースを実装"
+    verification: "全テストがパスすることをnpm/yarn等で確認"
+
+  - step: 5
+    title: "成果物・記録の整理と完了宣言"
+    command: "実装・検証ログを整理し、docs/coding-rules.ymlに知見を反映。レビューコメントを作成し完了を宣言"
+    verification: "coding-rules.ymlにルールが追記され、レビューコメントがdocs/review-request/に作成されていること"
+
+notes:
+  - 設計・実装・テストの全過程でTDD・一貫性・重複排除・説明責任原則を厳守
+  - 重大な矛盾が発生した場合はCONFLICT_DETECTEDで停止

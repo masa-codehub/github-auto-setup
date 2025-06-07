@@ -1,5 +1,16 @@
 {
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest --config=jest.config.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
   "devDependencies": {
+    "jest": "^29.7.0",
     "jest-environment-jsdom": "^30.0.0-beta.3"
   }
 }

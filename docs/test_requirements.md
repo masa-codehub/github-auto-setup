@@ -12,13 +12,26 @@
   description: コアロジックのAIParserが解析エラー（AiParserError）を発生させた場合、HTTP 400エラーが返されること。
 - id: TR-API-Upload-006
   description: 処理中に予期せぬサーバーエラーが発生した場合、HTTP 500エラーが返されること。
-- id: TR-FE-API-CALL-001
+
+# テスト要件: フロントエンド (クライアントサイド検証)
+- id: TR-FE-Validation-001
+  description: 有効なファイル（.md, .yml, .yaml, .json）が選択できること（input要素のaccept属性で制限）。
+- id: TR-FE-Validation-002
+  description: 許容サイズ（10MB）以下のファイルのみ選択できること（クライアントサイドでバリデーション）。
+- id: TR-FE-Validation-003
+  description: サポート外の拡張子（.txt等）を選択した場合、エラーメッセージが表示されること（クライアントサイド）。
+- id: TR-FE-Validation-004
+  description: 10MBを超えるファイルを選択した場合、エラーメッセージが表示されること（クライアントサイド）。
+
+# テスト要件: フロントエンド (API連携)
+- id: TR-FE-APICall-001
   description: ファイルアップロード時、バックエンドAPI（/api/v1/parse-file）へのPOSTリクエストがFormData形式で正しく送信されること。
-- id: TR-FE-API-CALL-002
+- id: TR-FE-APICall-002
   description: API呼び出しが成功した際、レスポンス（解析結果JSON等）を適切にハンドリングできること。
-- id: TR-FE-API-CALL-003
+- id: TR-FE-APICall-003
   description: API呼び出しが失敗した際（ネットワークエラー・サーバーエラー）、ユーザーにエラーメッセージが通知されること。
 
 # 備考
-- 既存要件との重複・矛盾はありませんでした。
-- 受け入れ基準の一貫性を優先し、APIエラー時のレスポンス仕様も明記しました。
+- API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
+- フロントエンドのテスト要件は、API要件とは別に、ユーザー体験向上のためのクライアントサイドでの即時フィードバックと、バックエンドとの通信を検証するものです。
+
