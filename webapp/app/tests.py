@@ -13,6 +13,7 @@ import datetime
 from core_logic.github_automation_tool.adapters.github_rest_client import GitHubRestClient
 from rest_framework.test import APIClient, force_authenticate
 from django.contrib.auth import get_user_model
+from core_logic.github_automation_tool.domain.exceptions import AiParserError, ParsingError
 
 
 class AuthenticatedAPITestMixin:
@@ -71,6 +72,56 @@ class FileUploadAPIViewTest(AuthenticatedAPITestMixin, TestCase):
             '/api/v1/upload-issue-file/', {}, format='multipart')
         self.assertEqual(response.status_code, 400)
         self.assertIn('detail', response.json())
+
+    @patch('app.models.ParsedDataCache.objects.create')
+    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse')
+    def test_upload_unsupported_extension(self, mock_ai_parse, mock_cache_create):
+        file_content = b"dummy content"
+        file = BytesIO(file_content)
+        file.name = 'test.txt'  # サポート外拡張子
+        response = self.client.post(
+            '/api/v1/upload-issue-file/', {'issue_file': file}, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('detail', response.json())
+        self.assertIn('Unsupported file extension', response.json()['detail'])
+
+    @patch('app.models.ParsedDataCache.objects.create')
+    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse')
+    def test_upload_file_size_exceeded(self, mock_ai_parse, mock_cache_create):
+        # 10MB + 1byte のダミーファイル
+        file_content = b"0" * (10 * 1024 * 1024 + 1)
+        file = BytesIO(file_content)
+        file.name = 'test.md'
+        response = self.client.post(
+            '/api/v1/upload-issue-file/', {'issue_file': file}, format='multipart')
+        # 実装によっては400, 413, 422などもあり得るが、要件通り400
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('detail', response.json())
+        self.assertIn('file size', response.json()['detail'].lower())
+
+    @patch('app.models.ParsedDataCache.objects.create')
+    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse', side_effect=AiParserError('AI解析エラー'))
+    def test_upload_ai_parser_error(self, mock_ai_parse, mock_cache_create):
+        file_content = b"# Issue\n- title: Test Issue\n- body: test body"
+        file = BytesIO(file_content)
+        file.name = 'test.md'
+        response = self.client.post(
+            '/api/v1/upload-issue-file/', {'issue_file': file}, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('detail', response.json())
+        self.assertIn('AI解析エラー', response.json()['detail'])
+
+    @patch('app.models.ParsedDataCache.objects.create')
+    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse', side_effect=Exception('予期せぬ例外'))
+    def test_upload_unexpected_exception(self, mock_ai_parse, mock_cache_create):
+        file_content = b"# Issue\n- title: Test Issue\n- body: test body"
+        file = BytesIO(file_content)
+        file.name = 'test.md'
+        response = self.client.post(
+            '/api/v1/upload-issue-file/', {'issue_file': file}, format='multipart')
+        self.assertEqual(response.status_code, 500)
+        self.assertIn('detail', response.json())
+        self.assertIn('予期せぬ例外', response.json()['detail'])
 
 
 class CreateGitHubResourcesAPIViewTest(AuthenticatedAPITestMixin, TestCase):

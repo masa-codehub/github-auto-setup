@@ -1,0 +1,43 @@
+- rule_id: "CR-018"
+  title: "Django REST APIのファイルアップロード時は例外ハンドリングとバリデーションを徹底する"
+  description: |
+    ファイルアップロードAPI実装時は、ファイル未添付・不正形式・サイズ超過・パース失敗・AI解析エラー・予期せぬ例外など、あらゆる異常系を網羅的に例外ハンドリングし、HTTP 400/500レスポンスを適切に返すこと。テスト要件を満たす単体テストも必ず実装する。
+  category: "API設計・例外処理"
+  example_bad: |
+    class FileUploadAPIView(APIView):
+        def post(self, request):
+            file = request.FILES.get('file')
+            parsed = parse(file.read())  # 例外処理なし
+            return Response(parsed)
+  example_good: |
+    class FileUploadAPIView(APIView):
+        def post(self, request):
+            file = request.FILES.get('file')
+            if not file:
+                return Response({"detail": "No file uploaded."}, status=400)
+            try:
+                parsed = parse(file.read())
+                return Response(parsed)
+            except (ParsingError, AiParserError) as e:
+                return Response({"detail": str(e)}, status=400)
+            except Exception as e:
+                return Response({"detail": "Unexpected error: " + str(e)}, status=500)
+
+- rule_id: "CR-019"
+  title: "DRFのAPIViewでは権限クラスを明示的に指定する"
+  description: "Django REST FrameworkのAPIViewまたはViewSetでは、たとえデフォルト設定に依存している場合でも、`permission_classes`属性を明示的に指定すべきである。これにより、クラス単体でその権限要件が明確になり、可読性と保守性が向上する。"
+  category: "セキュリティ"
+  example_bad: |
+    # settings.pyでデフォルトが設定されているため、省略されている
+    class MyProtectedView(APIView):
+        # permission_classes is not set
+        def get(self, request):
+            ...
+  example_good: |
+    from rest_framework.permissions import IsAuthenticated
+
+    class MyProtectedView(APIView):
+        permission_classes = [IsAuthenticated]
+
+        def get(self, request):
+            ...

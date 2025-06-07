@@ -1,0 +1,25 @@
+# TASK-BE-API-US001-FILE-PROCESS-ENDPOINT-fix-plan.yml
+
+issue_url: "https://github.com/masa-codehub/github-auto-setup/issues/181"
+dod:
+  must:
+    - "webapp/app/tests.pyのFileUploadAPIViewTestクラスに、レビューで指摘された4つの異常系シナリオ（サポート外の拡張子、サイズ超過、AiParserError発生、予期せぬException発生）に対応するテストケースが追加され、全てのテストがパスすること。"
+  should:
+    - "webapp/app/views.pyにおいて、load_settings()とAIParserのインスタンス化がリクエスト毎ではなく、モジュール読み込み時など一度だけ行われるようにリファクタリングされていること。"
+    - "webapp/app/views.pyのFileUploadAPIViewクラスにpermission_classesが明示的に設定されていること。"
+implementation_steps:
+  - step: 1
+    description: "FileUploadAPIViewTestに異常系テストケース（サポート外拡張子、サイズ超過、AiParserError発生、Exception発生）を追加する"
+    command: "webapp/app/tests.pyを編集し、4つの異常系テストケースを追加する"
+    verification: "pytestまたはmanage.py testで全テストがパスすることを確認する"
+  - step: 2
+    description: "AIParserの初期化をモジュールレベルに移動し、リクエスト間で再利用できるようにする"
+    command: "webapp/app/views.pyを編集し、load_settings()とAIParserのインスタンス化をモジュールレベルに移動する"
+    verification: "pytestまたはmanage.py testで全テストがパスすることを確認する"
+  - step: 3
+    description: "FileUploadAPIViewクラスにpermission_classes = [IsAuthenticated]を明示的に追加する"
+    command: "webapp/app/views.pyを編集し、permission_classes属性を追加する"
+    verification: "pytestまたはmanage.py testで全テストがパスすることを確認する"
+notes:
+  - "各ステップの検証でテストが失敗した場合、原因を特定し、修正内容とともに内部ログとして記録すること。"
+  - "完了後、実行ログをもとにcoding-rules.ymlへ新ルールを追加し、修正完了報告コメントを作成すること。"

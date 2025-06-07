@@ -5,6 +5,9 @@ app_name = "api_v1"
 
 urlpatterns = [
     path('healthcheck/', health_check_api_view, name='health_check_api'),
-    path('upload-issue-file/', FileUploadAPIView.as_view(), name='upload_issue_file_api'),
-    path('create-github-resources/', CreateGitHubResourcesAPIView.as_view(), name='create_github_resources_api'),
+    path('upload-issue-file/', FileUploadAPIView.as_view(),
+         name='upload_issue_file_api'),
+    path('create-github-resources/', CreateGitHubResourcesAPIView.as_view(),
+         name='create_github_resources_api'),
+    path('parse-file/', FileUploadAPIView.as_view(), name='parse_file_api'),
 ]
