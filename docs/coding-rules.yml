@@ -41,3 +41,30 @@
 
         def get(self, request):
             ...
+
+- rule_id: "CR-021"
+  title: "デバッグ用のコンソール出力を製品コードに残さない"
+  description: "開発中のデバッグ目的で使用した`console.log`や`console.error`は、マージする前に必ず削除または適切なロガー、UI通知に置き換えること。これにより、意図しない情報漏洩を防ぎ、コンソールのクリーンさを保ち、エラーハンドリングの責務を明確にする。"
+  category: "コード品質・セキュリティ"
+  example_bad: |
+    // デバッグ用のconsole.errorが残っている
+    async function fetchData() {
+      try {
+        const response = await fetch('/api/data');
+        return await response.json();
+      } catch (error) {
+        console.error('API Error:', error); // Not for production
+        throw error;
+      }
+    }
+  example_good: |
+    // UI通知関数に置き換えられている
+    async function fetchData() {
+      try {
+        const response = await fetch('/api/data');
+        return await response.json();
+      } catch (error) {
+        showGlobalError('データの取得に失敗しました。'); // User-facing notification
+        throw error;
+      }
+    }
