@@ -1,0 +1,57 @@
+# TASK-FE-US001-API-UPLOAD-CALL: フロントエンドAPIアップロード呼び出し計画
+
+issue_id: TASK-FE-US001-API-UPLOAD-CALL
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/178
+related_user_story: US-001
+
+summary: |
+  静的フロントエンド（JavaScript）から、選択ファイルをFormDataでバックエンドAPI（/api/v1/parse-file）へ非同期POST送信する機能を実装する。API呼び出し中はスピナー表示等のUIフィードバックを行い、成功・失敗時のハンドリングも実装する。APIクライアント関数はTDDで単体テストを作成する。
+
+definition_of_done:
+  - frontend/assets/js/issue_selection.js にファイルアップロードイベントリスナーが実装されている
+  - fetch APIで /api/v1/parse-file へFormDataをPOST送信する非同期関数がある
+  - API呼び出し中はスピナー等のUIフィードバックが表示される
+  - 成功時はレスポンスをコンソール出力または後続処理に渡せる
+  - 失敗時はユーザーにエラーメッセージを通知する
+  - APIクライアント関数の単体テスト（成功・失敗ケース、APIモック）がある
+
+implementation_steps:
+  - step: 1
+    description: "ファイルアップロードフォームの送信イベントを捕捉し、デフォルト動作を抑止する。"
+    command: |
+      frontend/assets/js/issue_selection.js に、#upload-form のsubmitイベントリスナーを追加する
+    verification: |
+      フォーム送信時にページリロードが発生せず、JSでイベントが捕捉できていることをconsole.log等で確認
+
+  - step: 2
+    description: "FormDataを生成し、fetch APIで /api/v1/parse-file へPOST送信する非同期関数を実装する。"
+    command: |
+      frontend/assets/js/issue_selection.js に、APIクライアント関数 uploadIssueFile(formData) を実装
+    verification: |
+      正しいFormDataがAPIに送信され、レスポンスが取得できることをconsole.logで確認
+
+  - step: 3
+    description: "API呼び出し中はスピナーを表示し、完了時に非表示にするUIフィードバックを実装する。"
+    command: |
+      frontend/top_page.html にスピナー要素を追加し、JSから表示/非表示を制御する
+    verification: |
+      API呼び出し中のみスピナーが表示されることを目視で確認
+
+  - step: 4
+    description: "API呼び出し成功時はレスポンスをコンソール出力、失敗時はエラーメッセージをUIに表示する。"
+    command: |
+      frontend/assets/js/issue_selection.js に、成功・失敗時のハンドリング処理を追加
+    verification: |
+      成功時はレスポンスが出力され、失敗時はエラー通知がUIに表示されること
+
+  - step: 5
+    description: "APIクライアント関数の単体テスト（成功・失敗ケース、APIモック）を作成する。"
+    command: |
+      frontend/tests/apiClient.test.js を新規作成し、uploadIssueFileのテストを実装
+    verification: |
+      テストが全てパスすること
+
+notes: |
+  - fetch APIを標準利用し、外部ライブラリは追加しない。
+  - UIフィードバックはスピナー表示とボタン無効化で実装する。
+  - テストはJest等のモック機能を利用する。

@@ -41,6 +41,9 @@
                         <div class="form-text" id="fileHelp">
                             {{ upload_form.issue_file.help_text|default:"Upload a Markdown, YAML, or JSON file containing issue definitions." }}
                         </div>
+                        <div class="mt-2">
+                            <span id="upload-spinner" class="spinner-border text-primary" style="display:none;" role="status" aria-hidden="true"></span>
+                        </div>
                     </form>
                 </div>
             </section>
