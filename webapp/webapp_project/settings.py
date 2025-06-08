@@ -41,7 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',  # API認証のため必要
     # 'django.contrib.messages', # メッセージフレームワーク不要
-    # 'django.contrib.staticfiles', # 静的ファイル配信不要なら
+    'django.contrib.staticfiles',  # 静的ファイル配信のため有効化
     'app',
     'rest_framework',
     'corsheaders',  # 追加
@@ -63,7 +63,7 @@ ROOT_URLCONF = 'webapp_project.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],  # HTMLテンプレートは参照しない
+        'DIRS': [BASE_DIR.parent / 'frontend'],  # ここを追加
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -125,6 +125,12 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 # STATIC_ROOT = os.path.join(BASE_DIR, 'static')  # Uncomment if you want to use STATIC_ROOT
+
+# 静的ファイルの追加ディレクトリ
+STATICFILES_DIRS = [
+    BASE_DIR.parent / 'frontend' / 'assets',
+    BASE_DIR.parent / 'frontend' / 'vendor',
+]
 
 # CORS設定
 CORS_ALLOWED_ORIGINS = [

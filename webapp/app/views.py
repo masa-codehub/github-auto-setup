@@ -3,6 +3,7 @@ from django.contrib import messages
 from .forms import FileUploadForm
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
@@ -108,6 +109,13 @@ class FileUploadAPIView(APIView):
                     "temp_id": issue.temp_id,
                     "title": issue.title,
                     "description": issue.description,
+                    "assignees": issue.assignees,
+                    "labels": issue.labels,
+                    "tasks": issue.tasks,
+                    "acceptance": issue.acceptance,
+                    "milestone": issue.milestone,
+                    "relational_definition": issue.relational_definition,
+                    "relational_issues": issue.relational_issues,
                 }
                 for issue in parsed_data.issues
             ]
@@ -185,3 +193,9 @@ class CreateGitHubResourcesAPIView(APIView):
             logger.exception(
                 f"Unexpected error during GitHub resource creation: {e}")
             return Response({"detail": f"An unexpected error occurred: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@ensure_csrf_cookie
+def top_page_view(request):
+    form = FileUploadForm()
+    return render(request, 'top_page.html', {'upload_form': form, 'issue_count': 0, 'issue_list': []})
