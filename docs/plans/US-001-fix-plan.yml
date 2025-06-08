@@ -1,0 +1,42 @@
+# US-001-fix-plan.yml
+
+issue: "US-001"
+title: "US-001 フロントエンド保守性・責務分離リファクタリング修正計画"
+description: |
+  コードレビュー指摘事項（APIエンドポイントの定数化、escapeHtml関数の責務分離）に対応し、既存テストの維持を確認するための修正計画。
+
+implementation_steps:
+  - step: 1
+    title: "APIエンドポイントの定数化"
+    description: |
+      frontend/assets/js/issue_selection.js 内でハードコードされているAPIエンドポイントURL（/api/v1/parse-file/）をファイル先頭で定数として定義し、fetch呼び出し箇所でその定数を参照するように修正する。
+    command: |
+      # 1. issue_selection.js の先頭に const API_ENDPOINT = '/api/v1/parse-file/'; を追加
+      # 2. fetch呼び出し箇所のURLをAPI_ENDPOINTに置換
+    verification: |
+      # fetchのURLが定数参照になっていることを目視確認
+      # 既存テスト（apiClient.test.js等）がパスすることを確認
+
+  - step: 2
+    title: "escapeHtml関数の責務分離"
+    description: |
+      frontend/assets/js/display_logic.js の escapeHtml 関数から改行（\n→<br>）の置換処理を削除し、renderIssueTableRows関数内でescapeHtml適用後に改行置換を行うように修正する。
+    command: |
+      # 1. escapeHtml関数から改行置換処理を削除
+      # 2. renderIssueTableRows関数でescapeHtml適用後に .replace(/\n/g, '<br>') を実施
+    verification: |
+      # escapeHtmlがHTMLエスケープのみを担い、改行置換はrenderIssueTableRowsで行われていることを目視確認
+      # display_logic.test.js等の既存テストがパスすることを確認
+
+  - step: 3
+    title: "既存テストの実行・検証"
+    description: |
+      上記修正後、frontend/tests/配下の全テストがパスすることを確認する。
+    command: |
+      cd frontend && npm test
+    verification: |
+      # すべてのテストがPASSすることを確認
+
+notes:
+  - "検証失敗時は原因・修正アプローチを内部ログとして記録し、自己修正ループを実施すること。"
+  - "完了後、作業ログをもとにcoding-rules.ymlを更新し、修正完了報告コメントを作成すること。"

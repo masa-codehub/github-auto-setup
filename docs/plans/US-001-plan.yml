@@ -1,0 +1,50 @@
+# US-001 実装計画
+issue_id: US-001
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/176
+summary: |
+  Web UIでのIssueファイルのアップロード、バックエンドAPI経由でのAI解析、結果の一覧表示を実現する。
+  - 静的Web UIからファイル（md, yml, json）を選択し、APIに送信、AI解析、結果を一覧表示。
+  - 多様なフォーマットやキーの揺らぎに対応。
+
+acceptance_criteria:
+  - フロントエンド: ファイルアップロードUI（top_page.html）実装
+  - フロントエンド: クライアントサイドでのファイル形式・サイズバリデーション
+  - バックエンド: ファイルアップロードAPI（/api/v1/parse-file/）実装
+  - バックエンド: サーバーサイドでのファイル検証・400エラー返却
+  - フロントエンド: Upload & PreviewボタンでFormDataをAPIにPOST
+  - バックエンド: AIParser呼び出し・ParsedSourceFileContent生成
+  - バックエンド: 解析結果をParsedDataCacheに一時保存・session_id生成
+  - バックエンド: session_idとIssue情報をJSONで返却
+  - フロントエンド: レスポンスをテーブル描画
+  - フロントエンド: APIエラー時は通知エリアに表示
+  - テスト: 上記機能の単体テストが全てパス
+
+implementation_steps:
+  - step: 1
+    description: "top_page.htmlにファイルアップロードUI（input[type=file], ボタン, 通知エリア, テーブル）を追加"
+    command: "編集: frontend/top_page.html"
+    verification: "UIが表示され、要素が存在することを手動またはJest+jsdomで確認"
+  - step: 2
+    description: "file_upload.jsにクライアントサイドバリデーション（拡張子・サイズ）を実装"
+    command: "編集: frontend/assets/js/file_upload.js"
+    verification: "Jestテスト(frontend/assets/js/tests/file_upload.test.js)でバリデーションロジックを検証"
+  - step: 3
+    description: "issue_selection.jsにFormData送信・API呼び出し・エラーハンドリングを実装"
+    command: "編集: frontend/assets/js/issue_selection.js"
+    verification: "Jestテスト(frontend/tests/apiClient.test.js)でAPI呼び出し・エラー時の動作を検証"
+  - step: 4
+    description: "display_logic.jsにAPIレスポンスを元にIssueテーブルを描画するロジックを実装"
+    command: "編集: frontend/assets/js/display_logic.js"
+    verification: "Jestテスト(frontend/tests/display_logic.test.js)でテーブル描画を検証"
+  - step: 5
+    description: "Djangoバックエンドに/api/v1/parse-file/エンドポイントを実装（views.py, models.py, urls.py）"
+    command: "編集: webapp/app/views.py, webapp/app/models.py, webapp/app/urls.py"
+    verification: "pytest(webapp/app/tests.py)でAPIの正常・異常系を検証"
+  - step: 6
+    description: "AIParser呼び出し・ParsedSourceFileContent生成・ParsedDataCache保存ロジックを実装"
+    command: "編集: webapp/app/views.py, webapp/core_logic/github_automation_tool/main.py 他"
+    verification: "pytest(webapp/app/tests.py)でAI解析・保存処理のテストを検証"
+  - step: 7
+    description: "全体の結合テスト・DoDの全項目を網羅するテストを実施"
+    command: "npm test, pytest"
+    verification: "全テストがパスし、UI・API・DB・AI連携が期待通り動作することを確認"

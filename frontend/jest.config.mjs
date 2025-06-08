@@ -1,6 +1,6 @@
 export default {
   testEnvironment: 'jsdom',
-  roots: ['<rootDir>/assets/js/tests'],
+  roots: ['<rootDir>/assets/js/tests', '<rootDir>/tests'],
   testMatch: ['**/*.test.js'],
   moduleFileExtensions: ['js', 'mjs'],
   transform: {

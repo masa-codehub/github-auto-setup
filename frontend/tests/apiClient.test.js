@@ -20,7 +20,7 @@ describe('uploadIssueFile', () => {
     formData.append('issue_file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
     const result = await uploadIssueFile(formData);
     expect(result).toEqual(mockResponse);
-    expect(fetch).toHaveBeenCalledWith('/api/v1/parse-file', expect.objectContaining({ method: 'POST' }));
+    expect(fetch).toHaveBeenCalledWith('/api/v1/parse-file/', expect.objectContaining({ method: 'POST' }));
   });
 
   it('失敗時: 例外を投げる', async () => {
