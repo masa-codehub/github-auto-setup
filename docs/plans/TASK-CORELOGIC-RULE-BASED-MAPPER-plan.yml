@@ -1,0 +1,27 @@
+# TASK-CORELOGIC-RULE-BASED-MAPPER 実装計画
+issue_id: TASK-CORELOGIC-RULE-BASED-MAPPER
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/184
+description: |
+  推論ルールに基づくIssueDataへのマッピング処理の実装計画。
+  - RuleBasedMapperService新規作成
+  - 値変換ロジックの純粋関数化
+  - title必須・警告ログ・フォールバック対応
+  - TDDで単体テストを網羅
+
+implementation_steps:
+  - step: 1
+    description: "RuleBasedMapperServiceの新規作成と値変換ロジックの実装"
+    command: "(実装済み)"
+    verification: "実装ファイルの内容確認・静的検証"
+  - step: 2
+    description: "単体テスト（正常系・異常系・変換・フォールバック・警告ログ）の作成"
+    command: "(実装済み)"
+    verification: "pytestでテストが全てパスすること"
+  - step: 3
+    description: "pytestによるテスト実行"
+    command: "pytest webapp/core_logic/tests/services/test_rule_based_mapper.py"
+    verification: "全テストがパスすること"
+  - step: 4
+    description: "成果物・設計・テスト要件の整合性最終確認"
+    command: "(手動確認)"
+    verification: "test_requirements.md, DoD, コード・テスト内容が矛盾なく一貫していることを確認"

@@ -1,3 +1,4 @@
+# docs/coding-rules.yml
 - rule_id: "CR-018"
   title: "Django REST APIのファイルアップロード時は例外ハンドリングとバリデーションを徹底する"
   description: |
@@ -150,7 +151,7 @@
   category: "フロントエンド・モノレポ運用指針"
   example_bad: |
     # ルートや複数箇所にnode_modulesが存在
-    npm install       # /app/node_modulesができる
+    npm install        # /app/node_modulesができる
     cd frontend && npm install   # frontend/node_modulesもできる
     # ルートからテストを実行しようとしてエラーになる
     npm test
@@ -203,10 +204,51 @@
             logger.warning(f"Failed to parse YAML content due to YAMLError: {e}")
             return []
 
-# ラベル・マイルストーン正規化ロジックの分離・import設計
-- id: CR-CORELOGIC-001
-  description: >
-    ラベル・マイルストーン等の正規化ロジックは、他のユースケースやサービスから再利用可能な形で`adapters`等の専用モジュールに分離すること。
-    importパスの解決や依存関係の複雑化を避けるため、パッケージ設計・__init__.pyの配置・相対/絶対importの使い分けに十分注意し、
-    テストやユースケース統合時にimportエラーが発生しないことを必ず確認する。
-    やむを得ず一時的にロジックをインライン化する場合も、最終的には分離・再利用可能な形に戻すこと。
+- rule_id: "CR-028"
+  title: "データ変換ロジックは独立した純粋関数としてカプセル化する"
+  description: "文字列からリストへの変換や特定パターンの抽出など、再利用可能なデータ変換処理は、それ自身の責務に特化した純粋関数として実装する。これにより、ロジックの単体テストが容易になり、異なる箇所からの再利用性も向上する。"
+  category: "保守性・テスト容易性"
+  example_bad: |
+    # マッピング処理の途中で変換ロジックがハードコードされている
+    def map_data(raw_data):
+      issue = IssueData()
+      if 'labels' in raw_data:
+        # カンマ区切りを直接処理
+        issue.labels = [label.strip() for label in raw_data['labels'].split(',')]
+      return issue
+  example_good: |
+    # 変換ロジックが独立した関数になっている
+    def to_list_by_comma(text: str) -> list[str]:
+      return [item.strip() for item in text.split(',') if item.strip()]
+
+    def map_data(raw_data):
+      issue = IssueData()
+      if 'labels' in raw_data:
+        issue.labels = to_list_by_comma(raw_data['labels'])
+      return issue
+
+- rule_id: "CR-029"
+  title: "ビジネスロジックは責務毎にサービスクラスとして分離する"
+  description: "ラベル正規化のような明確なビジネスロジックは、UseCase内に直接実装するのではなく、専用のサービスクラス（例: LabelMilestoneNormalizerSvc）として`adapters`層などに分離する。UseCaseは、そのサービスをDI（依存性注入）によって利用する。これにより、ロジックの再利用性とテスト容易性が向上し、UseCaseはビジネスフローの関心事に集中できる。"
+  category: "設計・単一責任原則"
+  example_bad: |
+    # UseCase内に正規化ロジックが混在している
+    class CreateResourcesUseCase:
+        def execute(self, issue_data):
+            # ...
+            # Normalization logic is here
+            normalized_labels = []
+            for label in issue_data.labels:
+                # ...
+            issue_data.labels = normalized_labels
+            # ...
+  example_good: |
+    # 正規化サービスをDIで利用する
+    class CreateResourcesUseCase:
+        def __init__(self, normalizer: NormalizerSvc):
+            self.normalizer = normalizer
+
+        def execute(self, issue_data):
+            # ...
+            self.normalizer.normalize_issue(issue_data)
+            # ...

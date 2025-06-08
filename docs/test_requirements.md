@@ -63,6 +63,16 @@
 - id: TR-Splitter-Edge-001
   description: 空のファイルや区切り文字がないファイルが正しく処理され、空リストが返されること。
 
+# テスト要件: ルールベースIssueマッピング (TASK-CORELOGIC-RULE-BASED-MAPPER)
+- id: TR-Map-001
+  description: 指定されたキーマッピングルールに基づき、IssueブロックからIssueDataの各フィールド（title, description等）へのマッピングが正しく行われること。
+- id: TR-Map-002
+  description: 値変換ルール（to_list_by_comma, to_list_by_newline, extract_mentions）が正しく適用されること。
+- id: TR-Map-Error-001
+  description: titleフィールドがマッピングできない場合にValueErrorを送出すること。
+- id: TR-Map-Error-002
+  description: マッピングに失敗したフィールドがある場合に警告ログが出力されること。
+
 # テスト要件: ラベル・マイルストーン正規化 (TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER)
 - id: TR-Normalization-001
   description: IssueDataのラベルは、github_setup_defaults.ymlに基づき正規化されること。
@@ -75,4 +85,3 @@
 - API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
 - フロントエンドのテスト要件は、API要件とは別に、ユーザー体験向上のためのクライアントサイドでの即時フィードバックと、バックエンドとの通信を検証するものです。
 - 【説明責任】US-001のDoD・受け入れ基準を反映し、既存要件と重複するものは統合・拡張し、矛盾はありませんでした。
-
