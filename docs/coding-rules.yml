@@ -68,3 +68,50 @@
         throw error;
       }
     }
+
+- rule_id: "CR-022"
+  title: "APIエラーハンドリングはUI通知・テスト駆動・責務分離を徹底する"
+  description: |
+    フロントエンドでAPI呼び出しを行う際は、ネットワークエラー・サーバーエラー・AI解析エラー等の異常系を全てcatchし、ユーザーに分かりやすいエラーメッセージをUI通知エリア（例: Bootstrap Alert）で表示すること。APIクライアント関数はエラーをthrowし、UI更新はイベントリスナー側で責務分離する。全ての異常系はJest等でテスト駆動する。
+  category: "フロントエンド設計・例外処理"
+  example_bad: |
+    async function uploadIssueFile(formData) {
+      const response = await fetch('/api/v1/parse-file', { method: 'POST', body: formData });
+      return await response.json(); // エラー時のハンドリングなし
+    }
+    // ...
+    // submitイベントで例外未捕捉
+    uploadForm.addEventListener('submit', async (e) => {
+      await uploadIssueFile(formData); // 失敗時にUI通知されない
+    });
+  example_good: |
+    async function uploadIssueFile(formData) {
+      const response = await fetch('/api/v1/parse-file', { method: 'POST', body: formData });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'API error');
+      }
+      return await response.json();
+    }
+    // ...
+    uploadForm.addEventListener('submit', async (e) => {
+      try {
+        await uploadIssueFile(formData);
+      } catch (e) {
+        showUploadError(e.message);
+      }
+    });
+
+- rule_id: "CR-023"
+  title: "最短の手番で実装を完了させるための作業ルール"
+  description: |
+    実装・修正・レビュー対応など全ての作業は、最短の手番（最小のアクション数）で完了することを最優先とする。必要な情報は自動で収集し、推測できる部分は即時実行し、不要な確認や質問を挟まず、連続的かつ効率的にタスクを進める。エージェント型開発支援の原則とする。
+  category: "開発プロセス・エージェント行動原則"
+  example_bad: |
+    // 毎回ユーザーに詳細を確認してから作業を進める
+    // 既知の手順でも都度質問や確認を挟む
+    // 1つの修正ごとに手動で指示を待つ
+  example_good: |
+    // 必要な情報は自動で検索・推論し、即座に実装を進める
+    // まとめて修正・テスト・検証まで一気通貫で完了させる
+    // ユーザーの手戻りや待ち時間を最小化する
