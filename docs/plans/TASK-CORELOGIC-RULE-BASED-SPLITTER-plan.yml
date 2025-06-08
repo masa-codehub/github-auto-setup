@@ -1,0 +1,29 @@
+# TASK-CORELOGIC-RULE-BASED-SPLITTER 実装計画
+
+issue_id: TASK-CORELOGIC-RULE-BASED-SPLITTER
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/183
+
+summary: |
+  AI推論またはフォールバックルールに基づき、Markdown/YAML/JSONファイルをIssueブロックに分割するRuleBasedSplitterSvcを実装し、各形式・区切りパターンのテストをTDDで作成する。
+
+implementation_steps:
+  - step: 1
+    title: "テスト要件の策定・test_requirements.mdへの追記"
+    command: "test_requirements.mdにSplitter関連のテスト要件(TR-Splitter-MD-001〜)を追記する"
+    verification: "既存要件と矛盾・重複がないか確認し、必要なら統合・説明責任コメントを記載"
+  - step: 2
+    title: "RuleBasedSplitterSvcの新規実装(アダプタ層)"
+    command: "webapp/core_logic/github_automation_tool/adapters/rule_based_splitter.pyにサービスクラスを新規作成"
+    verification: "区切りルールごとに分割ロジックが関数分離されていること、IntermediateParsingResult型を返すこと"
+  - step: 3
+    title: "AIParserからRuleBasedSplitterSvc呼び出しの導線追加"
+    command: "ai_parser.pyでRuleBasedSplitterSvcを利用するように修正"
+    verification: "AI推論/フォールバックルールで分割処理が呼ばれることをテストで確認"
+  - step: 4
+    title: "単体テストの実装(各形式・区切りルール・エッジケース)"
+    command: "tests/adapters/test_rule_based_splitter.pyに分割ロジックのテストをTDDで実装"
+    verification: "全テストがパスし、DoDの全条件を満たすこと"
+  - step: 5
+    title: "エラー・自己修正ログの整理"
+    command: "実装・テスト過程で発生したエラーや修正内容を内部ログとして記録"
+    verification: "完了時にコーディングルールへ反映できる形で整理されていること"
