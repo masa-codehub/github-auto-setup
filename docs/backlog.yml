@@ -174,8 +174,8 @@ user_stories:
       - "「すべて選択」「すべて解除」のような一括選択機能がある。"
       - "選択されたIssueの情報がバックエンドに正しく送信される。"
     technical_tasks:
-      - "TASK-WEBUI-SELECT-JS"          # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
-      - "TASK-WEBUI-SELECT-BACKEND"     # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
+      - "TASK-WEBUI-SELECT-JS"         # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
+      - "TASK-WEBUI-SELECT-BACKEND"    # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
     related_epic_ids: ["EPIC-WEBUI"]
     size_estimate: "[SP: 3]"
     dependencies_guessed:
@@ -229,9 +229,9 @@ user_stories:
       - "`core_logic`の`CreateGitHubResourcesUseCase`が呼び出され、処理が実行される。"
       - "処理結果がコンソールに`CliReporter`を通じて出力される。"
     technical_tasks:
-      - "TASK-CLI-ARGS-PARSE"         # issues.yml から
-      - "TASK-CLI-CORELOGIC-CALL"     # issues.yml から
-      - "TASK-CLI-REFACTOR"         # issues.yml の TASK-CLI-MAINTENANCE と関連
+      - "TASK-CLI-ARGS-PARSE"        # issues.yml から
+      - "TASK-CLI-CORELOGIC-CALL"    # issues.yml から
+      - "TASK-CLI-REFACTOR"        # issues.yml の TASK-CLI-MAINTENANCE と関連
     related_epic_ids: ["EPIC-CLI-MAINTENANCE", "EPIC-GITHUB-INTEGRATION"]
     size_estimate: "[SP: 5]"
     dependencies_guessed:
@@ -425,12 +425,32 @@ technical_tasks:
       申し送り事項として、信頼度評価ロジックの高度化（必須キーの存在チェックなど）が後続タスク（TASK-CORELOGIC-AI-REFINEMENT）で検討される。
 
   - task_id: "TASK-CORELOGIC-RULE-BASED-SPLITTER"
-    title: "CoreLogic: Rule-based Splitter for Issue Blocks"
-    description: "Implement a rule-based splitter to divide input file content into issue blocks based on inferred or fallback rules."
+    title: "[Core][Task] US-001: 推論ルールに基づくIssueブロックの分割処理"
+    description: |
+      AIが推論した区切りルールに基づき、入力ファイルを複数のIssueブロックに分割する処理を実装する。
+      - 分割ルールの適用（先頭キー/開始パターンに基づく）。
+      - 分割後のブロックの前処理（空白行の削除、メタ情報の抽出など）。
+      - 信頼度判定に基づくエラーハンドリング。
     related_epic_ids: ["EPIC-DATAPARSING"]
     status: "Done"
-    priority: "High"
+    priority: "Very High"
+    size_estimate: "[SP: 5]"
     dependencies:
       - "TASK-CORELOGIC-AI-RULE-INFERENCE"
     notes: |
-      責務分離の原則に基づき`RuleBasedSplitterSvc`を実装。レビュー指摘(ログ欠落)もテストと共に修正済。後続タスクでAIParser本体への統合が必要。
+      実装完了。責務分離のため`RuleBasedSplitterSvc`として実装し、レビューでのログ欠落指摘も修正済み。
+      入力ファイルの動的な分割が可能になった。今後の改善点として、分割ルールの設定管理等が検討される。
+
+  - task_id: "TASK-CORELOGIC-RULE-BASED-MAPPER"
+    title: "[Core][Task] US-001: 推論ルールに基づくIssueDataへのマッピング処理"
+    description: "AIが推論したキーマッピングルールと分割されたIssueブロックに基づき、各ブロックをIssueDataオブジェクトに変換（マッピング）する処理を実装する。"
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "Done"
+    priority: "Very High"
+    size_estimate: "[SP: 5]"
+    dependencies:
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
+      - "TASK-CORELOGIC-RULE-BASED-SPLITTER"
+    notes: |
+      実装完了。責務分離のためRuleBasedMapperServiceとして独立して実装された。
+      将来的な拡張として、値変換ロジックをディスパッチテーブル方式にリファクタリングすることを検討。
