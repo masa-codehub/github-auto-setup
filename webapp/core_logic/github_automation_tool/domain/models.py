@@ -8,7 +8,8 @@ class IssueData(BaseModel):
     # Allow population of 'description' field via alias 'body' to support existing tests
     model_config = ConfigDict(populate_by_name=True)
     title: str = Field(description="抽出されたGitHub issueのタイトル")
-    description: str = Field(alias="body", description="抽出されたGitHub issueの説明（概要、目的、背景など）")
+    description: str = Field(
+        alias="body", description="抽出されたGitHub issueの説明（概要、目的、背景など）")
     tasks: list[str] = Field(
         default_factory=list,
         description="抽出されたGitHub issueのタスク（例: 'タスク1', 'タスク2'など）"
@@ -30,13 +31,14 @@ class IssueData(BaseModel):
     assignees: list[str] | None = Field(
         default=None, description="抽出された担当者名のリスト (例: '@username')")
 
-    temp_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="一時的な一意ID（UI選択用）")
+    temp_id: str = Field(default_factory=lambda: str(
+        uuid.uuid4()), description="一時的な一意ID（UI選択用）")
 
     @property
     def body(self) -> str:
         """Alias for description to support code referencing issue_data.body"""
         return self.description
-        
+
     # --- 追加: title のバリデーター ---
     @field_validator('title')
     @classmethod
@@ -87,12 +89,16 @@ class CreateGitHubResourcesResult(BaseModel):
     CreateGitHubResourcesUseCase の全体的な実行結果を格納するデータクラス。
     リポジトリ、ラベル、マイルストーン、Issue作成、プロジェクト連携の結果を包括的に管理する。
     """
-    repository_url: str | None = Field(default=None, description="作成/確認されたリポジトリのURL")
-    project_node_id: str | None = Field(default=None, description="対象プロジェクトのNode ID (見つかった場合)")
+    repository_url: str | None = Field(
+        default=None, description="作成/確認されたリポジトリのURL")
+    project_node_id: str | None = Field(
+        default=None, description="対象プロジェクトのNode ID (見つかった場合)")
     project_name: str | None = Field(default=None, description="対象プロジェクト名")
 
-    created_labels: list[str] = Field(default_factory=list, description="正常に作成された(または既存だった)ラベル名のリスト")
-    failed_labels: list[tuple[str, str]] = Field(default_factory=list, description="作成に失敗したラベルとそのエラーメッセージのタプルのリスト")
+    created_labels: list[str] = Field(
+        default_factory=list, description="正常に作成された(または既存だった)ラベル名のリスト")
+    failed_labels: list[tuple[str, str]] = Field(
+        default_factory=list, description="作成に失敗したラベルとそのエラーメッセージのタプルのリスト")
 
     # マイルストーン処理の結果を複数保持するように変更
     processed_milestones: list[tuple[str, int]] = Field(
@@ -105,14 +111,32 @@ class CreateGitHubResourcesResult(BaseModel):
     )
 
     # Issue作成の結果は既存のモデルで保持
-    issue_result: CreateIssuesResult | None = Field(default=None, description="Issue作成処理の結果")
+    issue_result: CreateIssuesResult | None = Field(
+        default=None, description="Issue作成処理の結果")
 
     # プロジェクト連携の結果
-    project_items_added_count: int = Field(default=0, description="プロジェクトに正常に追加されたアイテム数")
-    project_items_failed: list[tuple[str, str]] = Field(default_factory=list, description="プロジェクトへの追加に失敗したIssue Node IDとそのエラーメッセージのタプルのリスト")
+    project_items_added_count: int = Field(
+        default=0, description="プロジェクトに正常に追加されたアイテム数")
+    project_items_failed: list[tuple[str, str]] = Field(
+        default_factory=list, description="プロジェクトへの追加に失敗したIssue Node IDとそのエラーメッセージのタプルのリスト")
 
     # 全体的な致命的エラー
-    fatal_error: str | None = Field(default=None, description="処理を中断させた致命的なエラーメッセージ")
+    fatal_error: str | None = Field(
+        default=None, description="処理を中断させた致命的なエラーメッセージ")
 
     # dry_runフラグを追加
     dry_run: bool = Field(default=False, description="ドライランかどうか")
+
+
+class AISuggestedRules(BaseModel):
+    """
+    AIによって推論された区切りルール・キーマッピングルール・信頼度・警告/エラー情報を格納するモデル
+    """
+    separator_rule: dict = Field(description="Issue区切りルール（例: 先頭キーやパターン情報）")
+    key_mapping_rule: dict = Field(
+        description="キーマッピングルール（入力ファイル中のキー→標準フィールド名の対応表）")
+    confidence: float = Field(description="AI推論ルールの信頼度（0.0〜1.0）")
+    warnings: list[str] = Field(
+        default_factory=list, description="信頼度が低い場合などの警告メッセージ")
+    errors: list[str] = Field(default_factory=list,
+                              description="致命的なエラーが発生した場合のエラーメッセージ")

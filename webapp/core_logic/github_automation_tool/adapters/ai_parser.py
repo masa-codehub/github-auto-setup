@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 # 設定、データモデル、カスタム例外をインポート
 from github_automation_tool.infrastructure.config import Settings
-from github_automation_tool.domain.models import ParsedRequirementData, IssueData
+from github_automation_tool.domain.models import ParsedRequirementData, IssueData, AISuggestedRules
 from github_automation_tool.domain.exceptions import AiParserError
 
 # --- LangChain のコアコンポーネント ---
@@ -266,6 +266,75 @@ class AIParser:
                 f"An unexpected error occurred during AI parsing: {e}")
             raise AiParserError(
                 "An unexpected error occurred during AI parsing.", original_exception=e) from e
+
+    def infer_rules(self, markdown_text: str) -> AISuggestedRules:
+        """
+        入力テキストからAIを用いて区切りルール・キーマッピングルールを推論し、信頼度評価・警告/エラー情報を含めて返す。
+        """
+        warnings = []
+        errors = []
+        confidence = 1.0
+        separator_rule = {}
+        key_mapping_rule = {}
+        # 区切りルール推論
+        try:
+            sep_prompt = self.settings.ai.separator_rule_prompt_template
+            if not sep_prompt:
+                raise ValueError("区切りルール用プロンプトテンプレートが未設定です")
+            sep_chain = PromptTemplate(
+                template=sep_prompt, input_variables=["markdown_text"])
+            sep_result = self.llm.invoke(
+                sep_chain.format(markdown_text=markdown_text))
+            separator_rule = self._parse_json_result(
+                sep_result, key="separator_pattern")
+        except Exception as e:
+            errors.append(f"区切りルール推論失敗: {e}")
+            confidence -= 0.4
+
+        # キーマッピングルール推論
+        try:
+            map_prompt = self.settings.ai.key_mapping_rule_prompt_template
+            if not map_prompt:
+                raise ValueError("キーマッピングルール用プロンプトテンプレートが未設定です")
+            map_chain = PromptTemplate(
+                template=map_prompt, input_variables=["markdown_text"])
+            map_result = self.llm.invoke(
+                map_chain.format(markdown_text=markdown_text))
+            key_mapping_rule = self._parse_json_result(
+                map_result, key="key_mapping")
+        except Exception as e:
+            errors.append(f"キーマッピングルール推論失敗: {e}")
+            confidence -= 0.4
+
+        # 信頼度評価（例: 先頭キーの一貫性、必須フィールド充足率）
+        if not separator_rule or not key_mapping_rule:
+            confidence = max(confidence, 0.3)
+            warnings.append("推論ルールの一部が取得できませんでした")
+        if confidence < 0.7:
+            warnings.append("AI推論ルールの信頼度が低いです")
+
+        return AISuggestedRules(
+            separator_rule=separator_rule or {},
+            key_mapping_rule=key_mapping_rule or {},
+            confidence=confidence,
+            warnings=warnings,
+            errors=errors
+        )
+
+    def _parse_json_result(self, result, key=None):
+        """AIレスポンスからJSONを抽出し、必要に応じてkeyで部分抽出。key指定時はdictで返す"""
+        import json
+        if isinstance(result, str):
+            data = json.loads(result)
+        else:
+            data = result
+        if key:
+            # キーマッピングはdict、区切りパターンはdictで返す
+            if key == "separator_pattern":
+                return {"separator_pattern": data[key]} if key in data else {}
+            if key == "key_mapping":
+                return data[key] if key in data else {}
+        return data
 
     def split_issues(self, file_content: str, filetype: str, rule: dict = None):
         """

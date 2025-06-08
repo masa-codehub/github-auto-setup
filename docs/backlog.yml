@@ -364,8 +364,8 @@ technical_tasks:
     dependencies:
       - "TT-001" # フォルダ構成見直しのフォローアップ
     notes: |
-      クリーンアーキテクチャの各レイヤーに対応したテスト構造を意識する。
-      `pytest` の設定やカバレッジ計測への影響も考慮する。
+      - クリーンアーキテクチャの各レイヤーに対応したテスト構造を意識する。
+      - `pytest` の設定やカバレッジ計測への影響も考慮する。
 
   - task_id: "TT-008"
     title: "[TechnicalTask][Optimization] Dockerfile及びコンテナ起動スクリプトの最適化検討"
@@ -379,8 +379,8 @@ technical_tasks:
     dependencies:
       - "TT-001" # 開発環境整理のフォローアップ
     notes: |
-      特に開発サイクルを高速化するための改善。
-      本番環境と開発環境でDockerfileを分けるか、ARGで制御するかも検討点。
+      - 特に開発サイクルを高速化するための改善。
+      - 本番環境と開発環境でDockerfileを分けるか、ARGで制御するかも検討点。
 
   - task_id: "TASK-FE-US001-UPLOAD-UI"
     title: "[FE][Task] US-001: ファイルアップロードUIコンポーネント実装"
@@ -406,6 +406,23 @@ technical_tasks:
     notes: |
       API通信とUI更新の責務を分離して実装。
       将来的な改善として、バックエンドのエラーレスポンス形式の標準化（TASK-BE-API-ERROR-STANDARDIZATION）を推奨。
+      
+  - task_id: "TASK-CORELOGIC-AI-RULE-INFERENCE"
+    title: "[Core][Task] US-001: AIによる区切り・キーマッピングルール推論ロジック"
+    description: |
+      ユーザーストーリー US-001 の中核機能。AIParserアダプタ内で、入力ファイル全体を分析し、AI（OpenAI/Gemini）を活用して以下の2種類のルールを動的に推論・生成するロジックを実装する。
+      1. Issue区切りルール
+      2. キーマッピングルール
+      信頼度判定基準を設け、信頼度が低い場合はエラーまたは警告情報を生成する。
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "Done"
+    priority: "Very High"
+    size_estimate: "[SP: 8]"
+    dependencies:
+      - "TASK-PROMPT-MANAGEMENT"
+    notes: |
+      実装完了。AIが区切りとキーマッピングを推論する基盤が完成。
+      申し送り事項として、信頼度評価ロジックの高度化（必須キーの存在チェックなど）が後続タスク（TASK-CORELOGIC-AI-REFINEMENT）で検討される。
 
   - task_id: "TASK-CORELOGIC-RULE-BASED-SPLITTER"
     title: "CoreLogic: Rule-based Splitter for Issue Blocks"
