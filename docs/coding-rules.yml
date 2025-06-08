@@ -202,3 +202,11 @@
         except yaml.YAMLError as e:
             logger.warning(f"Failed to parse YAML content due to YAMLError: {e}")
             return []
+
+# ラベル・マイルストーン正規化ロジックの分離・import設計
+- id: CR-CORELOGIC-001
+  description: >
+    ラベル・マイルストーン等の正規化ロジックは、他のユースケースやサービスから再利用可能な形で`adapters`等の専用モジュールに分離すること。
+    importパスの解決や依存関係の複雑化を避けるため、パッケージ設計・__init__.pyの配置・相対/絶対importの使い分けに十分注意し、
+    テストやユースケース統合時にimportエラーが発生しないことを必ず確認する。
+    やむを得ず一時的にロジックをインライン化する場合も、最終的には分離・再利用可能な形に戻すこと。

@@ -63,6 +63,14 @@
 - id: TR-Splitter-Edge-001
   description: 空のファイルや区切り文字がないファイルが正しく処理され、空リストが返されること。
 
+# テスト要件: ラベル・マイルストーン正規化 (TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER)
+- id: TR-Normalization-001
+  description: IssueDataのラベルは、github_setup_defaults.ymlに基づき正規化されること。
+- id: TR-Normalization-002
+  description: IssueDataのマイルストーンは、github_setup_defaults.ymlに基づき正規化されること。
+- id: TR-Normalization-003
+  description: 正規化に失敗したラベルやマイルストーンは警告ログが出力されること。
+
 # 備考
 - API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
 - フロントエンドのテスト要件は、API要件とは別に、ユーザー体験向上のためのクライアントサイドでの即時フィードバックと、バックエンドとの通信を検証するものです。
