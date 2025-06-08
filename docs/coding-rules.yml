@@ -42,6 +42,23 @@
         def get(self, request):
             ...
 
+- rule_id: "CR-020"
+  title: "AIを利用する処理は信頼度評価とフォールバック機構を必須とする"
+  description: |
+    AI（大規模言語モデル等）を利用するロジックでは、推論結果の信頼度を必ず評価し、信頼度が低い場合やエラー時には警告・エラー情報を返す、もしくは決定論的な処理にフォールバックする仕組みを実装すること。これによりAIの不確実性によるシステム障害や誤動作を防ぐ。
+  category: "AI・信頼性設計"
+  example_bad: |
+    def parse_with_ai(text):
+        # AIの出力をそのまま利用し、信頼度やエラーを考慮しない
+        return ai_model.predict(text)
+  example_good: |
+    def parse_with_ai(text):
+        result = ai_model.predict(text)
+        confidence = evaluate_confidence(result)
+        if confidence < 0.7:
+            return {"warning": "AI推論の信頼度が低い", "result": result}
+        return result
+
 - rule_id: "CR-021"
   title: "デバッグ用のコンソール出力を製品コードに残さない"
   description: "開発中のデバッグ目的で使用した`console.log`や`console.error`は、マージする前に必ず削除または適切なロガー、UI通知に置き換えること。これにより、意図しない情報漏洩を防ぎ、コンソールのクリーンさを保ち、エラーハンドリングの責務を明確にする。"

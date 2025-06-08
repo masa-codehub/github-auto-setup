@@ -13,6 +13,16 @@
 - id: TR-API-Upload-006
   description: 処理中に予期せぬサーバーエラーが発生した場合、HTTP 500エラーが返されること。
 
+# テスト要件: AIパーサー（区切り・キーマッピングルール推論）
+- id: TR-AI-Parse-001
+  description: AIパーサーが入力テキストからIssue区切りルール（先頭キー）を正しく推論できること。
+- id: TR-AI-Parse-002
+  description: AIパーサーが入力テキストからキーマッピングルールを正しく推論できること。
+- id: TR-AI-Parse-003
+  description: AIパーサーが推論結果の信頼度を評価し、信頼度が低い場合に警告情報を出力できること。
+- id: TR-AI-Error-001
+  description: AI APIの呼び出しが失敗した場合（認証エラー、APIエラー等）に、AIParserが適切に例外をハンドリングできること。
+
 # テスト要件: フロントエンド (クライアントサイド検証)
 - id: TR-FE-Validation-001
   description: 有効なファイル（.md, .yml, .yaml, .json）が選択できること（input要素のaccept属性で制限）。
