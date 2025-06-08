@@ -70,6 +70,41 @@
     }
 
 - rule_id: "CR-022"
+  title: "DOM操作ロジックはイベントリスナーから分離し、テスト容易性を確保する"
+  description: "UIの描画や更新を行うDOM操作のロジックは、イベントリスナーのコールバック関数内に直接記述せず、独立した関数として切り出すべきである。これにより、DOM操作ロジックをUIイベントから切り離し、純粋なデータと期待されるDOMの状態だけで単体テストを行うことが可能になる。"
+  category: "フロントエンド・テスト容易性"
+  example_bad: |
+    // イベントリスナー内にロジックが混在し、テストが困難
+    uploadButton.addEventListener('click', async () => {
+      const data = await fetchData();
+      const tableBody = document.getElementById('issue-table-body');
+      tableBody.innerHTML = ''; // Clear existing rows
+      data.issues.forEach(issue => {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${issue.title}</td>`;
+        tableBody.appendChild(row);
+      });
+    });
+  example_good: |
+    // 描画ロジックを分離
+    function renderIssues(issues) {
+      const tableBody = document.getElementById('issue-table-body');
+      if (!tableBody) return;
+      tableBody.innerHTML = ''; // Clear existing rows
+      issues.forEach(issue => {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${issue.title}</td>`;
+        tableBody.appendChild(row);
+      });
+    }
+
+    // イベントリスナーはロジックの呼び出しに専念
+    uploadButton.addEventListener('click', async () => {
+      const data = await fetchData();
+      renderIssues(data.issues);
+    });
+
+- rule_id: "CR-023"
   title: "APIエラーハンドリングはUI通知・テスト駆動・責務分離を徹底する"
   description: |
     フロントエンドでAPI呼び出しを行う際は、ネットワークエラー・サーバーエラー・AI解析エラー等の異常系を全てcatchし、ユーザーに分かりやすいエラーメッセージをUI通知エリア（例: Bootstrap Alert）で表示すること。APIクライアント関数はエラーをthrowし、UI更新はイベントリスナー側で責務分離する。全ての異常系はJest等でテスト駆動する。
@@ -102,16 +137,36 @@
       }
     });
 
-- rule_id: "CR-023"
+- rule_id: "CR-024"
   title: "最短の手番で実装を完了させるための作業ルール"
   description: |
     実装・修正・レビュー対応など全ての作業は、最短の手番（最小のアクション数）で完了することを最優先とする。必要な情報は自動で収集し、推測できる部分は即時実行し、不要な確認や質問を挟まず、連続的かつ効率的にタスクを進める。エージェント型開発支援の原則とする。
   category: "開発プロセス・エージェント行動原則"
   example_bad: |
-    // 毎回ユーザーに詳細を確認してから作業を進める
+    // 毎回ユーザーに細かく確認し、手が止まる
     // 既知の手順でも都度質問や確認を挟む
     // 1つの修正ごとに手動で指示を待つ
   example_good: |
     // 必要な情報は自動で検索・推論し、即座に実装を進める
     // まとめて修正・テスト・検証まで一気通貫で完了させる
     // ユーザーの手戻りや待ち時間を最小化する
+
+- rule_id: "CR-025"
+  title: "フロントエンドの依存・テスト・ビルドはfrontendディレクトリ配下で一元管理し、ESM構成を安定させる"
+  description: |
+    Django等のバックエンドとフロントエンドを明確に分離して開発する場合、フロントエンドの依存（node_modules）・package.json・テスト・ビルド・CI/CDはfrontendディレクトリ配下に統合・完結させること。
+    JestでESM(import/export)構文のテストを行う場合はBabel(babel.config.cjs)とJest(jest.config.mjs)の設定をfrontend配下に置き、`npm test`等のコマンドは必ずfrontendディレクトリ内で実行する。
+    これにより、依存の競合、ESM構文エラー、設定ファイルが見つからない等の問題を防止し、保守性と再現性を高める。
+  category: "フロントエンド・モノレポ運用指針"
+  example_bad: |
+    # ルートや複数箇所にnode_modulesが存在
+    npm install       # /app/node_modulesができる
+    cd frontend && npm install   # frontend/node_modulesもできる
+    # ルートからテストを実行しようとしてエラーになる
+    npm test
+  example_good: |
+    # frontend配下でのみ依存・テスト・ビルドを管理
+    cd frontend
+    npm install
+    npm test
+    # → frontend/node_modulesのみで全て完結し、設定も安定
