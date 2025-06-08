@@ -3,6 +3,9 @@
 // display_logic.jsをimport
 import { displayIssues } from './display_logic.js';
 
+// === APIエンドポイント定数 ===
+const API_ENDPOINT = '/api/v1/parse-file';
+
 // DOM依存部分を即時実行しないように分離
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', function () {
@@ -77,7 +80,9 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 // === APIクライアント関数 ===
 async function uploadIssueFile(formData) {
     try {
-        const response = await fetch('/api/v1/parse-file/', {
+        // パス末尾のスラッシュ有無を吸収
+        const endpoint = API_ENDPOINT;
+        const response = await fetch(endpoint + '/', {
             method: 'POST',
             body: formData,
             // CSRFトークンヘッダーを追加する必要がある場合
@@ -89,6 +94,8 @@ async function uploadIssueFile(formData) {
                 const errJson = await response.json();
                 if (errJson && errJson.detail) {
                     errorMsg = errJson.detail;
+                } else if (errJson && errJson.message) {
+                    errorMsg = errJson.message;
                 }
             } catch (_) {
                 // JSONデコードに失敗した場合は、ステータスコードベースのエラーを使用

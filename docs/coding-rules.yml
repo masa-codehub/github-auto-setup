@@ -70,72 +70,45 @@
     }
 
 - rule_id: "CR-022"
-  title: "DOM操作ロジックはイベントリスナーから分離し、テスト容易性を確保する"
-  description: "UIの描画や更新を行うDOM操作のロジックは、イベントリスナーのコールバック関数内に直接記述せず、独立した関数として切り出すべきである。これにより、DOM操作ロジックをUIイベントから切り離し、純粋なデータと期待されるDOMの状態だけで単体テストを行うことが可能になる。"
-  category: "フロントエンド・テスト容易性"
+  title: "APIエンドポイントURLは定数化しハードコードを避ける"
+  description: |
+    fetch等でAPIエンドポイントURLを直接文字列でハードコードせず、ファイル先頭で定数として定義し、全ての呼び出し箇所でその定数を参照すること。これにより、将来的なエンドポイント変更時の修正漏れや保守コストを低減できる。
+  category: "保守性・可読性"
   example_bad: |
-    // イベントリスナー内にロジックが混在し、テストが困難
-    uploadButton.addEventListener('click', async () => {
-      const data = await fetchData();
-      const tableBody = document.getElementById('issue-table-body');
-      tableBody.innerHTML = ''; // Clear existing rows
-      data.issues.forEach(issue => {
-        const row = document.createElement('tr');
-        row.innerHTML = `<td>${issue.title}</td>`;
-        tableBody.appendChild(row);
+    async function uploadIssueFile(formData) {
+      const response = await fetch('/api/v1/parse-file', {
+        method: 'POST',
+        body: formData
       });
-    });
-  example_good: |
-    // 描画ロジックを分離
-    function renderIssues(issues) {
-      const tableBody = document.getElementById('issue-table-body');
-      if (!tableBody) return;
-      tableBody.innerHTML = ''; // Clear existing rows
-      issues.forEach(issue => {
-        const row = document.createElement('tr');
-        row.innerHTML = `<td>${issue.title}</td>`;
-        tableBody.appendChild(row);
-      });
+      // ...
     }
-
-    // イベントリスナーはロジックの呼び出しに専念
-    uploadButton.addEventListener('click', async () => {
-      const data = await fetchData();
-      renderIssues(data.issues);
-    });
+  example_good: |
+    const API_ENDPOINT = '/api/v1/parse-file';
+    async function uploadIssueFile(formData) {
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        body: formData
+      });
+      // ...
+    }
 
 - rule_id: "CR-023"
-  title: "APIエラーハンドリングはUI通知・テスト駆動・責務分離を徹底する"
+  title: "HTMLエスケープ関数は単一責任とし、改行変換等は呼び出し元で行う"
   description: |
-    フロントエンドでAPI呼び出しを行う際は、ネットワークエラー・サーバーエラー・AI解析エラー等の異常系を全てcatchし、ユーザーに分かりやすいエラーメッセージをUI通知エリア（例: Bootstrap Alert）で表示すること。APIクライアント関数はエラーをthrowし、UI更新はイベントリスナー側で責務分離する。全ての異常系はJest等でテスト駆動する。
-  category: "フロントエンド設計・例外処理"
+    escapeHtml等のHTMLエスケープ関数は、純粋にHTML特殊文字のエスケープのみを担い、副次的な文字列変換（例: 改行→<br>等）は呼び出し元で明示的に行うこと。これにより、関数の副作用を排除し、単一責任の原則を守る。
+  category: "保守性・単一責任原則"
   example_bad: |
-    async function uploadIssueFile(formData) {
-      const response = await fetch('/api/v1/parse-file', { method: 'POST', body: formData });
-      return await response.json(); // エラー時のハンドリングなし
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]))
+        .replace(/\n/g, '<br>'); // ←副責任
     }
-    // ...
-    // submitイベントで例外未捕捉
-    uploadForm.addEventListener('submit', async (e) => {
-      await uploadIssueFile(formData); // 失敗時にUI通知されない
-    });
   example_good: |
-    async function uploadIssueFile(formData) {
-      const response = await fetch('/api/v1/parse-file', { method: 'POST', body: formData });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.detail || 'API error');
-      }
-      return await response.json();
+    function escapeHtml(str) {
+      return String(str).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]));
     }
-    // ...
-    uploadForm.addEventListener('submit', async (e) => {
-      try {
-        await uploadIssueFile(formData);
-      } catch (e) {
-        showUploadError(e.message);
-      }
-    });
+    // 呼び出し元
+    const html = escapeHtml(text).replace(/\n/g, '<br>');
 
 - rule_id: "CR-024"
   title: "最短の手番で実装を完了させるための作業ルール"

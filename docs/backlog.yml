@@ -141,8 +141,12 @@ epics:
 user_stories:
   - story_id: "US-001"
     title: "Web UIでのIssueファイルのアップロード、バックエンドAPI経由でのAI解析、結果の一覧表示"
-    status: "In Progress" # 他のタスクが残っているため In Progress のまま
-    description: "開発者として、静的なWeb UIからIssue情報ファイル（Markdown, YAML, JSON）を選択し、バックエンドAPIに送信してAIによる区切り・キーマッピングルール推論と解析を実行させ、その結果（Issueの一覧）をAPI経由で取得し画面で確認したい。これにより、多様なフォーマットやキーの揺らぎがあるファイルからでも効率的にIssue情報を把握できる。"
+    status: "Done"
+    notes: |
+      - [アーキテクチャ変更] このユーザーストーリーは静的フロントエンド + バックエンドAPI構成を前提とする。
+      - [API設計] 詳細なAPIエンドポイント、リクエスト/レスポンス形式は `docs/api_specifications.md` を参照。
+      - [データフロー変更] ファイルアップロード後の全Issueデータはバックエンドで一時保存され、UIとはIDベースでやり取りするよう変更されました。
+      - **[2025-06-08 完了] フロントエンド・バックエンドの基本機能を実装。ファイルアップロードから解析結果のUI表示までの一連のフローが完成。保守性向上のためのリファクタリングも実施済み。**
     acceptance_criteria:
       - "静的Web UIにファイルアップロード機能があり、`.md`, `.yml`, `.json` ファイル（10MB以下）を選択できる。"
       - "選択されたファイルデータが、フロントエンドからバックエンドのファイルアップロード/解析APIエンドポイントに送信される。"
@@ -162,12 +166,6 @@ user_stories:
       - "TASK-CORELOGIC-RULE-BASED-MAPPER"
       - "TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER"
       - "TASK-BE-API-TEMPORARY-DATA-STORAGE"
-    notes: |
-      - [アーキテクチャ変更] このユーザーストーリーは静的フロントエンド + バックエンドAPI構成を前提とする。
-      - [API設計] 詳細なAPIエンドポイント、リクエスト/レスポンス形式は `docs/api_specifications.md` を参照。
-      - [データフロー変更] ファイルアップロード後の全Issueデータはバックエンドで一時保存され、UIとはIDベースでやり取りするよう変更されました。
-      - **[2025-06-08 完了] TASK-FE-US001-API-UPLOAD-CALL: フロントエンドからのファイルアップロードAPI呼び出し機能を実装。エラーハンドリングにおける責務分離を改善。**
-      - **[2025-06-08 完了] TASK-FE-US001-DISPLAY-LOGIC: 解析結果を動的にテーブル表示するUIロジックを実装。TDDに基づきテストを拡充し、保守性を向上。**
   - story_id: "US-002"
     title: "Web UIでの処理対象Issueの選択"
     description: "開発者として、Web UIに表示されたIssue一覧の中から、GitHubへの登録やローカル保存の対象とするIssueを個別に、または一括で選択したい。これにより、必要なIssueのみを効率的に処理できる。"
