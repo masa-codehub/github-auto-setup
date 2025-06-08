@@ -174,8 +174,8 @@ user_stories:
       - "「すべて選択」「すべて解除」のような一括選択機能がある。"
       - "選択されたIssueの情報がバックエンドに正しく送信される。"
     technical_tasks:
-      - "TASK-WEBUI-SELECT-JS"         # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
-      - "TASK-WEBUI-SELECT-BACKEND"    # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
+      - "TASK-WEBUI-SELECT-JS"          # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
+      - "TASK-WEBUI-SELECT-BACKEND"     # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
     related_epic_ids: ["EPIC-WEBUI"]
     size_estimate: "[SP: 3]"
     dependencies_guessed:
@@ -229,9 +229,9 @@ user_stories:
       - "`core_logic`の`CreateGitHubResourcesUseCase`が呼び出され、処理が実行される。"
       - "処理結果がコンソールに`CliReporter`を通じて出力される。"
     technical_tasks:
-      - "TASK-CLI-ARGS-PARSE"        # issues.yml から
-      - "TASK-CLI-CORELOGIC-CALL"    # issues.yml から
-      - "TASK-CLI-REFACTOR"        # issues.yml の TASK-CLI-MAINTENANCE と関連
+      - "TASK-CLI-ARGS-PARSE"         # issues.yml から
+      - "TASK-CLI-CORELOGIC-CALL"     # issues.yml から
+      - "TASK-CLI-REFACTOR"         # issues.yml の TASK-CLI-MAINTENANCE と関連
     related_epic_ids: ["EPIC-CLI-MAINTENANCE", "EPIC-GITHUB-INTEGRATION"]
     size_estimate: "[SP: 5]"
     dependencies_guessed:
@@ -423,7 +423,7 @@ technical_tasks:
     notes: |
       実装完了。AIが区切りとキーマッピングを推論する基盤が完成。
       申し送り事項として、信頼度評価ロジックの高度化（必須キーの存在チェックなど）が後続タスク（TASK-CORELOGIC-AI-REFINEMENT）で検討される。
-
+      
   - task_id: "TASK-CORELOGIC-RULE-BASED-SPLITTER"
     title: "[Core][Task] US-001: 推論ルールに基づくIssueブロックの分割処理"
     description: |
@@ -454,3 +454,16 @@ technical_tasks:
     notes: |
       実装完了。責務分離のためRuleBasedMapperServiceとして独立して実装された。
       将来的な拡張として、値変換ロジックをディスパッチテーブル方式にリファクタリングすることを検討。
+
+  - task_id: "TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER"
+    title: "[Core][Task] US-001: ラベル・マイルストーン正規化処理"
+    description: "IssueData内のラベル・マイルストーン情報を、github_setup_defaults.ymlの定義に基づき正規化する処理を実装する。"
+    related_epic_ids: ["EPIC-DATAPARSING", "EPIC-GITHUB-INTEGRATION"]
+    status: "Done"
+    priority: "High"
+    size_estimate: "[SP: 5]"
+    dependencies:
+      - "TASK-CORELOGIC-RULE-BASED-MAPPER"
+      - "DefaultsLoaderInfra"
+    notes: |
+      [2025-06-08 完了] UseCase内にインライン実装されていたロジックを、レビュー指摘に基づきLabelMilestoneNormalizerSvcとしてadapters層に分離。UseCaseへはDIで設定情報を渡す形にリファクタリングし、クリーンアーキテクチャの原則を遵守した。

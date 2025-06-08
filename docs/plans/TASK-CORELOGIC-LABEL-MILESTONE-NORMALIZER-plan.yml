@@ -1,0 +1,39 @@
+# TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER-plan.yml
+
+issue_id: TASK-CORELOGIC-LABEL-MILESTONE-NORMALIZER
+issue_title: '[Core][Task] US-001: ラベル・マイルストーン正規化処理'
+issue_url: 'https://github.com/masa-codehub/github-auto-setup/issues/185'
+
+## 概要
+AIParserまたは関連サービスで粗マッピングされたIssueData内のラベル・マイルストーン情報を、docs/github_setup_defaults.ymlの定義に基づき正規化するサービス（LabelMilestoneNormalizerSvc）を実装し、テスト駆動で検証する。
+
+## implementation_steps:
+- step: 1
+  title: '正規化要件・定義の整理と設計方針の決定'
+  command: '設計方針・正規化仕様をまとめ、github_setup_defaults.ymlの定義・エイリアス設計を確認する'
+  verification: '設計方針・仕様が明文化されていること。エイリアスや大文字小文字の扱い方針が明確であること。'
+
+- step: 2
+  title: 'LabelMilestoneNormalizerSvcの新規実装（adapters配下）'
+  command: 'webapp/core_logic/github_automation_tool/adapters/label_milestone_normalizer.py にサービスクラスを新規作成し、正規化ロジック（大文字小文字非区別・エイリアス対応）を実装する'
+  verification: '主要な正規化パターン（エイリアス・大文字小文字・未定義値）に対する単体テストがパスすること'
+
+- step: 3
+  title: '単体テストの実装（TDD）'
+  command: 'webapp/core_logic/github_automation_tool/tests/adapters/test_label_milestone_normalizer.py に多様な入力パターンのテストケースを実装する'
+  verification: '全てのテストケースがパスすること。DoDの受け入れ基準を網羅していること。'
+
+- step: 4
+  title: 'DefaultsLoaderInfraとの連携確認'
+  command: 'github_setup_defaults.ymlの定義をInfrastructure層から受け取る形で、正規化サービスが動作することを確認する（モック可）'
+  verification: '外部定義の変更に追従できる設計であること。テストでモック定義を差し替えても正しく動作すること。'
+
+- step: 5
+  title: 'CreateGitHubResourcesUseCaseへの組み込み'
+  command: 'webapp/core_logic/github_automation_tool/use_cases/create_github_resources.py で、Issue作成前に正規化サービスを呼び出す処理を追加する'
+  verification: '正規化サービスが必ず呼ばれ、正規化後のIssueDataが下流に渡ること。既存のリソース作成フローが壊れていないこと。'
+
+- step: 6
+  title: '最終動作確認・リファクタ・ドキュメント整理'
+  command: '全体の動作確認・リファクタリング・設計/テスト/運用ドキュメントの更新を行う'
+  verification: 'DoDの全項目が満たされていること。レビュー観点が明文化されていること。'
