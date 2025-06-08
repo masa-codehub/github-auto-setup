@@ -394,3 +394,16 @@ technical_tasks:
       クライアントサイドでのファイルバリデーション（拡張子・サイズ）を実装完了。
       テスト容易性を考慮し、バリデーションロジックはUIから分離済み。
       サーバーサイドでの二重チェックが必須である点を申し送り。
+
+  - task_id: "TASK-FE-US001-ERROR-HANDLING"
+    title: "[FE][Task] US-001: フロントエンドでのAPIエラーハンドリングと表示"
+    description: "ファイルアップロード/解析処理において、APIからのエラーレスポンスをハンドリングし、UIに適切なエラーメッセージを表示する。"
+    related_epic_ids: ["EPIC-WEBUI"]
+    status: "Done"
+    priority: "High"
+    size_estimate: "[SP: 3]"
+    dependencies:
+      - "TASK-FE-US001-API-UPLOAD-CALL"
+    notes: |
+      API通信とUI更新の責務を分離して実装。
+      将来的な改善として、バックエンドのエラーレスポンス形式の標準化（TASK-BE-API-ERROR-STANDARDIZATION）を推奨。

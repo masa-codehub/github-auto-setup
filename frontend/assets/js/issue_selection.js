@@ -57,32 +57,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         // === [STEP1] ファイルアップロードフォームの送信イベントリスナー追加 ===
         const uploadForm = document.getElementById('upload-form');
 
-        uploadForm.addEventListener('submit', async function (e) {
-            e.preventDefault();
-            const fileInput = uploadForm.querySelector('input[type="file"][name="issue_file"]');
-            if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-                alert('ファイルを選択してください');
-                return;
-            }
-            const formData = new FormData();
-            formData.append('issue_file', fileInput.files[0]);
-            // スピナー表示・ボタン無効化
-            const uploadSpinner = document.getElementById('upload-spinner');
-            const uploadButton = document.getElementById('upload-button');
-            if (uploadSpinner) uploadSpinner.style.display = 'inline-block';
-            if (uploadButton) uploadButton.disabled = true;
-            try {
-                const data = await uploadIssueFile(formData);
-                // TODO: 後続UI描画処理に置き換えること（現状はinfoログのみ）
-                console.info('[UPLOAD] APIレスポンス:', data);
-            } catch (e) {
-                showUploadError('ファイル解析API呼び出しに失敗しました。ネットワークまたはサーバーエラーです。');
-            } finally {
-                // スピナー非表示・ボタン有効化
-                if (uploadSpinner) uploadSpinner.style.display = 'none';
-                if (uploadButton) uploadButton.disabled = false;
-            }
-        });
+        uploadForm.addEventListener('submit', handleUploadFormSubmit(uploadForm, uploadIssueFile, showUploadError));
     });
 }
 
@@ -93,6 +68,20 @@ async function uploadIssueFile(formData) {
             method: 'POST',
             body: formData
         });
+        if (!response.ok) {
+            let errorMsg = `APIエラー: ${response.status}`;
+            try {
+                const errJson = await response.json();
+                if (errJson && errJson.detail) {
+                    errorMsg = errJson.detail;
+                } else if (errJson && errJson.message) {
+                    errorMsg = errJson.message;
+                }
+            } catch (_) {
+                // JSONでなければ無視
+            }
+            throw new Error(errorMsg);
+        }
         const data = await response.json();
         return data;
     } catch (error) {
@@ -117,7 +106,34 @@ function showUploadError(message) {
     }
 }
 
+// submitイベントリスナー本体をテスト用にexport
+function handleUploadFormSubmit(uploadForm, uploadIssueFileFn, showUploadErrorFn) {
+    return async function (e) {
+        e.preventDefault();
+        const fileInput = uploadForm.querySelector('input[type="file"][name="issue_file"]');
+        if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
+            alert('ファイルを選択してください');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('issue_file', fileInput.files[0]);
+        const uploadSpinner = document.getElementById('upload-spinner');
+        const uploadButton = document.getElementById('upload-button');
+        if (uploadSpinner) uploadSpinner.style.display = 'inline-block';
+        if (uploadButton) uploadButton.disabled = true;
+        try {
+            const data = await uploadIssueFileFn(formData);
+            console.info('[UPLOAD] APIレスポンス:', data);
+        } catch (e) {
+            showUploadErrorFn(e.message || 'ファイル解析API呼び出しに失敗しました。ネットワークまたはサーバーエラーです。');
+        } finally {
+            if (uploadSpinner) uploadSpinner.style.display = 'none';
+            if (uploadButton) uploadButton.disabled = false;
+        }
+    };
+}
+
 // テスト用エクスポート（Node.js環境/Jest用）
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { uploadIssueFile, showUploadError };
+    module.exports = { uploadIssueFile, showUploadError, handleUploadFormSubmit };
 }
