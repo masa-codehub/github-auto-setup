@@ -174,8 +174,8 @@ user_stories:
       - "「すべて選択」「すべて解除」のような一括選択機能がある。"
       - "選択されたIssueの情報がバックエンドに正しく送信される。"
     technical_tasks:
-      - "TASK-WEBUI-SELECT-JS"          # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
-      - "TASK-WEBUI-SELECT-BACKEND"     # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
+      - "TASK-WEBUI-SELECT-JS"         # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
+      - "TASK-WEBUI-SELECT-BACKEND"    # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連
     related_epic_ids: ["EPIC-WEBUI"]
     size_estimate: "[SP: 3]"
     dependencies_guessed:
@@ -229,9 +229,9 @@ user_stories:
       - "`core_logic`の`CreateGitHubResourcesUseCase`が呼び出され、処理が実行される。"
       - "処理結果がコンソールに`CliReporter`を通じて出力される。"
     technical_tasks:
-      - "TASK-CLI-ARGS-PARSE"         # issues.yml から
-      - "TASK-CLI-CORELOGIC-CALL"     # issues.yml から
-      - "TASK-CLI-REFACTOR"         # issues.yml の TASK-CLI-MAINTENANCE と関連
+      - "TASK-CLI-ARGS-PARSE"        # issues.yml から
+      - "TASK-CLI-CORELOGIC-CALL"    # issues.yml から
+      - "TASK-CLI-REFACTOR"        # issues.yml の TASK-CLI-MAINTENANCE と関連
     related_epic_ids: ["EPIC-CLI-MAINTENANCE", "EPIC-GITHUB-INTEGRATION"]
     size_estimate: "[SP: 5]"
     dependencies_guessed:
@@ -406,7 +406,7 @@ technical_tasks:
     notes: |
       API通信とUI更新の責務を分離して実装。
       将来的な改善として、バックエンドのエラーレスポンス形式の標準化（TASK-BE-API-ERROR-STANDARDIZATION）を推奨。
-
+      
   - task_id: "TASK-CORELOGIC-AI-RULE-INFERENCE"
     title: "[Core][Task] US-001: AIによる区切り・キーマッピングルール推論ロジック"
     description: |
@@ -438,8 +438,8 @@ technical_tasks:
     dependencies:
       - "TASK-CORELOGIC-AI-RULE-INFERENCE"
     notes: |
-      実装完了。入力ファイルの動的な分割処理が可能に。
-      今後の改善点として、分割ルールの設定管理や動的更新機能の追加が検討される。
+      実装完了。責務分離のため`RuleBasedSplitterSvc`として実装し、レビューでのログ欠落指摘も修正済み。
+      入力ファイルの動的な分割が可能になった。今後の改善点として、分割ルールの設定管理等が検討される。
 
   - task_id: "TASK-CORELOGIC-RULE-BASED-MAPPER"
     title: "[Core][Task] US-001: 推論ルールに基づくIssueDataへのマッピング処理"

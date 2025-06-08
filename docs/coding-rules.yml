@@ -151,7 +151,7 @@
   example_bad: |
     # ルートや複数箇所にnode_modulesが存在
     npm install       # /app/node_modulesができる
-    cd frontend && npm install   # frontend/node_modulesもできる
+    cd frontend && npm install    # frontend/node_modulesもできる
     # ルートからテストを実行しようとしてエラーになる
     npm test
   example_good: |
@@ -162,6 +162,48 @@
     # → frontend/node_modulesのみで全て完結し、設定も安定
 
 - rule_id: "CR-026"
+  title: "複数の分割戦略を持つ処理はStrategyパターンで分離する"
+  description: |
+    Markdown/YAML/JSONなど複数の分割ルールや戦略を扱う場合、if/elseや分岐の肥大化を避け、各戦略を関数・クラスとして分離しStrategyパターンで実装することで、拡張性・テスト容易性・保守性を高める。
+  category: "設計・拡張性"
+  example_bad: |
+    def split(content, filetype, rule=None):
+        if filetype == "md":
+            # ...
+        elif filetype == "yaml":
+            # ...
+        elif filetype == "json":
+            # ...
+  example_good: |
+    class MarkdownSplitter: ...
+    class YamlSplitter: ...
+    class JsonSplitter: ...
+    def split(content, filetype, rule=None):
+        splitter = get_splitter(filetype)
+        return splitter.split(content, rule)
+
+- rule_id: "CR-027"
+  title: "パース失敗時は必ず警告ログを出力する"
+  description: |
+    YAMLやJSON等のパース処理で例外（YAMLError, JSONDecodeError等）が発生した場合、例外を握りつぶして無視するのではなく、必ずlogger.warning等で警告ログを出力すること。これにより、障害発生時の原因特定やデバッグが容易になり、保守性が向上する。
+  category: "ロギング・例外処理"
+  example_bad: |
+    def _split_yaml(self, content: str):
+        try:
+            data = yaml.safe_load(content)
+        except yaml.YAMLError:
+            return []  # ログ出力なしで握りつぶしている
+  example_good: |
+    import logging
+    logger = logging.getLogger(__name__)
+    def _split_yaml(self, content: str):
+        try:
+            data = yaml.safe_load(content)
+        except yaml.YAMLError as e:
+            logger.warning(f"Failed to parse YAML content due to YAMLError: {e}")
+            return []
+
+- rule_id: "CR-028"
   title: "データ変換ロジックは独立した純粋関数としてカプセル化する"
   description: "文字列からリストへの変換や特定パターンの抽出など、再利用可能なデータ変換処理は、それ自身の責務に特化した純粋関数として実装する。これにより、ロジックの単体テストが容易になり、異なる箇所からの再利用性も向上する。"
   category: "保守性・テスト容易性"

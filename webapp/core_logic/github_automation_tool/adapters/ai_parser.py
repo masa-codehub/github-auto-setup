@@ -1,3 +1,4 @@
+from .rule_based_splitter import RuleBasedSplitterSvc  # 相対importで再度試行
 import logging
 from typing import Type
 # pydantic.ValidationError をインポート
@@ -67,9 +68,9 @@ class AIParser:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        # llm と chain の初期化を build_chain から分離
         self.llm: BaseChatModel = self._initialize_llm()
         self.chain: RunnableSerializable = self._build_chain()
+        self.splitter = RuleBasedSplitterSvc()
         logger.info(
             f"AIParser initialized with model type: {self.settings.ai_model}")
 
@@ -334,3 +335,9 @@ class AIParser:
             if key == "key_mapping":
                 return data[key] if key in data else {}
         return data
+
+    def split_issues(self, file_content: str, filetype: str, rule: dict = None):
+        """
+        AI推論またはフォールバックルールで分割処理を呼び出す
+        """
+        return self.splitter.split(file_content, filetype, rule)
