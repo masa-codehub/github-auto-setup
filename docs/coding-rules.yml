@@ -105,93 +105,68 @@
     });
 
 - rule_id: "CR-023"
-  title: "最短手番での実装完了を目指す作業ルール"
+  title: "APIエラーハンドリングはUI通知・テスト駆動・責務分離を徹底する"
   description: |
-    実装タスクにおいては、無駄な確認や質問を極力省き、必要な情報は自動で収集・推論し、即時に実装・検証・修正を行うこと。ユーザーの指示や要件が明確な場合は、逐次的な確認を挟まず、最短の手番で成果物を完成させることを優先する。
-    - 依存情報や不足情報は自動で探索・補完する。
-    - 実装→テスト→修正→完了報告までを一気通貫で進める。
-    - 不明点があっても、まずは仮説ベースで実装し、検証結果に基づき即時修正する。
-    - 人的なレビューや承認を待たず、機械的に完了条件を満たすことを重視する。
-  category: "開発プロセス・効率化"
+    フロントエンドでAPI呼び出しを行う際は、ネットワークエラー・サーバーエラー・AI解析エラー等の異常系を全てcatchし、ユーザーに分かりやすいエラーメッセージをUI通知エリア（例: Bootstrap Alert）で表示すること。APIクライアント関数はエラーをthrowし、UI更新はイベントリスナー側で責務分離する。全ての異常系はJest等でテスト駆動する。
+  category: "フロントエンド設計・例外処理"
   example_bad: |
-    // 毎回ユーザーに細かく確認し、手が止まる
-    if (!userConfirmed) {
-      askUser("この仕様で良いですか？");
-      return;
+    async function uploadIssueFile(formData) {
+      const response = await fetch('/api/v1/parse-file', { method: 'POST', body: formData });
+      return await response.json(); // エラー時のハンドリングなし
     }
     // ...
+    // submitイベントで例外未捕捉
+    uploadForm.addEventListener('submit', async (e) => {
+      await uploadIssueFile(formData); // 失敗時にUI通知されない
+    });
   example_good: |
-    // 必要な情報は自動で収集し、即時に実装・テスト・修正まで完了させる
-    implementFeature();
-    runTests();
-    if (!testsPass) fixImmediately();
-    reportCompletion();
+    async function uploadIssueFile(formData) {
+      const response = await fetch('/api/v1/parse-file', { method: 'POST', body: formData });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'API error');
+      }
+      return await response.json();
+    }
+    // ...
+    uploadForm.addEventListener('submit', async (e) => {
+      try {
+        await uploadIssueFile(formData);
+      } catch (e) {
+        showUploadError(e.message);
+      }
+    });
 
 - rule_id: "CR-024"
-  title: "Jest+Babel+ESM構成でのテスト実行・ディレクトリ移動・頻発エラー対策（frontend配下運用版）"
+  title: "最短の手番で実装を完了させるための作業ルール"
   description: |
-    JestでESM(import/export)構文のテストを行う場合、Babelとbabel-jestを導入し、babel.config.js・jest.config.mjs・package.jsonはfrontendディレクトリ直下に配置すること。テスト実行・依存管理・ビルド・CI/CDもfrontend配下で閉じる。これにより、頻発する「Cannot use import statement outside a module」「You appear to be using a native ECMAScript module configuration file」等のエラーを防止できる。
-    - テストファイルはimport/export構文で統一し、require形式は使わない。
-    - 依存・テスト・ビルド・CI/CDはfrontendディレクトリでのみ実行する。
-    - babel.config.jsはCommonJS形式（module.exports）で書く。
-    - 頻発エラーの原因はJestのESMサポートの制約・Babel設定のパス・カレントディレクトリ不一致。
-    - これらの構成・手順を守ることで、ESM+Jest+Babel環境で安定してテストが動作する。
-  category: "フロントエンド・テスト環境構築・安定運用"
+    実装・修正・レビュー対応など全ての作業は、最短の手番（最小のアクション数）で完了することを最優先とする。必要な情報は自動で収集し、推測できる部分は即時実行し、不要な確認や質問を挟まず、連続的かつ効率的にタスクを進める。エージェント型開発支援の原則とする。
+  category: "開発プロセス・エージェント行動原則"
   example_bad: |
-    # ルートや他ディレクトリでnpm testやnpm installを実行
-    cd ..
-    npm test
-    npm install
-    # → ESM構文エラーやBabel config not foundエラーが頻発
+    // 毎回ユーザーに細かく確認し、手が止まる
+    // 既知の手順でも都度質問や確認を挟む
+    // 1つの修正ごとに手動で指示を待つ
   example_good: |
-    # frontend配下でのみ依存・テスト・ビルドを管理
-    cd frontend
-    npm install
-    npm test
-    npm run build
-    # → frontend/node_modulesのみで全て完結
+    // 必要な情報は自動で検索・推論し、即座に実装を進める
+    // まとめて修正・テスト・検証まで一気通貫で完了させる
+    // ユーザーの手戻りや待ち時間を最小化する
 
 - rule_id: "CR-025"
-  title: "フロントエンド依存・テスト・ビルドはfrontendディレクトリ配下で一元管理する"
+  title: "フロントエンドの依存・テスト・ビルドはfrontendディレクトリ配下で一元管理し、ESM構成を安定させる"
   description: |
     Django等のバックエンドとフロントエンドを明確に分離して開発する場合、フロントエンドの依存（node_modules）・package.json・テスト・ビルド・CI/CDはfrontendディレクトリ配下に統合・完結させること。
-    - frontend/node_modulesのみを使用し、ルートや他ディレクトリにnode_modulesを作らない。
-    - frontend/package.jsonで依存・スクリプト・設定を一元管理する。
-    - テスト・ビルド・CI/CDもfrontend配下で閉じる。
-    - バックエンド（webapp等）とは依存・ビルド・テストを完全分離し、モノレポでも独立運用を推奨。
-    - これにより、依存の競合や設定トラブルを防ぎ、保守性・拡張性を高める。
+    JestでESM(import/export)構文のテストを行う場合はBabel(babel.config.cjs)とJest(jest.config.mjs)の設定をfrontend配下に置き、`npm test`等のコマンドは必ずfrontendディレクトリ内で実行する。
+    これにより、依存の競合、ESM構文エラー、設定ファイルが見つからない等の問題を防止し、保守性と再現性を高める。
   category: "フロントエンド・モノレポ運用指針"
   example_bad: |
     # ルートや複数箇所にnode_modulesが存在
-    npm install   # /app/node_modulesができる
+    npm install       # /app/node_modulesができる
     cd frontend && npm install   # frontend/node_modulesもできる
-    # 依存や設定が分散し、競合やトラブルの原因に
+    # ルートからテストを実行しようとしてエラーになる
+    npm test
   example_good: |
     # frontend配下でのみ依存・テスト・ビルドを管理
     cd frontend
     npm install
     npm test
-    npm run build
-    # → frontend/node_modulesのみで全て完結
-
-- rule_id: "CR-026"
-  title: "ESM+Jest+Babel構成・テスト運用・ファイル拡張子統一・DoD要件"
-  description: |
-    - フロントエンド依存・テスト・ビルドはfrontend配下で一元管理すること。
-    - Jest+Babel+ESM構成でテストを安定運用すること。
-    - Babel設定はbabel.config.cjs、Jest設定はjest.config.mjsで管理し、testファイルは.js拡張子で統一すること。
-    - テストはnpm test（frontendディレクトリ）で実行し、全テストがパスすることをDoDとする。
-  category: "フロントエンド・モノレポ運用指針"
-  example_bad: |
-    # ルートや他ディレクトリでnpm testやnpm installを実行
-    cd ..
-    npm test
-    npm install
-    # → ESM構文エラーやBabel config not foundエラーが頻発
-  example_good: |
-    # frontend配下でのみ依存・テスト・ビルドを管理
-    cd frontend
-    npm install
-    npm test
-    npm run build
-    # → frontend/node_modulesのみで全て完結
+    # → frontend/node_modulesのみで全て完結し、設定も安定
