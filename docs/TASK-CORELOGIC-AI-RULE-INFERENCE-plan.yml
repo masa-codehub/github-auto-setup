@@ -1,0 +1,38 @@
+# TASK-CORELOGIC-AI-RULE-INFERENCE 実装計画
+
+issue_id: TASK-CORELOGIC-AI-RULE-INFERENCE
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/182
+summary: |
+  US-001の中核機能として、AI（OpenAI/Gemini）とLangChainを活用し、Issue区切りルール・キーマッピングルールを推論するロジックをAIParserに実装する。
+  推論ルールの信頼度評価・エラー/警告出力も含め、クリーンアーキテクチャ/DDD/TDD原則に則る。
+
+dod:
+  - webapp/core_logic/github_automation_tool/domain/models.py にAISuggestedRulesモデルを新規作成
+  - config.yaml.sampleにプロンプトテンプレートのプレースホルダーを追加し、infrastructure/config.pyで読込対応
+  - adapters/ai_parser.pyのAIParserにLangChain連携・推論ロジック・信頼度評価を実装
+  - AIParserがAISuggestedRulesモデルへ変換する処理を実装
+  - AIParserに信頼度評価・警告/エラー出力ロジックを実装
+  - webapp/core_logic/tests/adapters/test_ai_parser.pyに単体テストを追加（AIはモック化）
+  - すべてのテストがパスすること
+
+implementation_steps:
+  - step: 1
+    title: "AISuggestedRulesモデルの設計・実装"
+    command: "ドメインモデル（AISuggestedRules）をwebapp/core_logic/github_automation_tool/domain/models.pyに追加する"
+    verification: "Pydanticモデルとして正しく定義されていること、テストでインスタンス化・バリデーションが通ることを確認"
+  - step: 2
+    title: "プロンプトテンプレートのサンプル追加・設定読込対応"
+    command: "config.yaml.sampleに区切り・マッピング用プロンプトテンプレートのプレースホルダーを追加し、infrastructure/config.pyで読込対応する"
+    verification: "config.pyのテストで新しいプロンプトテンプレートが正しく読み込まれることを確認"
+  - step: 3
+    title: "AIParserのLangChain連携・推論ロジック実装"
+    command: "adapters/ai_parser.pyのAIParserにLangChainのChain構築・AI呼び出し・推論ロジック・信頼度評価・AISuggestedRules変換処理を実装する"
+    verification: "AIParserの単体テストで、AIレスポンスのパース・信頼度評価・エラー/警告出力が正しく動作することを確認"
+  - step: 4
+    title: "AIParserの単体テスト追加（AIモック化）"
+    command: "webapp/core_logic/tests/adapters/test_ai_parser.pyに、様々な入力パターン・信頼度判定・エラーケースを網羅するテストを追加する"
+    verification: "pytestで全テストがパスすることを確認"
+  - step: 5
+    title: "最終検証（全体テスト）"
+    command: "pytestおよびnpm testで全テストを実行し、すべてパスすることを確認する"
+    verification: "全テストがパスし、DoDの全項目が満たされていることを確認"

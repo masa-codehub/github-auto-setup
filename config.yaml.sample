@@ -38,6 +38,17 @@ ai:
     - タイトル行やラベル行などのキーワード行自体は、最終的な本文フィールド（descriptionなど）に含めないでください。
     - 各Issue候補は自身のマイルストーンを持ち、他のIssue候補のマイルストーンに影響されません。
 
+  # 区切りルール推論用プロンプトテンプレート
+  separator_rule_prompt_template: |
+    以下のテキストから、Issueの区切りルール（先頭キーやパターン）を推論してください。
+    例: すべてのIssueは '---' で始まる、または '**Title:**' で始まる等。
+    出力はJSON形式で {"separator_pattern": "..."} の形で返してください。
+
+  # キーマッピングルール推論用プロンプトテンプレート
+  key_mapping_rule_prompt_template: |
+    以下のテキストから、各Issueブロック内のキー（例: 'Title', 'Description', 'Tasks'など）と標準フィールド名の対応関係（マッピングルール）を推論してください。
+    出力はJSON形式で {"key_mapping": {"Title": "title", ...}} の形で返してください。
+
 logging:
   log_level: INFO # ログレベル (環境変数 LOG_LEVEL で上書き可)
 
