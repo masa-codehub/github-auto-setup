@@ -2,7 +2,7 @@
 RuleBasedMapperService: 推論ルールに基づくIssueDataマッピングサービス
 """
 from typing import Any, Dict, List, Optional
-from github_automation_tool.domain.models import IssueData
+from domain.models import IssueData
 import logging
 
 logger = logging.getLogger(__name__)

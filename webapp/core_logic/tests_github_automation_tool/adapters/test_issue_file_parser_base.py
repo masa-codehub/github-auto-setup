@@ -1,18 +1,22 @@
+from adapters.issue_file_parser_base import AbstractIssueFileParser, IntermediateParsingResult
 import sys
 import os
 import pytest
 
 # プロジェクトルートをimportパスに追加
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../..')))
-from core_logic.github_automation_tool.adapters.issue_file_parser_base import AbstractIssueFileParser, IntermediateParsingResult
+sys.path.insert(0, os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '../../../..')))
+
 
 class DummyParser(AbstractIssueFileParser):
     def parse(self, file_content: str) -> IntermediateParsingResult:
         return [file_content]
 
+
 def test_abstract_issue_file_parser_cannot_instantiate():
     with pytest.raises(TypeError):
         AbstractIssueFileParser()
+
 
 def test_dummy_parser_returns_input_as_list():
     parser = DummyParser()

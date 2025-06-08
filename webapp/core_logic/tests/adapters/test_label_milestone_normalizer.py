@@ -1,5 +1,5 @@
 import pytest
-from github_automation_tool.adapters.label_milestone_normalizer import LabelMilestoneNormalizerSvc
+from core_logic.adapters.label_milestone_normalizer import LabelMilestoneNormalizerSvc
 
 
 class DummyIssue:

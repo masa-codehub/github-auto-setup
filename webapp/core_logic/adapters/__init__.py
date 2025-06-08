@@ -6,15 +6,13 @@ from githubkit.versions.latest.models import (
     Label, Issue, Milestone, Repository, SimpleUser as User
 )
 
-from .github_rest_client import GitHubRestClient
-from .github_graphql_client import GitHubGraphQLClient
-from .assignee_validator import AssigneeValidator
-from .ai_parser import AIParser
-from .cli_reporter import CliReporter
-from .cli import Cli
-from . import github_utils
-from .rule_based_splitter import RuleBasedSplitterSvc
-from ..domain.exceptions import GitHubClientError, GitHubResourceNotFoundError, GitHubValidationError, GitHubAuthenticationError
+from core_logic.adapters.github_rest_client import GitHubRestClient
+from core_logic.adapters.github_graphql_client import GitHubGraphQLClient
+from core_logic.adapters.ai_parser import AIParser
+from core_logic.adapters.cli_reporter import CliReporter
+from core_logic.adapters.assignee_validator import AssigneeValidator
+from core_logic.adapters.cli import Cli
+from core_logic.domain.exceptions import GitHubClientError, GitHubResourceNotFoundError, GitHubValidationError, GitHubAuthenticationError
 
 logger = logging.getLogger(__name__)
 

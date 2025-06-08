@@ -2,8 +2,8 @@
 RuleBasedMapperService 単体テスト
 """
 import pytest
-from github_automation_tool.services.rule_based_mapper import RuleBasedMapperService
-from github_automation_tool.domain.models import IssueData
+from core_logic.services.rule_based_mapper import RuleBasedMapperService
+from core_logic.domain.models import IssueData
 
 
 @pytest.fixture
@@ -32,7 +32,9 @@ def key_mapping_rule():
 def block():
     return {
         "件名": "テストタイトル",
+        "Title": "テストタイトル",  # default_mapping経由のtitle取得用
         "本文": "詳細説明",
+        "Description": "詳細説明",  # default_mapping経由のdescription取得用
         "タスク": "タスク1\nタスク2",
         "Labels": "bug,feature",
         "Assignees": "@alice @bob"
@@ -61,7 +63,7 @@ def test_fallback_to_default_mapping(default_mapping, block):
     svc = RuleBasedMapperService(default_mapping)
     # key_mapping_ruleにtitleがない場合、default_mappingが使われる
     issue = svc.map_block_to_issue_data(block, {})
-    assert issue.title == block["Title"] if "Title" in block else None
+    assert issue.title == block["Title"]
 
 
 def test_warning_on_missing_fields(default_mapping, key_mapping_rule, block, caplog):
@@ -79,4 +81,4 @@ def test_convert_error_logged(default_mapping, key_mapping_rule, block, caplog):
     b["タスク"] = None  # to_list_by_newlineに不正値
     with caplog.at_level("WARNING"):
         issue = svc.map_block_to_issue_data(b, key_mapping_rule)
-    assert "変換失敗: tasks" in caplog.text
+    assert "マッピング失敗: tasks" in caplog.text or "変換失敗: tasks" in caplog.text

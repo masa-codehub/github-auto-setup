@@ -1,7 +1,6 @@
 import logging
-# 依存を GitHubRestClient に変更
-from github_automation_tool.adapters.github_rest_client import GitHubRestClient
-from github_automation_tool.domain.exceptions import (
+from adapters.github_rest_client import GitHubRestClient
+from domain.exceptions import (
     GitHubClientError, GitHubValidationError, GitHubAuthenticationError
 )
 
@@ -26,7 +25,7 @@ class CreateRepositoryUseCase:
         if not isinstance(github_client, GitHubRestClient):
             # このエラーは通常、開発中の設定ミスで発生する
             raise TypeError(
-                "github_client must be an instance of GitHubRestClient") # エラーメッセージも修正
+                "github_client must be an instance of GitHubRestClient")  # エラーメッセージも修正
         self.github_client = github_client
 
     def execute(self, repo_name: str) -> str:
@@ -61,11 +60,12 @@ class CreateRepositoryUseCase:
             repo_data = self.github_client.create_repository(repo_name)
             # URL を返すように修正
             if not repo_data or not repo_data.html_url:
-                raise GitHubClientError(f"Repository '{repo_name}' created but URL is missing in response.")
+                raise GitHubClientError(
+                    f"Repository '{repo_name}' created but URL is missing in response.")
             logger.info(
                 f"Repository successfully created by client: {repo_data.html_url}")
             # --- 3. 結果を返す ---
-            return repo_data.html_url # URL を返す
+            return repo_data.html_url  # URL を返す
         except (GitHubValidationError, GitHubAuthenticationError, GitHubClientError) as e:
             # GitHubクライアントから送出されたカスタム例外はログに記録し、そのまま再送出
             # 必要なら exc_info=True
