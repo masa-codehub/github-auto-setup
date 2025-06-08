@@ -73,8 +73,10 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             if (uploadButton) uploadButton.disabled = true;
             try {
                 const data = await uploadIssueFile(formData);
-                // TODO: 後続UI描画処理に置き換えること（現状はinfoログのみ）
-                console.info('[UPLOAD] APIレスポンス:', data);
+                // display_logic.jsの描画関数を呼び出し
+                if (data && Array.isArray(data.issues)) {
+                    displayIssues(data.issues);
+                }
             } catch (e) {
                 showUploadError('ファイル解析API呼び出しに失敗しました。ネットワークまたはサーバーエラーです。');
             } finally {
@@ -121,3 +123,6 @@ function showUploadError(message) {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { uploadIssueFile, showUploadError };
 }
+
+// display_logic.jsをimport
+import { displayIssues } from './display_logic.js';

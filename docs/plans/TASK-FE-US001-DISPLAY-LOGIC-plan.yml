@@ -1,0 +1,38 @@
+# TASK-FE-US001-DISPLAY-LOGIC-plan.yml
+
+issue_id: TASK-FE-US001-DISPLAY-LOGIC
+issue_title: '[FE][Task] US-001: 解析結果のIssue一覧表示ロジック'
+issue_url: 'https://github.com/masa-codehub/github-auto-setup/issues/179'
+
+objectives:
+  - APIから受け取ったIssueData配列をWeb UI上のテーブルに動的に描画する。
+  - タイトルクリックでアコーディオン形式の詳細展開/折り畳みを実現する。
+  - 件数インジケーターを正しく更新する。
+  - 描画・アコーディオン制御ロジックを純粋関数化し、Jestで単体テスト可能にする。
+
+implementation_steps:
+  - step: 1
+    description: 'display_logic.jsにIssueData配列→テーブルHTML生成・アコーディオン制御・件数更新の純粋関数を実装する'
+    command: '実装済みdisplay_logic.jsの内容を確認し、必要に応じて修正・拡張する'
+    verification: 'Jestでdisplay_logic.test.jsのテストが全てパスすること'
+  - step: 2
+    description: 'display_logic.test.jsにテーブル描画・アコーディオン制御の単体テストを実装する'
+    command: '実装済みdisplay_logic.test.jsの内容を確認し、必要に応じて修正・拡張する'
+    verification: 'Jestでdisplay_logic.test.jsのテストが全てパスすること'
+  - step: 3
+    description: 'issue_selection.jsでAPIレスポンス受信後にdisplay_logic.jsのdisplayIssuesを呼び出すよう修正する'
+    command: 'issue_selection.jsの該当箇所を修正し、APIレスポンスでdisplayIssuesを呼ぶ'
+    verification: '手動またはJestで、APIレスポンス受信時にテーブルが正しく描画・更新されることを確認'
+  - step: 4
+    description: 'top_page.htmlのテーブルtbodyにid="issue-table-body"を付与し、ターゲットを明確化する'
+    command: 'top_page.htmlの該当箇所を修正し、tbodyにidを追加'
+    verification: 'Jestまたは手動で、display_logic.jsの描画先が正しく機能することを確認'
+  - step: 5
+    description: 'テスト要件定義（test_requirements.md）に新規要件を追記する'
+    command: 'test_requirements.mdにTR-FE-Display-001, TR-FE-Display-002, TR-FE-Interaction-001を追記'
+    verification: '要件記述が既存と矛盾せず、重複もないことを確認'
+
+notes:
+  - クリーンアーキテクチャ・TDD原則に従い、UI描画ロジックはイベントリスナーから分離し、テスト容易性を確保する。
+  - 既存のAPI連携・バリデーション要件との重複・矛盾はなし。
+  - 主要なUI仕様はdocs/ui_ux_specifications.ymlのStep 2に準拠。

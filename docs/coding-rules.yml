@@ -68,3 +68,130 @@
         throw error;
       }
     }
+
+- rule_id: "CR-022"
+  title: "DOM操作ロジックはイベントリスナーから分離し、テスト容易性を確保する"
+  description: "UIの描画や更新を行うDOM操作のロジックは、イベントリスナーのコールバック関数内に直接記述せず、独立した関数として切り出すべきである。これにより、DOM操作ロジックをUIイベントから切り離し、純粋なデータと期待されるDOMの状態だけで単体テストを行うことが可能になる。"
+  category: "フロントエンド・テスト容易性"
+  example_bad: |
+    // イベントリスナー内にロジックが混在し、テストが困難
+    uploadButton.addEventListener('click', async () => {
+      const data = await fetchData();
+      const tableBody = document.getElementById('issue-table-body');
+      tableBody.innerHTML = ''; // Clear existing rows
+      data.issues.forEach(issue => {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${issue.title}</td>`;
+        tableBody.appendChild(row);
+      });
+    });
+  example_good: |
+    // 描画ロジックを分離
+    function renderIssues(issues) {
+      const tableBody = document.getElementById('issue-table-body');
+      if (!tableBody) return;
+      tableBody.innerHTML = ''; // Clear existing rows
+      issues.forEach(issue => {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${issue.title}</td>`;
+        tableBody.appendChild(row);
+      });
+    }
+
+    // イベントリスナーはロジックの呼び出しに専念
+    uploadButton.addEventListener('click', async () => {
+      const data = await fetchData();
+      renderIssues(data.issues);
+    });
+
+- rule_id: "CR-023"
+  title: "最短手番での実装完了を目指す作業ルール"
+  description: |
+    実装タスクにおいては、無駄な確認や質問を極力省き、必要な情報は自動で収集・推論し、即時に実装・検証・修正を行うこと。ユーザーの指示や要件が明確な場合は、逐次的な確認を挟まず、最短の手番で成果物を完成させることを優先する。
+    - 依存情報や不足情報は自動で探索・補完する。
+    - 実装→テスト→修正→完了報告までを一気通貫で進める。
+    - 不明点があっても、まずは仮説ベースで実装し、検証結果に基づき即時修正する。
+    - 人的なレビューや承認を待たず、機械的に完了条件を満たすことを重視する。
+  category: "開発プロセス・効率化"
+  example_bad: |
+    // 毎回ユーザーに細かく確認し、手が止まる
+    if (!userConfirmed) {
+      askUser("この仕様で良いですか？");
+      return;
+    }
+    // ...
+  example_good: |
+    // 必要な情報は自動で収集し、即時に実装・テスト・修正まで完了させる
+    implementFeature();
+    runTests();
+    if (!testsPass) fixImmediately();
+    reportCompletion();
+
+- rule_id: "CR-024"
+  title: "Jest+Babel+ESM構成でのテスト実行・ディレクトリ移動・頻発エラー対策（frontend配下運用版）"
+  description: |
+    JestでESM(import/export)構文のテストを行う場合、Babelとbabel-jestを導入し、babel.config.js・jest.config.mjs・package.jsonはfrontendディレクトリ直下に配置すること。テスト実行・依存管理・ビルド・CI/CDもfrontend配下で閉じる。これにより、頻発する「Cannot use import statement outside a module」「You appear to be using a native ECMAScript module configuration file」等のエラーを防止できる。
+    - テストファイルはimport/export構文で統一し、require形式は使わない。
+    - 依存・テスト・ビルド・CI/CDはfrontendディレクトリでのみ実行する。
+    - babel.config.jsはCommonJS形式（module.exports）で書く。
+    - 頻発エラーの原因はJestのESMサポートの制約・Babel設定のパス・カレントディレクトリ不一致。
+    - これらの構成・手順を守ることで、ESM+Jest+Babel環境で安定してテストが動作する。
+  category: "フロントエンド・テスト環境構築・安定運用"
+  example_bad: |
+    # ルートや他ディレクトリでnpm testやnpm installを実行
+    cd ..
+    npm test
+    npm install
+    # → ESM構文エラーやBabel config not foundエラーが頻発
+  example_good: |
+    # frontend配下でのみ依存・テスト・ビルドを管理
+    cd frontend
+    npm install
+    npm test
+    npm run build
+    # → frontend/node_modulesのみで全て完結
+
+- rule_id: "CR-025"
+  title: "フロントエンド依存・テスト・ビルドはfrontendディレクトリ配下で一元管理する"
+  description: |
+    Django等のバックエンドとフロントエンドを明確に分離して開発する場合、フロントエンドの依存（node_modules）・package.json・テスト・ビルド・CI/CDはfrontendディレクトリ配下に統合・完結させること。
+    - frontend/node_modulesのみを使用し、ルートや他ディレクトリにnode_modulesを作らない。
+    - frontend/package.jsonで依存・スクリプト・設定を一元管理する。
+    - テスト・ビルド・CI/CDもfrontend配下で閉じる。
+    - バックエンド（webapp等）とは依存・ビルド・テストを完全分離し、モノレポでも独立運用を推奨。
+    - これにより、依存の競合や設定トラブルを防ぎ、保守性・拡張性を高める。
+  category: "フロントエンド・モノレポ運用指針"
+  example_bad: |
+    # ルートや複数箇所にnode_modulesが存在
+    npm install   # /app/node_modulesができる
+    cd frontend && npm install   # frontend/node_modulesもできる
+    # 依存や設定が分散し、競合やトラブルの原因に
+  example_good: |
+    # frontend配下でのみ依存・テスト・ビルドを管理
+    cd frontend
+    npm install
+    npm test
+    npm run build
+    # → frontend/node_modulesのみで全て完結
+
+- rule_id: "CR-026"
+  title: "ESM+Jest+Babel構成・テスト運用・ファイル拡張子統一・DoD要件"
+  description: |
+    - フロントエンド依存・テスト・ビルドはfrontend配下で一元管理すること。
+    - Jest+Babel+ESM構成でテストを安定運用すること。
+    - Babel設定はbabel.config.cjs、Jest設定はjest.config.mjsで管理し、testファイルは.js拡張子で統一すること。
+    - テストはnpm test（frontendディレクトリ）で実行し、全テストがパスすることをDoDとする。
+  category: "フロントエンド・モノレポ運用指針"
+  example_bad: |
+    # ルートや他ディレクトリでnpm testやnpm installを実行
+    cd ..
+    npm test
+    npm install
+    # → ESM構文エラーやBabel config not foundエラーが頻発
+  example_good: |
+    # frontend配下でのみ依存・テスト・ビルドを管理
+    cd frontend
+    npm install
+    npm test
+    npm run build
+    # → frontend/node_modulesのみで全て完結

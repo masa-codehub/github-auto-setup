@@ -1,0 +1,64 @@
+# TASK-FE-US001-DISPLAY-LOGIC-fix-plan.yml
+
+issue: "https://github.com/masa-codehub/github-auto-setup/issues/179"
+title: "[FE][Task] US-001: 解析結果のIssue一覧表示ロジック コードレビュー指摘対応計画"
+description: |
+  コードレビュー結果に基づき、Issue一覧表示ロジックの指摘事項を修正するための実行計画。
+  すべての修正タスクはDefinition of Done（DoD）を満たすことをもって完了とする。
+
+implementation_steps:
+  - step: 1
+    title: "escapeHtml関数の責務分離（改行置換ロジックの移動）"
+    command: |
+      1. frontend/assets/js/display_logic.js の escapeHtml から改行置換（.replace(/\n/g, '<br>')）を削除。
+      2. renderIssueTableRows 内で description にのみ改行置換を適用するよう修正。
+    verification: |
+      - escapeHtml関数がHTMLエスケープのみを行い、改行置換を含まないこと。
+      - renderIssueTableRowsでdescriptionのみ改行置換が行われていること。
+
+  - step: 2
+    title: "冗長なアコーディオン用クリックイベントリスナーの削除"
+    command: |
+      1. frontend/assets/js/display_logic.js 内のtbody.querySelectorAll('.issue-title-clickable').forEach(...)で始まるクリックイベントリスナーのコードブロック全体を削除。
+    verification: |
+      - display_logic.js内にアコーディオン用の独自クリックイベントリスナーが存在しないこと。
+      - Bootstrapのdata-bs-toggle属性によるアコーディオンが正常動作すること。
+
+  - step: 3
+    title: "displayIssues関数のテスト追加（Jest/DOM操作検証）"
+    command: |
+      1. frontend/assets/js/tests/display_logic.test.js に displayIssues のテストケースを追加。
+      2. jsdom環境でテーブル描画・アコーディオンのクラス切り替えを検証。
+    verification: |
+      - displayIssuesのテストが追加されていること。
+      - DOM描画内容とアコーディオンのクラス切り替えがテストで検証されていること。
+      - npm test で全テストがパスすること。
+
+  - step: 4
+    title: "モジュール解決エラーの修正（ESM対応）"
+    command: |
+      1. frontend/base.html の issue_selection.js を読み込む <script>タグに type="module" を追加。
+      2. frontend/assets/js/display_logic.js で export を明示。
+      3. frontend/assets/js/issue_selection.js で import を使用。
+    verification: |
+      - base.htmlの<script>タグにtype="module"が追加されていること。
+      - display_logic.jsでexportが明示されていること。
+      - issue_selection.jsでimportが正しく使われていること。
+      - ブラウザでSyntaxErrorが発生しないこと。
+
+  - step: 5
+    title: "最終検証（Jestテストの全通過）"
+    command: |
+      1. cd frontend && npm test を実行し、Jestの全テストがパスすることを確認。
+    verification: |
+      - すべてのテストスイートがエラーなくパスすること。
+
+done_criteria:
+  - 指摘事項の全対応（Critical, Major, Minor）が完了していること
+  - Jestテストが全てパスしていること
+  - ブラウザでモジュールエラーが発生しないこと
+  - 修正内容が報告コメントとしてまとめられていること
+
+notes:
+  - 修正過程で発生したエラーや自己修正の記録は、完了フェーズでコーディングルールに反映する
+  - 追加の知見や再発防止策は coding-rules.yml に追記する
