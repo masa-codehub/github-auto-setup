@@ -49,6 +49,20 @@
 - id: TR-FE-Interaction-001
   description: Issueタイトルのクリックにより、アコーディオン形式で詳細情報が展開・縮小されること。
 
+# テスト要件: Issue分割ロジック (TASK-CORELOGIC-RULE-BASED-SPLITTER)
+- id: TR-Splitter-MD-001
+  description: Markdownファイルが水平線（---）ルールで正しくIssueブロックに分割されること。
+- id: TR-Splitter-MD-002
+  description: Markdownファイルが先頭キー（Title:等）ルールで正しくIssueブロックに分割されること。
+- id: TR-Splitter-MD-003
+  description: Markdownファイルがヘッダーレベル（##等）ルールで正しくIssueブロックに分割されること。
+- id: TR-Splitter-YAML-001
+  description: YAMLファイルがリスト形式ルールで正しくIssueブロック（辞書リスト）に分割されること。
+- id: TR-Splitter-JSON-001
+  description: JSONファイルがリスト形式ルールで正しくIssueブロック（辞書リスト）に分割されること。
+- id: TR-Splitter-Edge-001
+  description: 空のファイルや区切り文字がないファイルが正しく処理され、空リストが返されること。
+
 # 備考
 - API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
 - フロントエンドのテスト要件は、API要件とは別に、ユーザー体験向上のためのクライアントサイドでの即時フィードバックと、バックエンドとの通信を検証するものです。

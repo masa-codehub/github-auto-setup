@@ -406,7 +406,7 @@ technical_tasks:
     notes: |
       API通信とUI更新の責務を分離して実装。
       将来的な改善として、バックエンドのエラーレスポンス形式の標準化（TASK-BE-API-ERROR-STANDARDIZATION）を推奨。
-
+      
   - task_id: "TASK-CORELOGIC-AI-RULE-INFERENCE"
     title: "[Core][Task] US-001: AIによる区切り・キーマッピングルール推論ロジック"
     description: |
@@ -423,3 +423,14 @@ technical_tasks:
     notes: |
       実装完了。AIが区切りとキーマッピングを推論する基盤が完成。
       申し送り事項として、信頼度評価ロジックの高度化（必須キーの存在チェックなど）が後続タスク（TASK-CORELOGIC-AI-REFINEMENT）で検討される。
+
+  - task_id: "TASK-CORELOGIC-RULE-BASED-SPLITTER"
+    title: "CoreLogic: Rule-based Splitter for Issue Blocks"
+    description: "Implement a rule-based splitter to divide input file content into issue blocks based on inferred or fallback rules."
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "Done"
+    priority: "High"
+    dependencies:
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
+    notes: |
+      責務分離の原則に基づき`RuleBasedSplitterSvc`を実装。レビュー指摘(ログ欠落)もテストと共に修正済。後続タスクでAIParser本体への統合が必要。
