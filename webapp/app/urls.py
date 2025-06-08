@@ -1,9 +1,10 @@
 from django.urls import path
-from .views import health_check_api_view, FileUploadAPIView, CreateGitHubResourcesAPIView
+from .views import health_check_api_view, FileUploadAPIView, CreateGitHubResourcesAPIView, top_page_view
 
-app_name = "api_v1"
+app_name = "app"
 
 urlpatterns = [
+    path('', top_page_view, name='top_page'),
     path('healthcheck/', health_check_api_view, name='health_check_api'),
     path('upload-issue-file/', FileUploadAPIView.as_view(),
          name='upload_issue_file_api'),
