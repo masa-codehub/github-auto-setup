@@ -49,6 +49,16 @@
 - id: TR-FE-Interaction-001
   description: Issueタイトルのクリックにより、アコーディオン形式で詳細情報が展開・縮小されること。
 
+# テスト要件: ルールベースIssueマッピング (TASK-CORELOGIC-RULE-BASED-MAPPER)
+- id: TR-Map-001
+  description: 指定されたキーマッピングルールに基づき、IssueブロックからIssueDataの各フィールド（title, description等）へのマッピングが正しく行われること。
+- id: TR-Map-002
+  description: 値変換ルール（to_list_by_comma, to_list_by_newline, extract_mentions）が正しく適用されること。
+- id: TR-Map-Error-001
+  description: titleフィールドがマッピングできない場合にValueErrorを送出すること。
+- id: TR-Map-Error-002
+  description: マッピングに失敗したフィールドがある場合に警告ログが出力されること。
+
 # 備考
 - API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
 - フロントエンドのテスト要件は、API要件とは別に、ユーザー体験向上のためのクライアントサイドでの即時フィードバックと、バックエンドとの通信を検証するものです。

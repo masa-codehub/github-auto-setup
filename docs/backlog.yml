@@ -423,3 +423,34 @@ technical_tasks:
     notes: |
       実装完了。AIが区切りとキーマッピングを推論する基盤が完成。
       申し送り事項として、信頼度評価ロジックの高度化（必須キーの存在チェックなど）が後続タスク（TASK-CORELOGIC-AI-REFINEMENT）で検討される。
+
+  - task_id: "TASK-CORELOGIC-RULE-BASED-SPLITTER"
+    title: "[Core][Task] US-001: 推論ルールに基づくIssueブロックの分割処理"
+    description: |
+      AIが推論した区切りルールに基づき、入力ファイルを複数のIssueブロックに分割する処理を実装する。
+      - 分割ルールの適用（先頭キー/開始パターンに基づく）。
+      - 分割後のブロックの前処理（空白行の削除、メタ情報の抽出など）。
+      - 信頼度判定に基づくエラーハンドリング。
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "Done"
+    priority: "Very High"
+    size_estimate: "[SP: 5]"
+    dependencies:
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
+    notes: |
+      実装完了。入力ファイルの動的な分割処理が可能に。
+      今後の改善点として、分割ルールの設定管理や動的更新機能の追加が検討される。
+
+  - task_id: "TASK-CORELOGIC-RULE-BASED-MAPPER"
+    title: "[Core][Task] US-001: 推論ルールに基づくIssueDataへのマッピング処理"
+    description: "AIが推論したキーマッピングルールと分割されたIssueブロックに基づき、各ブロックをIssueDataオブジェクトに変換（マッピング）する処理を実装する。"
+    related_epic_ids: ["EPIC-DATAPARSING"]
+    status: "Done"
+    priority: "Very High"
+    size_estimate: "[SP: 5]"
+    dependencies:
+      - "TASK-CORELOGIC-AI-RULE-INFERENCE"
+      - "TASK-CORELOGIC-RULE-BASED-SPLITTER"
+    notes: |
+      実装完了。責務分離のためRuleBasedMapperServiceとして独立して実装された。
+      将来的な拡張として、値変換ロジックをディスパッチテーブル方式にリファクタリングすることを検討。
