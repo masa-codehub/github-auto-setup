@@ -1,5 +1,5 @@
 import pytest
-from core_logic.github_automation_tool.adapters.rule_based_splitter import RuleBasedSplitterSvc
+from adapters.rule_based_splitter import RuleBasedSplitterSvc
 
 
 @pytest.mark.parametrize("content, filetype, rule, expected", [

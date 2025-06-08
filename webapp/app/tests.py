@@ -4,16 +4,16 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from unittest.mock import patch, MagicMock
 from .models import ParsedDataCache
-from core_logic.github_automation_tool.domain.models import ParsedRequirementData, IssueData, CreateGitHubResourcesResult
+from core_logic.domain.models import ParsedRequirementData, IssueData, CreateGitHubResourcesResult
 from io import BytesIO
 import uuid
 import json
 from django.utils import timezone
 import datetime
-from core_logic.github_automation_tool.adapters.github_rest_client import GitHubRestClient
+from core_logic.adapters.github_rest_client import GitHubRestClient
 from rest_framework.test import APIClient, force_authenticate
 from django.contrib.auth import get_user_model
-from core_logic.github_automation_tool.domain.exceptions import AiParserError, ParsingError
+from core_logic.domain.exceptions import AiParserError, ParsingError
 
 
 class AuthenticatedAPITestMixin:
@@ -46,7 +46,7 @@ class HealthCheckAPITest(TestCase):
 
 class FileUploadAPIViewTest(AuthenticatedAPITestMixin, TestCase):
     @patch('app.models.ParsedDataCache.objects.create')
-    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse')
+    @patch('core_logic.adapters.ai_parser.AIParser.parse')
     def test_upload_valid_markdown_file(self, mock_ai_parse, mock_cache_create):
         # モックのIssueDataを正確に修正
         mock_ai_parse.return_value = ParsedRequirementData(issues=[
@@ -74,7 +74,7 @@ class FileUploadAPIViewTest(AuthenticatedAPITestMixin, TestCase):
         self.assertIn('detail', response.json())
 
     @patch('app.models.ParsedDataCache.objects.create')
-    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse')
+    @patch('core_logic.adapters.ai_parser.AIParser.parse')
     def test_upload_unsupported_extension(self, mock_ai_parse, mock_cache_create):
         file_content = b"dummy content"
         file = BytesIO(file_content)
@@ -86,7 +86,7 @@ class FileUploadAPIViewTest(AuthenticatedAPITestMixin, TestCase):
         self.assertIn('Unsupported file extension', response.json()['detail'])
 
     @patch('app.models.ParsedDataCache.objects.create')
-    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse')
+    @patch('core_logic.adapters.ai_parser.AIParser.parse')
     def test_upload_file_size_exceeded(self, mock_ai_parse, mock_cache_create):
         # 10MB + 1byte のダミーファイル
         file_content = b"0" * (10 * 1024 * 1024 + 1)
@@ -100,7 +100,7 @@ class FileUploadAPIViewTest(AuthenticatedAPITestMixin, TestCase):
         self.assertIn('file size', response.json()['detail'].lower())
 
     @patch('app.models.ParsedDataCache.objects.create')
-    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse', side_effect=AiParserError('AI解析エラー'))
+    @patch('core_logic.adapters.ai_parser.AIParser.parse', side_effect=AiParserError('AI解析エラー'))
     def test_upload_ai_parser_error(self, mock_ai_parse, mock_cache_create):
         file_content = b"# Issue\n- title: Test Issue\n- body: test body"
         file = BytesIO(file_content)
@@ -112,7 +112,7 @@ class FileUploadAPIViewTest(AuthenticatedAPITestMixin, TestCase):
         self.assertIn('AI解析エラー', response.json()['detail'])
 
     @patch('app.models.ParsedDataCache.objects.create')
-    @patch('core_logic.github_automation_tool.adapters.ai_parser.AIParser.parse', side_effect=Exception('予期せぬ例外'))
+    @patch('core_logic.adapters.ai_parser.AIParser.parse', side_effect=Exception('予期せぬ例外'))
     def test_upload_unexpected_exception(self, mock_ai_parse, mock_cache_create):
         file_content = b"# Issue\n- title: Test Issue\n- body: test body"
         file = BytesIO(file_content)
@@ -126,18 +126,15 @@ class FileUploadAPIViewTest(AuthenticatedAPITestMixin, TestCase):
 
 class CreateGitHubResourcesAPIViewTest(AuthenticatedAPITestMixin, TestCase):
     @patch('app.models.ParsedDataCache.objects.get')
-    @patch('core_logic.github_automation_tool.use_cases.create_github_resources.CreateGitHubResourcesUseCase.execute')
-    @patch('core_logic.github_automation_tool.infrastructure.config.load_settings')
-    @patch('githubkit.GitHub', spec=True)
-    @patch('core_logic.github_automation_tool.use_cases.create_repository.isinstance', return_value=True)
-    @patch('app.views.GitHubRestClient', return_value=MagicMock(spec=GitHubRestClient))
-    @patch('core_logic.github_automation_tool.adapters.github_graphql_client.GitHubGraphQLClient', spec=True)
-    @patch('app.views.AssigneeValidator', spec=True)
-    @patch('core_logic.github_automation_tool.use_cases.create_repository.CreateRepositoryUseCase', spec=True)
-    @patch('core_logic.github_automation_tool.use_cases.create_issues.CreateIssuesUseCase', spec=True)
-    @patch('core_logic.github_automation_tool.use_cases.create_github_resources.isinstance', return_value=True)
-    @patch('core_logic.github_automation_tool.use_cases.create_issues.isinstance', return_value=True)
-    def test_create_github_resources_success(self, mock_isinstance_issues, mock_isinstance_repo, mock_isinstance, mock_create_issues_uc, mock_create_repo_uc, mock_assignee_validator, mock_graphql_client, mock_rest_client, mock_github, mock_load_settings, mock_execute, mock_cache_get):
+    @patch('core_logic.use_cases.create_github_resources.CreateGitHubResourcesUseCase.execute')
+    @patch('core_logic.infrastructure.config.load_settings')
+    @patch('core_logic.use_cases.create_repository.isinstance', return_value=True)
+    @patch('core_logic.adapters.github_graphql_client.GitHubGraphQLClient', spec=True)
+    @patch('core_logic.use_cases.create_repository.CreateRepositoryUseCase', spec=True)
+    @patch('core_logic.use_cases.create_issues.CreateIssuesUseCase', spec=True)
+    @patch('core_logic.use_cases.create_github_resources.isinstance', return_value=True)
+    @patch('core_logic.use_cases.create_issues.isinstance', return_value=True)
+    def test_create_github_resources_success(self, mock_isinstance_issues, mock_isinstance_github_resources, mock_create_issues_uc, mock_create_repo_uc, mock_graphql_client, mock_isinstance_repo, mock_load_settings, mock_execute, mock_cache_get):
         # キャッシュデータのモック
         parsed_data = ParsedRequirementData(issues=[
             IssueData(title="Test Issue", description="test body",

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest import mock
 import yaml
 import logging
-from github_automation_tool.infrastructure.file_reader import (
+from core_logic.infrastructure.file_reader import (
     read_markdown_file, read_yaml_file, read_file, read_yaml, file_exists, FileReaderError
 )
 
@@ -37,7 +37,7 @@ def test_read_file_success(mock_file_path):
 def test_read_file_not_exists():
     """存在しないファイルを読み取ろうとして失敗するケース"""
     non_existent_path = Path("/non/existent/file.txt")
-    
+
     with pytest.raises(FileReaderError, match="File not found"):
         read_markdown_file(non_existent_path)
 
@@ -52,7 +52,7 @@ def test_read_yaml_file_success(mock_yaml_file_path):
 def test_read_yaml_file_not_exists():
     """存在しないYAMLファイルを読み取ろうとして失敗するケース"""
     non_existent_path = Path("/non/existent/file.yaml")
-    
+
     with pytest.raises(FileReaderError, match="YAML file not found"):
         read_yaml_file(non_existent_path)
 
@@ -80,7 +80,7 @@ def test_read_file_io_error(mock_file_path, caplog):
     with mock.patch.object(Path, 'open', side_effect=IOError("Permission denied")):
         with pytest.raises(FileReaderError, match="Failed to read file"), caplog.at_level(logging.ERROR):
             read_markdown_file(mock_file_path)
-        
+
         # エラーログが適切に記録されていることを確認
         assert "Failed to read file" in caplog.text
         assert "Permission denied" in caplog.text
@@ -92,7 +92,7 @@ def test_read_file_os_error(mock_file_path, caplog):
     with mock.patch.object(Path, 'open', side_effect=OSError("Too many open files")):
         with pytest.raises(FileReaderError, match="Failed to read file"), caplog.at_level(logging.ERROR):
             read_markdown_file(mock_file_path)
-        
+
         # エラーログが適切に記録されていることを確認
         assert "Failed to read file" in caplog.text
         assert "Too many open files" in caplog.text
@@ -104,7 +104,7 @@ def test_read_yaml_file_io_error(mock_yaml_file_path, caplog):
     with mock.patch.object(Path, 'open', side_effect=IOError("Permission denied")):
         with pytest.raises(FileReaderError, match="Failed to read YAML file"), caplog.at_level(logging.ERROR):
             read_yaml_file(mock_yaml_file_path)
-        
+
         # エラーログが適切に記録されていることを確認
         assert "Failed to read YAML file" in caplog.text
         assert "Permission denied" in caplog.text
@@ -116,7 +116,7 @@ def test_read_yaml_file_os_error(mock_yaml_file_path, caplog):
     with mock.patch.object(Path, 'open', side_effect=OSError("Too many open files")):
         with pytest.raises(FileReaderError, match="Failed to read YAML file"), caplog.at_level(logging.ERROR):
             read_yaml_file(mock_yaml_file_path)
-        
+
         # エラーログが適切に記録されていることを確認
         assert "Failed to read YAML file" in caplog.text
         assert "Too many open files" in caplog.text
@@ -128,7 +128,7 @@ def test_read_yaml_file_yaml_error(mock_yaml_file_path, caplog):
     with mock.patch('yaml.safe_load', side_effect=yaml.YAMLError("Mapping values are not allowed here")):
         with pytest.raises(FileReaderError, match="Failed to parse YAML file"), caplog.at_level(logging.ERROR):
             read_yaml_file(mock_yaml_file_path)
-        
+
         # エラーログが適切に記録されていることを確認
         assert "Failed to parse YAML file" in caplog.text
         assert "Mapping values are not allowed here" in caplog.text
@@ -140,7 +140,7 @@ def test_read_yaml_file_unexpected_error(mock_yaml_file_path, caplog):
     with mock.patch('yaml.safe_load', side_effect=ValueError("Unexpected error")):
         with pytest.raises(FileReaderError, match="Unexpected error reading YAML file"), caplog.at_level(logging.ERROR):
             read_yaml_file(mock_yaml_file_path)
-        
+
         # エラーログが適切に記録されていることを確認
         assert "Unexpected error reading YAML file" in caplog.text
         assert "ValueError" in caplog.text
@@ -152,7 +152,7 @@ def test_read_file_alias(mock_file_path):
     """read_file関数がread_markdown_fileと同じ動作をするかテスト"""
     result = read_file(mock_file_path)
     assert result == "test content"
-    
+
     # read_markdown_fileと同じ例外を発生させるか確認
     with mock.patch.object(Path, 'open', side_effect=IOError("Permission denied")):
         with pytest.raises(FileReaderError, match="Failed to read file"):
@@ -164,7 +164,7 @@ def test_read_yaml_alias(mock_yaml_file_path):
     result = read_yaml(mock_yaml_file_path)
     assert result["key"] == "value"
     assert result["nested"]["subkey"] == "subvalue"
-    
+
     # read_yaml_fileと同じ例外を発生させるか確認
     with mock.patch.object(Path, 'open', side_effect=IOError("Permission denied")):
         with pytest.raises(FileReaderError, match="Failed to read YAML file"):

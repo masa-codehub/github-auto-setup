@@ -5,9 +5,9 @@ from typing import Type
 from pydantic import ValidationError
 
 # 設定、データモデル、カスタム例外をインポート
-from github_automation_tool.infrastructure.config import Settings
-from github_automation_tool.domain.models import ParsedRequirementData, IssueData, AISuggestedRules
-from github_automation_tool.domain.exceptions import AiParserError
+from core_logic.infrastructure.config import Settings
+from core_logic.domain.models import ParsedRequirementData, IssueData, AISuggestedRules
+from core_logic.domain.exceptions import AiParserError
 
 # --- LangChain のコアコンポーネント ---
 from langchain_core.prompts import PromptTemplate

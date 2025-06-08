@@ -6,26 +6,31 @@ from typer.testing import CliRunner
 from pathlib import Path
 import pytest
 from pydantic import ValidationError, SecretStr
+from githubkit import GitHub
 
 # main.py 内の app をインポート
-from github_automation_tool.main import run, app
-from github_automation_tool import __version__
-# モック対象のクラスと、発生しうる例外をインポート
-from github_automation_tool.infrastructure.config import Settings
-# UseCaseや他のコンポーネントもモックするのでインポート
-from github_automation_tool.infrastructure.file_reader import read_markdown_file # 例外用
-from github_automation_tool.adapters.ai_parser import AIParser
-from github_automation_tool.adapters.github_rest_client import GitHubRestClient # GitHubAppClientからGitHubRestClientに修正
-from github_automation_tool.use_cases.create_github_resources import CreateGitHubResourcesUseCase
-from github_automation_tool.domain.models import ParsedRequirementData, IssueData, CreateGitHubResourcesResult # モデルもインポート
-from github_automation_tool.domain.exceptions import (
+from core_logic.main import run, app
+from core_logic.infrastructure.config import Settings
+from core_logic.infrastructure.file_reader import read_markdown_file
+from core_logic.adapters.ai_parser import AIParser
+from core_logic.adapters.github_rest_client import GitHubRestClient
+from core_logic.use_cases.create_github_resources import CreateGitHubResourcesUseCase
+from core_logic.domain.models import ParsedRequirementData, IssueData, CreateGitHubResourcesResult
+from core_logic.domain.exceptions import (
     AiParserError, GitHubClientError, GitHubValidationError, GitHubAuthenticationError
 )
+import importlib.metadata
+try:
+    __version__ = importlib.metadata.version("core_logic")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "dev"
 
 # stderrを分離してキャプチャするように CliRunner を初期化
 runner = CliRunner()
 
 # --- Fixtures ---
+
+
 @pytest.fixture
 def dummy_md_file(tmp_path: Path) -> Path:
     d = tmp_path / "sub"
@@ -44,6 +49,7 @@ def dummy_md_file(tmp_path: Path) -> Path:
     """, encoding='utf-8')
     return p
 
+
 @pytest.fixture
 def dummy_permission_denied_file(tmp_path: Path) -> Path:
     p = tmp_path / "no_access.md"
@@ -53,6 +59,7 @@ def dummy_permission_denied_file(tmp_path: Path) -> Path:
         p.chmod(0o000)
     return p
 
+
 @pytest.fixture
 def dummy_config_file(tmp_path: Path) -> Path:
     p = tmp_path / "config.yaml"
@@ -61,6 +68,8 @@ def dummy_config_file(tmp_path: Path) -> Path:
 
 # --- Mock Fixtures ---
 # モック対象が増えたので、共通のモック設定をフィクスチャ化
+
+
 @pytest.fixture
 def mock_dependencies(dummy_md_file):
     """主要な依存関係のモックをまとめて提供するフィクスチャ"""
@@ -70,8 +79,8 @@ def mock_dependencies(dummy_md_file):
     mock_settings.github_pat = SecretStr("valid-token")
     mock_settings.openai_api_key = SecretStr("valid-key")
     mock_settings.gemini_api_key = None
-    mock_settings.ai_model = "openai" # デフォルト
-    
+    mock_settings.ai_model = "openai"  # デフォルト
+
     # 修正: 重要なプロパティを追加 - 特にAIの設定
     # AISettingsのモック
     ai_settings_mock = MagicMock()
@@ -79,19 +88,20 @@ def mock_dependencies(dummy_md_file):
     ai_settings_mock.openai_model_name = "gpt-4o"
     ai_settings_mock.gemini_model_name = "gemini-1.5-flash"
     mock_settings.ai = ai_settings_mock
-    
+
     # プロパティ関数の戻り値を設定
     mock_settings.prompt_template = "Test prompt template {markdown_text} {format_instructions}"
-    mock_settings.final_openai_model_name = "gpt-4o" 
+    mock_settings.final_openai_model_name = "gpt-4o"
     mock_settings.final_gemini_model_name = "gemini-1.5-flash"
     mock_settings.final_log_level = "INFO"  # 大文字である必要がある
-    
+
     # ロギング設定
     logging_settings_mock = MagicMock()
     logging_settings_mock.log_level = "INFO"
     mock_settings.logging = logging_settings_mock
 
-    mock_gh_client_instance = MagicMock(spec=GitHubRestClient) # GitHubAppClientからGitHubRestClientに修正
+    # GitHubAppClientからGitHubRestClientに修正
+    mock_gh_client_instance = MagicMock(spec=GitHubRestClient)
     # オーナー推測用のモック設定
     mock_user_data = MagicMock(login="test-auth-user")
     mock_auth_user_response = MagicMock()
@@ -99,35 +109,49 @@ def mock_dependencies(dummy_md_file):
     mock_gh_client_instance.gh = MagicMock()
     mock_gh_client_instance.gh.rest = MagicMock()
     mock_gh_client_instance.gh.rest.users = MagicMock()
-    mock_gh_client_instance.gh.rest.users.get_authenticated = MagicMock(return_value=mock_auth_user_response)
+    mock_gh_client_instance.gh.rest.users.get_authenticated = MagicMock(
+        return_value=mock_auth_user_response)
 
     mock_ai_parser_instance = MagicMock(spec=AIParser)
     # モックのAIパーサーが返すデータを準備 - Pydanticモデルに合わせて正しくインスタンス化
     mock_parsed_data = ParsedRequirementData(issues=[
         IssueData(title="Test Issue 1", description="Body 1", labels=["bug"]),
-        IssueData(title="Test Issue 2", description="Body 2", milestone="Sprint 1")
+        IssueData(title="Test Issue 2",
+                  description="Body 2", milestone="Sprint 1")
     ])
     mock_ai_parser_instance.parse.return_value = mock_parsed_data
 
     mock_main_uc_instance = MagicMock(spec=CreateGitHubResourcesUseCase)
     # モックのUseCaseが返す結果を準備
-    mock_uc_result = CreateGitHubResourcesResult(repository_url="https://mock.repo/url")
+    mock_uc_result = CreateGitHubResourcesResult(
+        repository_url="https://mock.repo/url")
     mock_main_uc_instance.execute.return_value = mock_uc_result
 
     mock_reporter_instance = MagicMock()
 
     # パッチの開始と終了を管理
     patches = {
-        'load_settings': patch('github_automation_tool.main.load_settings', return_value=mock_settings),
-        'read_markdown_file': patch('github_automation_tool.main.read_markdown_file', return_value="## Mock Content"),
-        'AIParser': patch('github_automation_tool.main.AIParser', return_value=mock_ai_parser_instance),
-        'GitHubRestClient': patch('github_automation_tool.main.GitHubRestClient', return_value=mock_gh_client_instance), # GitHubAppClientからGitHubRestClientに修正
-        'CreateGitHubResourcesUseCase': patch('github_automation_tool.main.CreateGitHubResourcesUseCase', return_value=mock_main_uc_instance),
-        'CliReporter': patch('github_automation_tool.main.CliReporter', return_value=mock_reporter_instance),
+        'load_settings': patch('core_logic.main.load_settings', return_value=mock_settings),
+        'read_markdown_file': patch('core_logic.main.read_markdown_file', return_value="## Mock Content"),
+        'AIParser': patch('core_logic.main.AIParser', return_value=mock_ai_parser_instance),
+        'GitHubRestClient': patch('core_logic.main.GitHubRestClient', return_value=mock_gh_client_instance),
+        'CreateGitHubResourcesUseCase': patch('core_logic.main.CreateGitHubResourcesUseCase', return_value=mock_main_uc_instance),
+        'CliReporter': patch('core_logic.main.CliReporter', return_value=mock_reporter_instance),
         # CreateRepositoryUseCase と CreateIssuesUseCase も main.py で import されているため、モックしておく
-        'CreateRepositoryUseCase': patch('github_automation_tool.main.CreateRepositoryUseCase'),
-        'CreateIssuesUseCase': patch('github_automation_tool.main.CreateIssuesUseCase'),
+        'CreateRepositoryUseCase': patch('core_logic.main.CreateRepositoryUseCase'),
+        'CreateIssuesUseCase': patch('core_logic.main.CreateIssuesUseCase'),
     }
+
+    # --- ここから追加: infer_rulesのデフォルト実装（高信頼度） ---
+    from core_logic.domain.models import AISuggestedRules
+    mock_ai_parser_instance.infer_rules.return_value = AISuggestedRules(
+        separator_rule={"separator_pattern": "---"},
+        key_mapping_rule={"Title": "title", "Description": "description"},
+        confidence=1.0,
+        warnings=[],
+        errors=[]
+    )
+    # --- ここまで追加 ---
 
     # モックオブジェクトとパッチ管理オブジェクトを辞書で返す
     mocks = {
@@ -136,14 +160,16 @@ def mock_dependencies(dummy_md_file):
         'ai_parser': mock_ai_parser_instance,
         'main_uc': mock_main_uc_instance,
         'reporter': mock_reporter_instance,
-        'parsed_data': mock_parsed_data, # executeの引数検証用
+        'parsed_data': mock_parsed_data,  # executeの引数検証用
         'patches': patches
     }
     return mocks
 
-@pytest.fixture(autouse=False) # 明示的に使うテストのみ適用
+
+@pytest.fixture(autouse=False)  # 明示的に使うテストのみ適用
 def apply_patches(mock_dependencies):
-    started_patches = {name: p.start() for name, p in mock_dependencies['patches'].items()}
+    started_patches = {name: p.start()
+                       for name, p in mock_dependencies['patches'].items()}
     yield
     for p in started_patches.values():
         p.stop()
@@ -157,12 +183,14 @@ def test_cli_help():
     assert result.exit_code == 0
     assert "Usage:" in result.stdout
 
+
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_version():
     """--version オプションで正しいバージョンが表示され、正常終了するか"""
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert f"GitHub Automation Tool Version: {__version__}" in result.stdout
+
 
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_missing_required_options(dummy_md_file: Path):
@@ -176,6 +204,7 @@ def test_cli_missing_required_options(dummy_md_file: Path):
     assert result_no_file.exit_code != 0
     assert "Missing option" in result_no_file.stderr
     assert "'--file'" in result_no_file.stderr
+
 
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_file_not_exists():
@@ -205,12 +234,13 @@ def test_cli_success_core_flow(mock_dependencies, dummy_md_file: Path, caplog):
     mock_main_uc.execute.assert_called_once_with(
         parsed_data=mock_parsed_data,
         repo_name_input="owner/repo",
-        project_name=None, # projectオプションなし
+        project_name=None,  # projectオプションなし
         dry_run=False      # dry-runオプションなし
     )
     # Reporterが呼ばれたか
     mock_reporter.display_create_github_resources_result.assert_called_once()
     assert "Workflow execution completed." in caplog.text
+
 
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_success_with_project(mock_dependencies, dummy_md_file: Path):
@@ -229,9 +259,10 @@ def test_cli_success_with_project(mock_dependencies, dummy_md_file: Path):
     mock_main_uc.execute.assert_called_once_with(
         parsed_data=mock_parsed_data,
         repo_name_input="owner/repo",
-        project_name=project_name, # project名が渡されている
+        project_name=project_name,  # project名が渡されている
         dry_run=False
     )
+
 
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_dry_run_mode(mock_dependencies, dummy_md_file: Path):
@@ -242,7 +273,7 @@ def test_cli_dry_run_mode(mock_dependencies, dummy_md_file: Path):
     result = runner.invoke(app, [
         "--file", str(dummy_md_file),
         "--repo", "owner/repo",
-        "--dry-run", # 追加
+        "--dry-run",  # 追加
     ])
 
     assert result.exit_code == 0, f"Stderr: {result.stderr}"
@@ -250,8 +281,9 @@ def test_cli_dry_run_mode(mock_dependencies, dummy_md_file: Path):
         parsed_data=mock_parsed_data,
         repo_name_input="owner/repo",
         project_name=None,
-        dry_run=True # dry_runフラグがTrueであることを確認
+        dry_run=True  # dry_runフラグがTrueであることを確認
     )
+
 
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_owner_inference(mock_dependencies, dummy_md_file: Path):
@@ -273,7 +305,7 @@ def test_cli_owner_inference(mock_dependencies, dummy_md_file: Path):
     # UseCase にはリポジトリ名のみが渡されることを確認
     mock_main_uc.execute.assert_called_once_with(
         parsed_data=mock_parsed_data,
-        repo_name_input=repo_name_only, # repo名のみ
+        repo_name_input=repo_name_only,  # repo名のみ
         project_name=None,
         dry_run=False
     )
@@ -281,17 +313,19 @@ def test_cli_owner_inference(mock_dependencies, dummy_md_file: Path):
     # ここでは UseCase をモックしているため直接検証はできない。
     # UseCase のテスト (`test_create_github_resources.py`) で確認済み。
 
+
 @pytest.mark.usefixtures("apply_patches")
 @pytest.mark.parametrize("ai_model_env, expected_ai_model", [
     ("openai", "openai"),
     ("gemini", "gemini"),
-    (None, "openai"), # 環境変数なしの場合のデフォルト
+    (None, "openai"),  # 環境変数なしの場合のデフォルト
 ])
 def test_cli_ai_model_switch(mock_dependencies, dummy_md_file: Path, ai_model_env, expected_ai_model):
     """AI モデル切り替え (AC-AI-Switch): 環境変数 AI_MODEL"""
     mock_main_uc = mock_dependencies['main_uc']
     mock_ai_parser = mock_dependencies['ai_parser']
-    mock_settings_patch = mock_dependencies['patches']['load_settings'] # 設定モックのパッチを取得
+    # 設定モックのパッチを取得
+    mock_settings_patch = mock_dependencies['patches']['load_settings']
 
     # 環境変数を設定
     env_vars = {}
@@ -302,18 +336,19 @@ def test_cli_ai_model_switch(mock_dependencies, dummy_md_file: Path, ai_model_en
     env_vars["OPENAI_API_KEY"] = "dummy"
     # 必要ならGEMINI_API_KEYも
     if ai_model_env == "gemini":
-         env_vars["GEMINI_API_KEY"] = "dummy_gemini"
+        env_vars["GEMINI_API_KEY"] = "dummy_gemini"
 
     with mock.patch.dict(os.environ, env_vars, clear=True):
         # load_settings が正しいai_modelを持つSettingsを返すように再設定
         updated_settings = MagicMock(spec=Settings, log_level="INFO")
         updated_settings.github_pat = SecretStr("dummy")
         updated_settings.openai_api_key = SecretStr("dummy")
-        updated_settings.gemini_api_key = SecretStr("dummy_gemini") if ai_model_env == "gemini" else None
+        updated_settings.gemini_api_key = SecretStr(
+            "dummy_gemini") if ai_model_env == "gemini" else None
         updated_settings.ai_model = expected_ai_model
-        mock_settings_patch.stop() # 一旦パッチを停止
+        mock_settings_patch.stop()  # 一旦パッチを停止
         mock_settings_patch.return_value = updated_settings
-        mock_settings_patch.start() # 更新した設定でパッチを再開
+        mock_settings_patch.start()  # 更新した設定でパッチを再開
 
         result = runner.invoke(app, [
             "--file", str(dummy_md_file),
@@ -331,13 +366,15 @@ def test_cli_ai_model_switch(mock_dependencies, dummy_md_file: Path, ai_model_en
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_error_handling_settings_validation(mock_dependencies, dummy_md_file: Path, capsys):
     """エラーハンドリング (AC-Error-Handling): 設定不備"""
-    mock_load_settings = mock_dependencies['patches']['load_settings'] 
+    mock_load_settings = mock_dependencies['patches']['load_settings']
     mock_load_settings.stop()
     validation_error = ValidationError.from_exception_data(
-        title="Settings", 
-        line_errors=[{'loc': ('GITHUB_PAT',), 'msg': 'Field required', 'type': 'missing'}]
+        title="Settings",
+        line_errors=[
+            {'loc': ('GITHUB_PAT',), 'msg': 'Field required', 'type': 'missing'}]
     )
-    new_mock = patch('github_automation_tool.main.load_settings', side_effect=validation_error)
+    new_mock = patch('core_logic.main.load_settings',
+                     side_effect=validation_error)
     new_mock.start()
     try:
         result = runner.invoke(app, [
@@ -353,23 +390,25 @@ def test_cli_error_handling_settings_validation(mock_dependencies, dummy_md_file
         new_mock.stop()
         mock_load_settings.start()
 
+
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_error_handling_file_not_found(mock_dependencies):
-     """エラーハンドリング (AC-Error-Handling): ファイル読み込みエラー (FileNotFound)"""
-     # Typerが処理するため、モック不要、存在しないパスを指定
-     result = runner.invoke(app, [
-          "--file", "nonexistent/path/to/file.md",
-          "--repo", "owner/repo",
-     ])
-     # 終了コードの検証（Typerのエラーは通常2または1）
-     assert result.exit_code != 0
-     # 以下のいずれかの文字列がエラーメッセージに含まれていることを確認
-     # より柔軟な検証にすることでテスト環境による差異を吸収
-     stderr = result.stderr
-     assert any([
-          "Invalid value for '--file'" in stderr,
-          "nonexistent/path/to/file.md" in stderr
-     ])
+    """エラーハンドリング (AC-Error-Handling): ファイル読み込みエラー (FileNotFound)"""
+    # Typerが処理するため、モック不要、存在しないパスを指定
+    result = runner.invoke(app, [
+        "--file", "nonexistent/path/to/file.md",
+        "--repo", "owner/repo",
+    ])
+    # 終了コードの検証（Typerのエラーは通常2または1）
+    assert result.exit_code != 0
+    # 以下のいずれかの文字列がエラーメッセージに含まれていることを確認
+    # より柔軟な検証にすることでテスト環境による差異を吸収
+    stderr = result.stderr
+    assert any([
+        "Invalid value for '--file'" in stderr,
+        "nonexistent/path/to/file.md" in stderr
+    ])
+
 
 @pytest.mark.usefixtures("apply_patches")
 # @pytest.mark.skipif(os.name == 'nt', reason="Permission test requires non-Windows OS")
@@ -378,11 +417,11 @@ def test_cli_error_handling_file_permission(mock_dependencies, dummy_permission_
     # パッチの取得と一時停止
     mock_read_file = mock_dependencies['patches']['read_markdown_file']
     mock_read_file.stop()
-    
+
     # PermissionErrorを発生させるように設定
     error_message = f"Permission denied: '{dummy_permission_denied_file}'"
-    new_mock = patch('github_automation_tool.main.read_markdown_file', 
-                    side_effect=PermissionError(error_message))
+    new_mock = patch('core_logic.main.read_markdown_file',
+                     side_effect=PermissionError(error_message))
     new_mock.start()
 
     try:
@@ -398,6 +437,7 @@ def test_cli_error_handling_file_permission(mock_dependencies, dummy_permission_
         # クリーンアップと元のモックの復元
         new_mock.stop()
         mock_read_file.start()
+
 
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_error_handling_ai_parser(mock_dependencies, dummy_md_file: Path, capsys):
@@ -417,6 +457,7 @@ def test_cli_error_handling_ai_parser(mock_dependencies, dummy_md_file: Path, ca
     assert "AI parsing error" in stderr
     assert error_message in stderr
 
+
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_error_handling_use_case_github_auth(mock_dependencies, dummy_md_file: Path, capsys):
     """エラーハンドリング (AC-Error-Handling): UseCase 実行中の GitHub 認証エラー"""
@@ -435,12 +476,14 @@ def test_cli_error_handling_use_case_github_auth(mock_dependencies, dummy_md_fil
     assert "Workflow failed: GitHubAuthenticationError" in stderr
     assert error_message in stderr
 
+
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_error_handling_use_case_github_client(mock_dependencies, dummy_md_file: Path, capsys):
     """エラーハンドリング (AC-Error-Handling): UseCase 実行中の GitHub クライアントエラー"""
     mock_main_uc = mock_dependencies['main_uc']
     error_message = "Rate limit exceeded"
-    mock_main_uc.execute.side_effect = GitHubClientError(error_message) # RateLimitErrorもClientErrorを継承
+    mock_main_uc.execute.side_effect = GitHubClientError(
+        error_message)  # RateLimitErrorもClientErrorを継承
 
     with capsys.disabled():
         result = runner.invoke(app, [
@@ -453,12 +496,13 @@ def test_cli_error_handling_use_case_github_client(mock_dependencies, dummy_md_f
     assert "Workflow failed: GitHubClientError" in stderr
     assert error_message in stderr
 
+
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_error_handling_use_case_unexpected(mock_dependencies, dummy_md_file: Path, capsys):
     """エラーハンドリング (AC-Error-Handling): UseCase 実行中の予期せぬエラー"""
     mock_main_uc = mock_dependencies['main_uc']
     error_message = "Something unexpected happened"
-    mock_main_uc.execute.side_effect = Exception(error_message) # 汎用エラー
+    mock_main_uc.execute.side_effect = Exception(error_message)  # 汎用エラー
 
     with capsys.disabled():
         result = runner.invoke(app, [
@@ -471,6 +515,7 @@ def test_cli_error_handling_use_case_unexpected(mock_dependencies, dummy_md_file
     assert "An unexpected critical error occurred" in stderr
     assert error_message in stderr
 
+
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_github_pat_not_set(tmp_path, capsys):
     """GITHUB_PAT未設定時はエラー終了する
@@ -479,10 +524,12 @@ def test_cli_github_pat_not_set(tmp_path, capsys):
     dummy_file = tmp_path / "dummy.md"
     dummy_file.write_text("dummy")
     with patch.dict(os.environ, {}, clear=True):
-        with patch("github_automation_tool.main.load_settings", side_effect=ValueError("GITHUB_PAT is required but not set.")):
-            result = runner.invoke(app, ["--file", str(dummy_file), "--repo", "dummy-repo", "--config-file", "/non/existent/file.yaml"])
+        with patch("core_logic.main.load_settings", side_effect=ValueError("GITHUB_PAT is required but not set.")):
+            result = runner.invoke(app, ["--file", str(dummy_file), "--repo",
+                                   "dummy-repo", "--config-file", "/non/existent/file.yaml"])
             stderr = result.stderr
             assert "GITHUB_PAT" in stderr
+
 
 @pytest.mark.usefixtures("apply_patches")
 def test_cli_github_pat_empty(tmp_path, capsys):
@@ -492,23 +539,25 @@ def test_cli_github_pat_empty(tmp_path, capsys):
     dummy_file = tmp_path / "dummy.md"
     dummy_file.write_text("dummy")
     with patch.dict(os.environ, {"GITHUB_PAT": "   "}, clear=True):
-        with patch("github_automation_tool.main.load_settings", side_effect=ValueError("GITHUB_PAT cannot be empty")):
-            result = runner.invoke(app, ["--file", str(dummy_file), "--repo", "dummy-repo", "--config-file", "/non/existent/file.yaml"])
+        with patch("core_logic.main.load_settings", side_effect=ValueError("GITHUB_PAT cannot be empty")):
+            result = runner.invoke(app, ["--file", str(dummy_file), "--repo",
+                                   "dummy-repo", "--config-file", "/non/existent/file.yaml"])
             stderr = result.stderr
             assert "GITHUB_PAT cannot be empty" in stderr
 
 # test_cli_github_pat_invalid は apply_patches を使わず、個別patchのみ
+
+
 def test_cli_github_pat_invalid(tmp_path, capsys):
     """GITHUB_PATが無効な場合は認証エラーで終了する
     注意: CliRunnerの仕様上、runコマンド関数の先頭で例外が発生した場合はexit_codeの検証はできない。
     そのため、エラーメッセージのみ検証する。"""
     dummy_file = tmp_path / "dummy.md"
     dummy_file.write_text("dummy")
-    from github_automation_tool.domain.models import ParsedRequirementData, IssueData
-    from unittest.mock import MagicMock, patch
-    from github_automation_tool.adapters.github_rest_client import GitHubRestClient
-    from githubkit import GitHub
-    from github_automation_tool.domain.exceptions import GitHubAuthenticationError
+    from core_logic.domain.models import ParsedRequirementData, IssueData
+    from core_logic.adapters.github_rest_client import GitHubRestClient
+    from core_logic.domain.exceptions import GitHubAuthenticationError
+
     class DummySettings:
         def __init__(self):
             class DummyPat:
@@ -518,6 +567,7 @@ def test_cli_github_pat_invalid(tmp_path, capsys):
             self.final_log_level = "INFO"
             self.gemini_api_key = None
             self.ai_model = "openai"
+
             class DummyAI:
                 prompt_template = "{markdown_text}"
                 openai_model_name = "gpt-4o"
@@ -526,19 +576,62 @@ def test_cli_github_pat_invalid(tmp_path, capsys):
             self.prompt_template = "{markdown_text}"
             self.final_openai_model_name = "gpt-4o"
             self.final_gemini_model_name = "gemini-1.5-flash"
+
             class DummyLogging:
                 log_level = "INFO"
             self.logging = DummyLogging()
     # 本物のGitHubRestClientインスタンスを生成し、get_authenticated_userだけをモック
     real_client = GitHubRestClient(github_instance=GitHub("invalid_token"))
-    real_client.get_authenticated_user = MagicMock(side_effect=GitHubAuthenticationError("Invalid PAT"))
-    with patch("github_automation_tool.main.GitHubRestClient", return_value=real_client):
-        with patch("github_automation_tool.main.AIParser") as mock_ai_parser_cls:
+    real_client.get_authenticated_user = MagicMock(
+        side_effect=GitHubAuthenticationError("Invalid PAT"))
+    with patch("core_logic.main.GitHubRestClient", return_value=real_client):
+        with patch("core_logic.main.AIParser") as mock_ai_parser_cls:
             mock_ai_parser = MagicMock()
-            mock_ai_parser.parse.return_value = ParsedRequirementData(issues=[IssueData(title="t", description="d")])
+            mock_ai_parser.parse.return_value = ParsedRequirementData(
+                issues=[IssueData(title="t", description="d")])
             mock_ai_parser_cls.return_value = mock_ai_parser
             with patch.dict(os.environ, {"GITHUB_PAT": "invalid_token"}, clear=True):
-                with patch("github_automation_tool.main.load_settings", return_value=DummySettings()):
-                    result = runner.invoke(app, ["--file", str(dummy_file), "--repo", "dummy-repo", "--config-file", "/non/existent/file.yaml"])
+                with patch("core_logic.main.load_settings", return_value=DummySettings()):
+                    result = runner.invoke(
+                        app, ["--file", str(dummy_file), "--repo", "dummy-repo", "--config-file", "/non/existent/file.yaml"])
                     stderr = result.stderr
                     assert "Invalid PAT" in stderr
+
+
+# --- 信頼度低下時のAIパース警告・エラー出力/処理中断テスト ---
+@pytest.mark.usefixtures("apply_patches")
+def test_cli_ai_parser_low_confidence(monkeypatch, mock_dependencies, dummy_md_file: Path, capsys):
+    """
+    AIパーサーが低信頼度（confidence<0.7, warningsあり）のAISuggestedRulesを返した場合、
+    CLIが警告またはエラーを出力し、処理を中断すること（backlog.yml/requirements.yml要件）
+    """
+    from core_logic.domain.models import AISuggestedRules, ParsedRequirementData, IssueData
+    # 低信頼度のAISuggestedRulesを返すようにAIParserをモック
+    low_conf_rules = AISuggestedRules(
+        separator_rule={"separator_pattern": "---"},
+        key_mapping_rule={"Title": "title", "Description": "description"},
+        confidence=0.5,
+        warnings=["AI推論ルールの信頼度が低いです"],
+        errors=[]
+    )
+    # parse()は通常通りParsedRequirementDataを返すが、infer_rules()で低信頼度を返す
+    mock_ai_parser = mock_dependencies['ai_parser']
+    mock_ai_parser.infer_rules.return_value = low_conf_rules
+    mock_ai_parser.parse.return_value = ParsedRequirementData(issues=[
+        IssueData(title="t", description="d")
+    ])
+
+    # monkeypatchでmain.AIParserをこのモックに差し替え
+    monkeypatch.setattr("core_logic.main.AIParser",
+                        lambda settings: mock_ai_parser)
+
+    # CLI実行
+    result = runner.invoke(app, [
+        "--file", str(dummy_md_file),
+        "--repo", "owner/repo",
+    ])
+    # 信頼度低下時は警告またはエラーがstderrに出力され、終了コードが1になること
+    assert result.exit_code == 1
+    stderr = result.stderr
+    assert "信頼度が低い" in stderr or "AI推論ルールの信頼度が低い" in stderr or "低信頼度" in stderr
+    assert "修正" in stderr or "中断" in stderr or "エラー" in stderr

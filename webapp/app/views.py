@@ -13,21 +13,21 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import ParsedDataCache
 from django.utils import timezone
-from core_logic.github_automation_tool.domain.models import ParsedRequirementData, IssueData
-from core_logic.github_automation_tool.infrastructure.config import load_settings
-from core_logic.github_automation_tool.adapters.ai_parser import AIParser
-from core_logic.github_automation_tool.adapters.markdown_issue_parser import MarkdownIssueParser
-from core_logic.github_automation_tool.adapters.yaml_issue_parser import YamlIssueParser
-from core_logic.github_automation_tool.adapters.json_issue_parser import JsonIssueParser
-from core_logic.github_automation_tool.domain.exceptions import AiParserError, ParsingError
-from core_logic.github_automation_tool.use_cases.create_github_resources import CreateGitHubResourcesUseCase
+from core_logic.domain.models import ParsedRequirementData, IssueData
+from core_logic.infrastructure.config import load_settings
+from core_logic.adapters.ai_parser import AIParser
+from core_logic.adapters.markdown_issue_parser import MarkdownIssueParser
+from core_logic.adapters.yaml_issue_parser import YamlIssueParser
+from core_logic.adapters.json_issue_parser import JsonIssueParser
+from core_logic.domain.exceptions import AiParserError, ParsingError
+from core_logic.use_cases.create_github_resources import CreateGitHubResourcesUseCase
 from githubkit import GitHub
-from core_logic.github_automation_tool.adapters.github_rest_client import GitHubRestClient
-from core_logic.github_automation_tool.adapters.github_graphql_client import GitHubGraphQLClient
-from core_logic.github_automation_tool.adapters.assignee_validator import AssigneeValidator
-from core_logic.github_automation_tool.use_cases.create_repository import CreateRepositoryUseCase
-from core_logic.github_automation_tool.use_cases.create_issues import CreateIssuesUseCase
-from core_logic.github_automation_tool.domain.exceptions import GitHubClientError, GitHubAuthenticationError, GitHubValidationError
+from core_logic.adapters.github_rest_client import GitHubRestClient
+from core_logic.adapters.github_graphql_client import GitHubGraphQLClient
+from core_logic.adapters.assignee_validator import AssigneeValidator
+from core_logic.use_cases.create_repository import CreateRepositoryUseCase
+from core_logic.use_cases.create_issues import CreateIssuesUseCase
+from core_logic.domain.exceptions import GitHubClientError, GitHubAuthenticationError, GitHubValidationError
 
 import logging
 import os

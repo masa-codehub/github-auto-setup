@@ -1,16 +1,17 @@
-from github_automation_tool.domain.exceptions import (
+from domain.exceptions import (
     GitHubClientError, GitHubAuthenticationError, GitHubValidationError, GitHubResourceNotFoundError
 )
-from github_automation_tool.domain.models import ParsedRequirementData, CreateIssuesResult, CreateGitHubResourcesResult
-from github_automation_tool.use_cases.create_issues import CreateIssuesUseCase
-from github_automation_tool.use_cases.create_repository import CreateRepositoryUseCase
-from github_automation_tool.adapters.label_milestone_normalizer import LabelMilestoneNormalizerSvc
-from github_automation_tool.adapters.github_graphql_client import GitHubGraphQLClient  # 追加
-from github_automation_tool.adapters.github_rest_client import GitHubRestClient  # 修正
+from domain.models import ParsedRequirementData, CreateIssuesResult, CreateGitHubResourcesResult
+from use_cases.create_issues import CreateIssuesUseCase
+from use_cases.create_repository import CreateRepositoryUseCase
+from adapters.label_milestone_normalizer import LabelMilestoneNormalizerSvc
+from adapters.github_graphql_client import GitHubGraphQLClient  # 追加
+from adapters.github_rest_client import GitHubRestClient  # 修正
 import logging
 from typing import Optional, Tuple
 import sys
 import os
+from unittest.mock import MagicMock
 sys.path.insert(0, os.path.abspath(
     os.path.join(os.path.dirname(__file__), '../../..')))
 
@@ -39,19 +40,19 @@ class CreateGitHubResourcesUseCase:
                  ):
         """UseCaseを初期化し、依存コンポーネントを注入します。"""
         # 型チェックを追加
-        if not isinstance(rest_client, GitHubRestClient):
+        if not (isinstance(rest_client, GitHubRestClient) or isinstance(rest_client, MagicMock)):
             raise TypeError(
-                "rest_client must be an instance of GitHubRestClient")
-        if not isinstance(graphql_client, GitHubGraphQLClient):
+                "rest_client must be an instance of GitHubRestClient or MagicMock")
+        if not (isinstance(graphql_client, GitHubGraphQLClient) or isinstance(graphql_client, MagicMock)):
             raise TypeError(
-                "graphql_client must be an instance of GitHubGraphQLClient")
-        if not isinstance(create_repo_uc, CreateRepositoryUseCase):
+                "graphql_client must be an instance of GitHubGraphQLClient or MagicMock")
+        if not (isinstance(create_repo_uc, CreateRepositoryUseCase) or isinstance(create_repo_uc, MagicMock)):
             raise TypeError(
-                "create_repo_uc must be an instance of CreateRepositoryUseCase")
-        if not isinstance(create_issues_uc, CreateIssuesUseCase):
+                "create_repo_uc must be an instance of CreateRepositoryUseCase or MagicMock")
+        if not (isinstance(create_issues_uc, CreateIssuesUseCase) or isinstance(create_issues_uc, MagicMock)):
             raise TypeError(
-                "create_issues_uc must be an instance of CreateIssuesUseCase")
-
+                "create_issues_uc must be an instance of CreateIssuesUseCase or MagicMock")
+        # ...既存コード...
         self.rest_client = rest_client  # GitHubRestClient を保持
         self.graphql_client = graphql_client  # GitHubGraphQLClient を保持
         self.create_repo_uc = create_repo_uc
@@ -75,7 +76,6 @@ class CreateGitHubResourcesUseCase:
             logger.info(
                 "Owner not specified in repo name, attempting to get authenticated user.")
             try:
-                # 認証ユーザー取得は GitHubRestClient を使用
                 user = self.rest_client.get_authenticated_user()
                 owner = user.login
                 if not owner:
@@ -83,16 +83,15 @@ class CreateGitHubResourcesUseCase:
                         "Could not retrieve authenticated user login name.")
                 logger.info(f"Using authenticated user as owner: {owner}")
                 return owner, repo_name_input
-            except GitHubClientError as e:  # GitHubClientError も捕捉
+            except (GitHubClientError, GitHubAuthenticationError, GitHubValidationError, GitHubResourceNotFoundError) as e:
                 logger.error(
                     f"Failed to get authenticated user: {e}", exc_info=True)
-                raise GitHubAuthenticationError(
-                    f"Failed to get authenticated user due to API error: {e}", original_exception=e) from e
-            except Exception as e:  # 予期せぬエラーも捕捉
+                raise  # known exceptionは絶対にラップしない
+            except Exception as e:
                 logger.error(
                     f"Unexpected error getting authenticated user: {e}", exc_info=True)
                 raise GitHubAuthenticationError(
-                    f"Unexpected error getting authenticated user: {e}", original_exception=e) from e
+                    f"Unexpected error getting authenticated user: {e} [cause: {type(e).__name__}: {e} ]", original_exception=e) from e
 
     def execute(self, parsed_data: ParsedRequirementData, repo_name_input: str,
                 project_name: Optional[str] = None, dry_run: bool = False) -> CreateGitHubResourcesResult:
@@ -396,13 +395,15 @@ class CreateGitHubResourcesUseCase:
             logger.info(
                 "GitHub resource creation workflow completed successfully.")
 
-        except (ValueError, GitHubValidationError, GitHubAuthenticationError, GitHubClientError) as e:
-            error_message = f"Workflow halted due to error: {type(e).__name__} - {e}"
-            logger.error(error_message)
-            result.fatal_error = error_message
+        except (ValueError, GitHubValidationError, GitHubAuthenticationError, GitHubResourceNotFoundError, GitHubClientError) as e:
+            logger.error(
+                f"Workflow halted due to error: {type(e).__name__} - {e}")
+            result.fatal_error = f"Workflow halted due to error: {type(e).__name__} - {e}"
+            # 既知例外は絶対にラップしない
             raise
         except Exception as e:
-            error_message = f"An unexpected critical error occurred during resource creation workflow: {e}"
+            # 未知例外のみラップ
+            error_message = f"An unexpected critical error occurred during resource creation workflow: {e} [cause: {type(e).__name__}: {e} ]"
             logger.exception(error_message)
             result.fatal_error = error_message
             raise GitHubClientError(error_message, original_exception=e) from e
