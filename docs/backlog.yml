@@ -316,10 +316,77 @@ user_stories:
     - "TASK-FE-US001-DISPLAY-LOGIC"
     - "TASK-FE-US001-ERROR-HANDLING"
 
-# --- 既存タスクへの注釈 ---
-# 既存のFE-US001系タスク（UPLOAD-UI, API-UPLOAD-CALL, DISPLAY-LOGIC, ERROR-HANDLING）は、
-# 新しい静的サイト＋API連携アーキテクチャのIssue（ISSUE-FE-STATIC-API-MIGRATION）に置き換えられます。
-# 必要に応じてstatusやdescriptionに注釈を追加してください。
+# --- 新規Issue: バックエンドAPIサーバー化と機能移行 ---
+- issue_id: "ISSUE-BE-API-MIGRATION"
+  title: "バックエンド（Django）のAPIサーバー化と関連機能の移行"
+  description: |
+    現在Web UIのレンダリングを担っているDjangoアプリケーションを、純粋なHTTP APIサーバーとして再構築します。これにより、フロントエンド（静的サイト）からのリクエストに応答し、ビジネスロジック (`core_logic`) を実行するバックエンドAPIレイヤーを確立します。
+    
+    **目標:**
+    * DjangoをAPIサーバーとして動作させ、フロントエンドからのすべてのリクエストをAPI経由で処理できるようにする。
+    * Django REST Framework (DRF) を導入し、効率的かつセキュアなAPI開発基盤を構築する。
+    * 既存のコアロジックをAPIから呼び出し、必要な認証・認可、入出力データ形式、エラーハンドリングを定義する。
+    * APIキーの管理方法（永続化しない方針）を実装に反映する。
+  status: "To Do"
+  priority: "Very High"
+  labels: ["backend", "API", "migration", "architecture"]
+  children:
+    - issue_id: "ISSUE-BE-API-DRF-SETUP"
+      title: "DRFの導入とAPI基盤の構築"
+      description: |
+        DjangoプロジェクトにDRFを導入し、API認証と基本的なルーティングを設定する。
+        
+        **タスク:**
+        * `requirements.txt` に`djangorestframework`と`django-cors-headers`を追加し、Djangoプロジェクトにインストール・設定する。
+        * DRFのAPI ViewまたはViewSetを使用して、少なくとも1つのテスト用APIエンドポイント（例: `/api/healthcheck/`）を定義し、JSONレスポンスを返すことを確認する。
+        * フロントエンドから送信されるAPIキーを受け取り、認証を行うカスタム認証クラス（DRFの`BaseAuthentication`を継承）を実装する。
+        * 有効なAPIキーを持つリクエストのみを許可するパーミッションクラス（DRFの`BasePermission`を継承）を定義し、テスト用APIに適用する。
+        * `webapp/webapp_project/settings.py` にCORS設定を追加し、フロントエンド（静的サイト）からのアクセスを許可する。
+        * `webapp/webapp_project/urls.py` でAPIルーティングを設定する。
+      status: "To Do"
+      priority: "Very High"
+      labels: ["backend", "API", "security", "DRF"]
+    - issue_id: "ISSUE-BE-API-FILE-PROCESS"
+      title: "ファイルアップロード・解析APIの実装"
+      description: |
+        フロントエンドからIssue情報ファイルを受け取り、AIによる解析を実行し、結果をJSONで返すAPIエンドポイントを実装する。
+        
+        **タスク:**
+        * `webapp/app/views.py` にファイルアップロード（Multipart-form dataを処理）とAI解析を実行するAPIエンドポイント（例: `/api/upload-and-parse/`）を定義する。
+        * アップロードされたファイルデータを `core_logic.use_cases.AIParseFileUseCase` に渡し、解析結果を受け取る。
+        * `webapp/core_logic/domain/models.py` の`ParsedSourceFileContentMdl`などをJSONにシリアライズするためのDRFシリアライザを定義する。
+        * APIキー（GitHub PAT, AIサービスAPIキー）をフロントエンドから受け取り、メモリ上で一時的に保持し、`core_logic`の呼び出し時に利用するように実装する（永続化しない）。
+        * ファイルアップロード時のバリデーション（ファイルサイズ、形式など）とエラーレスポンスを実装する。
+      status: "To Do"
+      priority: "Very High"
+      labels: ["backend", "API", "feature", "AI"]
+    - issue_id: "ISSUE-BE-API-GITHUB-ACTION"
+      title: "GitHubリソース作成・ローカル保存APIの実装"
+      description: |
+        解析済みのIssue情報を受け取り、GitHubリソース（Issue, リポジトリ、ラベル、マイルストーン）を作成し、またはローカルに保存するAPIエンドポイントを実装する。
+        
+        **タスク:**
+        * `webapp/app/views.py` にGitHubリソース作成API（例: `/api/create-github-resources/`）とローカル保存API（例: `/api/save-locally/`）を定義する。
+        * APIリクエストボディからIssue情報を取得し、`core_logic.use_cases.CreateGitHubResourcesUseCase` や `LocalSaveUseCase` を呼び出す。
+        * `CreateGitHubResourcesResultMdl` などのドメインモデルをJSONにシリアライズするためのDRFシリアライザを定義する。
+        * APIキー（GitHub PAT, AIサービスAPIキー）をメモリ上で一時的に保持し、`core_logic`の呼び出し時に利用するように実装する。
+        * GitHub APIからのエラーやローカルファイルシステムへの書き込みエラーに対する適切なエラーハンドリングとレスポンスを実装する。
+      status: "To Do"
+      priority: "Very High"
+      labels: ["backend", "API", "feature", "GitHub"]
+    - issue_id: "ISSUE-BE-CONFIG-LOGGING"
+      title: "バックエンド設定とロギングの調整"
+      description: |
+        APIサーバーとしてのDjangoの運用に必要な設定（キー管理、ログ）を調整する。
+        
+        **タスク:**
+        * `webapp/webapp_project/settings.py` にて、Djangoバックエンド用APIキー、GitHub PAT、AIサービスAPIキーを環境変数から読み込むロジックを実装する（UIからの入力と排他的または補完的に動作）。
+        * アプリケーション全体のログ設定を見直し、APIリクエスト、レスポンス、エラー、`core_logic`の処理に関するログが適切に記録されるようにする。ログレベル、出力先（コンソール、ファイルなど）を定義する。
+        * 将来的なレートリミット設定のために、`webapp/core_logic/infrastructure/config.py` または新しい設定ファイルに、レートリミット関連の設定を組み込めるようなプレースホルダーまたは構造を追加する。
+        * 本番環境でのHTTPS強制のための設定（例: `SECURE_SSL_REDIRECT`, `CSRF_COOKIE_SECURE`など）を確認・適用する。
+      status: "To Do"
+      priority: "High"
+      labels: ["backend", "configuration", "logging", "security"]
 
 technical_tasks:
   # --- Backend API Tasks (新規または既存タスクの役割変更) ---
