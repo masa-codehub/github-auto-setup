@@ -252,3 +252,38 @@
             # ...
             self.normalizer.normalize_issue(issue_data)
             # ...
+
+- rule_id: "CR-030"
+  title: "API/フロントエンド間のFormDataキー・エンドポイント仕様は一貫性を維持する"
+  description: |
+    バックエンドAPIとフロントエンドの間でファイルアップロード等のFormDataキー名やエンドポイントURL仕様（末尾スラッシュ有無等）は必ず統一し、テスト・実装・ドキュメントで一貫性を保つこと。これにより、テストの不整合や運用時のバグを防止する。
+  category: "API設計・運用一貫性"
+  example_bad: |
+    // API側: request.FILES['file']
+    // フロント側: formData.append('issue_file', ...)
+    // →テストや本番でアップロード失敗
+  example_good: |
+    // API側・フロント側とも formData.append('file', ...)
+    // →テスト・本番で常に動作が一致
+
+- rule_id: "CR-031"
+  title: "テスト失敗時の自己修正ループは必ず記録し、再現性を担保する"
+  description: |
+    テスト失敗や実装エラーが発生した場合、原因・誤ったアプローチ・最終的な解決策を内部ログやコミットメッセージ等で必ず記録し、同様の問題が再発した際に迅速に再現・修正できるようにする。これにより、開発プロセスの透明性と品質を高める。
+  category: "開発プロセス・品質保証"
+  example_bad: |
+    # テスト失敗時に修正内容や原因を記録せず、同じ問題が繰り返される
+  example_good: |
+    # テスト失敗時のエラー内容・修正内容・学びを記録し、次回以降の修正効率を向上
+
+- rule_id: "CR-032"
+  title: "テスト実行時はpackage.jsonの場所を自動で探索し、適切なディレクトリでテストを実行する"
+  description: |
+    テストを実行する際には、必ず`package.json`の存在するディレクトリを自動で探索し、そこでテストを実行すること。これにより、テスト環境の一貫性が保たれ、実行忘れやパスの誤設定によるエラーを防止できる。
+  category: "開発プロセス・テスト"
+  example_bad: |
+    # package.jsonの場所を考慮せず、誤ったディレクトリでテストを実行
+    npm test
+  example_good: |
+    # 自動でpackage.jsonを探索し、適切なディレクトリでテストを実行
+    cd $(dirname $(find . -name package.json -print -quit)) && npm test

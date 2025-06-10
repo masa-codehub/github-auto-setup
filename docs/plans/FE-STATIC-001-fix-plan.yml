@@ -1,0 +1,38 @@
+# FE-STATIC-001-fix-plan.yml
+# フロントエンド静的サイト化・API連携移行タスク：コードレビュー指摘対応 修正計画
+
+issue: FE-STATIC-001
+phase: fix
+owner: auto-generated
+created: 2025-06-10
+
+## 完了定義（DoD）
+- CSRFトークン送信ロジックを有効化し、全API POSTリクエストで適切に送信されること
+- GitHub登録・ローカル保存ボタンがAPI経由で動作し、サーバー側で処理されること
+- AI設定フォームの保存・取得がAPI経由で行われ、UIに反映されること
+- FormDataキー名が全JSで統一され、API仕様と一致していること
+- JSファイルのCDN読み込みにintegrity/crossorigin属性が付与されていること
+- APIエンドポイントのURLが一意に統一されていること
+- display_logic.test.jsの削除とテスト構成の整理
+- Pydanticバリデーションテストが現仕様に合致していること
+- すべての修正に対しテストが追加・修正され、CIでパスすること
+- 修正過程・自己修正ループを記録し、coding-rules.ymlへ反映すること
+
+## 修正タスク一覧
+
+- [ ] frontend/assets/js/issue_selection.js: CSRFトークン送信ロジックの有効化・getCookie関数実装
+- [ ] frontend/assets/js/issue_selection.js, top_page.html: GitHub登録・ローカル保存ボタンのAPI連携実装
+- [ ] webapp/app/urls.py, webapp/app/views.py: 上記APIエンドポイントの追加
+- [ ] frontend/assets/js/issue_selection.js, top_page.html: AI設定フォームの保存・取得API連携
+- [ ] webapp/app/urls.py, webapp/app/views.py: AI設定APIエンドポイントの追加
+- [ ] frontend/assets/js/file_upload.js, issue_selection.js: FormDataキー名の統一
+- [ ] frontend/top_page.html: JSファイルCDN読み込みにintegrity/crossorigin属性追加
+- [ ] webapp/app/urls.py, frontend/assets/js/*: APIエンドポイントURLの統一
+- [ ] frontend/assets/js/display_logic.test.js: ファイル削除・テスト構成整理
+- [ ] webapp/core_logic/tests/adapters/test_ai_parser.py: バリデーションテスト修正
+- [ ] frontend/tests, frontend/assets/js/tests: テスト追加・修正
+- [ ] docs/coding-rules.yml: 新ルール・修正過程の反映
+
+## 備考
+- すべての修正はテスト駆動で行い、CIパスをもって完了とする
+- 修正過程の自己修正ループは記録し、再発防止策を明文化する

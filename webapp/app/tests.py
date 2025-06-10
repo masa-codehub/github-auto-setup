@@ -254,3 +254,27 @@ class SecurityHeadersTest(TestCase):
         self.assertEqual(response.get('X-Content-Type-Options'), 'nosniff')
         self.assertEqual(response.get('X-Frame-Options'), 'DENY')
         # Content-Security-Policy等も必要に応じて追加
+
+
+class UserAiSettingsAPITest(AuthenticatedAPITestMixin, TestCase):
+    def test_get_default_ai_settings(self):
+        response = self.client.get('/api/v1/ai-settings/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('ai_provider', response.json())
+        self.assertIn('openai_model', response.json())
+
+    def test_post_and_get_ai_settings(self):
+        data = {
+            'ai_provider': 'gemini',
+            'openai_model': 'gpt-4o',
+            'gemini_model': 'gemini-1.5-pro',
+            'openai_api_key': 'test-openai',
+            'gemini_api_key': 'test-gemini'
+        }
+        post_resp = self.client.post(
+            '/api/v1/ai-settings/', data, format='json')
+        self.assertEqual(post_resp.status_code, 200)
+        get_resp = self.client.get('/api/v1/ai-settings/')
+        self.assertEqual(get_resp.status_code, 200)
+        self.assertEqual(get_resp.json()['ai_provider'], 'gemini')
+        self.assertEqual(get_resp.json()['gemini_model'], 'gemini-1.5-pro')

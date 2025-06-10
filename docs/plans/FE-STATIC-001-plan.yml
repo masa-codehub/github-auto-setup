@@ -1,0 +1,51 @@
+# FE-STATIC-001 実装計画
+issue_id: FE-STATIC-001
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/FE-STATIC-001
+summary: |
+  Djangoテンプレート依存のWeb UIを静的HTML/CSS/JavaScriptサイトへ移行し、全UIアクションをAPI連携に統一する。BootstrapはCDN経由、クライアントサイドビルドは導入せず、全てのロジックはテスト駆動で実装・検証する。
+definition_of_done:
+  - Web UIがDjangoサーバーサイドレンダリングに依存せず、静的HTML/CSS/JSとして機能する
+  - frontend/base.html, frontend/top_page.html からDjangoテンプレート構文が完全除去
+  - Bootstrap 5がCDN経由で読み込まれ、vendor/bootstrap/が削除済み
+  - file_upload.jsのアップロード処理がfetch+FormData+API POSTに移行
+  - display_logic.jsのDOM描画がAPIのJSONレスポンスに基づく動的レンダリング
+  - issue_selection.js等、全JSがAPI経由でデータ取得・UI操作
+  - GitHub Issue登録・ローカル保存・設定画面もAPI経由
+  - 設定画面の保存/取得もAPI経由
+  - 既存・新規JSテストが全て新API/DOM仕様でパス
+implementation_steps:
+  - step: 1
+    description: "frontend/base.html, frontend/top_page.html からDjangoテンプレート構文を完全除去し、静的HTML化する"
+    command: "編集: frontend/base.html, frontend/top_page.html"
+    verification: "Djangoテンプレートタグ・構文が一切残っていないことをgrep等で確認。ブラウザで静的HTMLとして表示されること"
+  - step: 2
+    description: "Bootstrap 5をCDN経由で読み込むようHTMLを修正し、frontend/vendor/bootstrap/ディレクトリを削除"
+    command: "編集: frontend/base.html, frontend/top_page.html、削除: frontend/vendor/bootstrap/"
+    verification: "CDNからBootstrapが読み込まれ、ローカルbootstrap/が存在しないことを確認"
+  - step: 3
+    description: "file_upload.jsのアップロード処理をfetch+FormData+API POSTに移行"
+    command: "編集: frontend/assets/js/file_upload.js"
+    verification: "Jestテスト(frontend/assets/js/tests/file_upload.test.js)でAPI POST処理が検証されること"
+  - step: 4
+    description: "display_logic.jsのDOM描画ロジックをAPIのJSONレスポンスに基づく動的レンダリングに修正"
+    command: "編集: frontend/assets/js/display_logic.js"
+    verification: "Jestテスト(frontend/assets/js/tests/display_logic.test.js)でDOM描画が検証されること"
+  - step: 5
+    description: "issue_selection.js等、全JSをDjangoテンプレート非依存・API経由のデータ取得/操作に統一"
+    command: "編集: frontend/assets/js/issue_selection.js 他"
+    verification: "Jestテスト(frontend/tests/issue_selection_ui.test.js)でAPI経由のUI操作が検証されること"
+  - step: 6
+    description: "GitHub Issue登録・ローカル保存・設定画面の保存/取得もAPI経由に統一"
+    command: "編集: frontend/assets/js/issue_selection.js, 設定画面関連JS"
+    verification: "Jestテスト・手動検証で全アクションがAPI経由で動作すること"
+  - step: 7
+    description: "既存・新規のJavaScriptテストコードを新API/DOM仕様に合わせて更新・新規作成"
+    command: "編集: frontend/assets/js/tests/, frontend/tests/"
+    verification: "全テストがパスすること (npm test)"
+  - step: 8
+    description: "成果物・実装記録を整理し、docs/coding-rules.ymlに知見を反映。レビューコメントを作成し完了を宣言"
+    command: "記録整理・ルール追記・レビューコメント作成"
+    verification: "coding-rules.ymlにルールが追記され、レビューコメントがdocs/review-request/に作成されていること"
+notes:
+  - 設計・実装・テストの全過程でTDD・一貫性・重複排除・説明責任原則を厳守
+  - 重大な矛盾が発生した場合はCONFLICT_DETECTEDで停止

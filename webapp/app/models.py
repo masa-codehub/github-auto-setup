@@ -5,6 +5,7 @@ import datetime
 
 # Create your models here.
 
+
 class ParsedDataCache(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     data = models.JSONField(help_text="JSON serialized ParsedRequirementData")
@@ -22,3 +23,17 @@ class ParsedDataCache(models.Model):
 
     def __str__(self):
         return str(self.id)
+
+
+class UserAiSettings(models.Model):
+    user = models.OneToOneField(
+        'auth.User', on_delete=models.CASCADE, related_name='ai_settings')
+    ai_provider = models.CharField(max_length=32, default='openai')
+    openai_model = models.CharField(max_length=64, blank=True, null=True)
+    gemini_model = models.CharField(max_length=64, blank=True, null=True)
+    openai_api_key = models.CharField(max_length=128, blank=True, null=True)
+    gemini_api_key = models.CharField(max_length=128, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"AI設定({self.user.username})"

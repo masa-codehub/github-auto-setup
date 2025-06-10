@@ -42,7 +42,7 @@
         return;
       }
     });
-    uploadForm.addEventListener('submit', function(e) {
+    uploadForm.addEventListener('submit', async function(e) {
       clearError(defaultHelp);
       const file = fileInput.files[0];
       if (!file) {
@@ -60,6 +60,29 @@
         showError('ファイルサイズが10MBを超えています');
         e.preventDefault();
         return;
+      }
+      // --- fetch+FormData+POSTでAPI呼び出し ---
+      e.preventDefault(); // ページリロード防止
+      const formData = new FormData();
+      formData.append('issue_file', file); // ←キー名を統一
+      try {
+        const csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+        const response = await fetch('/api/v1/parse-file', {
+          method: 'POST',
+          body: formData,
+          headers: csrfToken ? { 'X-CSRFToken': csrfToken } : undefined
+        });
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          showError(err.detail || 'アップロードに失敗しました');
+          return;
+        }
+        // 成功時の処理（例: 結果表示ロジックへデータ渡し）
+        const result = await response.json();
+        // window.dispatchEventやコールバックでdisplay_logic.js等に通知してもよい
+        window.dispatchEvent(new CustomEvent('fileUploadSuccess', { detail: result }));
+      } catch (err) {
+        showError('ネットワークエラーが発生しました');
       }
     });
   }

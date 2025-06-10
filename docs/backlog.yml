@@ -627,3 +627,55 @@ skip_tests:
       - test_execute_empty_name
       - test_execute_invalid_name_with_slash
       - test_execute_logs_debug_info
+
+  - issue_id: "ISSUE-FE-STATIC-API-MIGRATION"
+    title: "フロントエンドの静的サイト化とAPI連携への移行"
+    description: |
+      現在DjangoによってレンダリングされているWeb UIを、純粋な静的HTML/CSS/JavaScriptベースのサイトに移行します。これにより、フロントエンドのデプロイがGitHub Pagesのような静的サイトホスティングサービスで可能になり、バックエンドはAPIサーバーとして機能します。
+      
+      **目標:**
+      * Web UIをサーバーサイドレンダリングから完全に切り離し、静的サイトとして機能させる。
+      * Web UIとバックエンド（Django APIサーバー）間の通信をすべてHTTP API呼び出し（Fetch APIなど）に移行する。
+      * クライアントサイドのビルドプロセスは導入せず、BootstrapはCDN経由で利用する。
+      
+      **背景:**
+      これまでの議論で、UI/UXの要件として「最小限のJavaScriptでいいが、Djangoのレンダリングを使用しないサイト構成」が明確化されたため、既存のDjangoテンプレートベースのフロントエンドを変更し、バックエンドをAPIサーバーに特化させる方針を採用します。これにより、フロントエンドとバックエンドの役割が明確に分離され、それぞれの開発・デプロイが独立して行えるようになります。
+      
+      **主要なタスク（子Issueとして分割可能）:**
+      1.  静的HTMLファイルの作成とDjangoテンプレートからの分離
+          * `frontend/base.html` および `frontend/top_page.html` を、Djangoテンプレート構文を含まない純粋なHTMLファイルとして再構築する。
+          * Djangoテンプレートタグ（`{% csrf_token %}`など）やDjangoフォームのレンダリングロジックをHTMLから除去する。
+          * 既存の`frontend/vendor/bootstrap/`ディレクトリを削除し、Bootstrap 5をCDNから読み込むようにHTMLを修正する。
+      2.  既存JavaScriptロジックのAPI連携への移行
+          * `frontend/assets/js/file_upload.js` を修正し、ファイルアップロード処理をDjangoビューへの直接POSTから、JavaScriptによるFormDataの生成とAPIエンドポイントへの非同期HTTPリクエスト（Fetch APIなど）に変更する。
+          * `frontend/assets/js/display_logic.js` を修正し、ファイル処理結果の表示ロジックを、APIから受け取ったJSONデータを基にDOMを動的に操作してレンダリングするように変更する。
+          * `frontend/assets/js/issue_selection.js` やその他のJavaScriptファイルも、Djangoテンプレートに依存せず、APIを介したデータ取得とUI操作を行うように改修する。
+          * 現在のJavaScriptテストコード（`frontend/assets/js/tests/`、`frontend/tests/`）は、新しいAPIクライアントとDOM操作ロジックに合わせて更新または新規作成する。
+      3.  UIアクションのAPI呼び出しへの変更
+          * GitHubへのIssue登録ボタンやローカル保存ボタンなど、すべてのユーザーインタフェースからのアクションが、JavaScriptを介してDjango APIサーバーの適切なエンドポイントを呼び出すように変更する。
+          * 設定画面（AIサービスAPIキー、GitHubリポジトリ名など）での設定の保存・取得もAPI経由となるように変更する。
+      4.  エラーハンドリングとユーザーフィードバックの改善
+          * APIからのエラーレスポンスを適切に捕捉し、ユーザーフレンドリーな形でWeb UIに表示するロジックを実装する。
+      
+      **関連する既存のバックログ項目:**
+      * `TASK-FE-US001-UPLOAD-UI-plan.yml`
+      * `TASK-FE-US001-API-UPLOAD-CALL-plan.yml`
+      * `TASK-FE-US001-DISPLAY-LOGIC-plan.yml`
+      * `TASK-FE-US001-ERROR-HANDLING-plan.yml`
+        *これらのタスクは、新しいアーキテクチャ（静的サイト + API連携）に合わせて内容が大幅に修正されるか、あるいは新しいタスクに置き換えられます。*
+      
+      **定義済みラベル（例）:**
+      * `feature`
+      * `frontend`
+      * `refactoring`
+      * `architecture`
+    status: "Done"
+    priority: "Very High"
+    labels: ["feature", "frontend", "refactoring", "architecture"]
+    replaces:
+      - "TASK-FE-US001-UPLOAD-UI"
+      - "TASK-FE-US001-API-UPLOAD-CALL"
+      - "TASK-FE-US001-DISPLAY-LOGIC"
+      - "TASK-FE-US001-ERROR-HANDLING"
+    notes: |
+      【申し送り事項】実装は完了したが、ユーザーAPIキーのDB保存が平文のため、後続タスクでの暗号化対応が必須。
