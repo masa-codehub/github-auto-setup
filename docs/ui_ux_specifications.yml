@@ -10,6 +10,7 @@ document_info:
 global_ui_ux_principles:
   base_framework: "Bootstrap 5"
   responsive_design: true
+  frontend_architecture: "静的HTML+Bootstrap5+最小限のJavaScriptで構築し、すべてのデータ送受信・アクションはクライアントサイドJavaScriptからAPIサーバー（Django REST Framework）への非同期通信で行う。DjangoテンプレートによるHTMLレンダリングやサーバーサイドコンテキスト注入は行わない。"
   navigation:
     header:
       position: "Fixed Top"
@@ -59,7 +60,8 @@ top_page_layout:
               components:
                 - type: "Card Header"
                   content: "1. Upload Issue File" #
-                - type: "Form (id='upload-form')" #
+                - type: "Form (id='upload-form')"
+                  description: "ファイルアップロードはJavaScriptがFormDataを生成し、APIエンドポイントに非同期送信する。Djangoビューへの直接POSTは行わない。"
                   elements:
                     - type: "CSRF Token" #
                     - type: "File Input (input#issue-file-input)" #
@@ -83,7 +85,8 @@ top_page_layout:
                       label: "Deselect All"
                 - type: "Issue Count Indicator (p#issue-count-indicator)" #
                   format: "X issues found."
-                - type: "Issue Table (table#issue-table)" #
+                - type: "Issue Table (table#issue-table)"
+                  description: "APIから取得したJSONデータをJavaScriptで解析し、動的にテーブルを構築・表示する。Djangoテンプレートでのループは行わない。"
                   header:
                     - type: "Checkbox (input#select-all-header-checkbox)" #
                       purpose: "Select/Deselect all issues in the current view."
@@ -138,16 +141,19 @@ top_page_layout:
                         - type: "Switch/Checkbox (input#dry-run-checkbox)" #
                           label: "Dry Run Mode"
                           default: true
-                        - type: "Submit Button (button#github-submit-button)" #
+                        - type: "Button (button#github-submit-button)"
+                          description: "JavaScriptが選択Issue・設定情報をAPIエンドポイントに送信し、GitHub登録処理を非同期で実行する。"
                           label: "Create Issues on GitHub"
                     - group_name: "Local Save"
                       elements:
                         - type: "Text Input (input#local-path-input)" #
                           label: "Save Directory (Optional)"
                           placeholder: "./output_issues"
-                        - type: "Button (button#local-save-button)" #
+                        - type: "Button (button#local-save-button)"
+                          description: "JavaScriptが選択Issue・設定情報をAPIエンドポイントに送信し、ローカル保存処理を非同期で実行する。"
                           label: "Save Issues Locally"
                     - group_name: "AI Configuration" #
+                      description: "AI設定の保存・取得もJavaScriptがAPI経由で行う。"
                       elements:
                         - type: "Radio Buttons (input[name='ai_provider'])" #
                           label: "AI Provider:"
