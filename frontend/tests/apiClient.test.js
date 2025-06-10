@@ -17,16 +17,16 @@ describe('uploadIssueFile', () => {
       json: async () => mockResponse
     });
     const formData = new FormData();
-    formData.append('issue_file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
+    formData.append('file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
     const result = await uploadIssueFile(formData);
     expect(result).toEqual(mockResponse);
-    expect(fetch).toHaveBeenCalledWith('/api/v1/parse-file/', expect.objectContaining({ method: 'POST' }));
+    expect(fetch).toHaveBeenCalledWith('/api/v1/parse-file', expect.objectContaining({ method: 'POST' }));
   });
 
   it('失敗時: 例外を投げる', async () => {
     fetch.mockRejectedValue(new Error('network error'));
     const formData = new FormData();
-    formData.append('issue_file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
+    formData.append('file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
     await expect(uploadIssueFile(formData)).rejects.toThrow('network error');
   });
 
@@ -37,7 +37,7 @@ describe('uploadIssueFile', () => {
       json: async () => ({ detail: 'ファイル検証エラー: 不正なファイル形式' })
     });
     const formData = new FormData();
-    formData.append('issue_file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
+    formData.append('file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
     await expect(uploadIssueFile(formData)).rejects.toThrow('ファイル検証エラー: 不正なファイル形式');
   });
 
@@ -48,7 +48,7 @@ describe('uploadIssueFile', () => {
       json: async () => ({ message: 'Internal Server Error' })
     });
     const formData = new FormData();
-    formData.append('issue_file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
+    formData.append('file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
     await expect(uploadIssueFile(formData)).rejects.toThrow('Internal Server Error');
   });
 
@@ -59,7 +59,7 @@ describe('uploadIssueFile', () => {
       json: async () => ({ detail: 'AI解析エラー: パース失敗' })
     });
     const formData = new FormData();
-    formData.append('issue_file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
+    formData.append('file', new Blob(['dummy'], { type: 'text/markdown' }), 'test.md');
     await expect(uploadIssueFile(formData)).rejects.toThrow('AI解析エラー: パース失敗');
   });
 });
