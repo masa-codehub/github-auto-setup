@@ -9,11 +9,11 @@ graph TD
     EnvVars["環境変数"]
 
     subgraph System Boundary
-        GitHubAutoSetup["github-auto-setup システム"] 
+        GitHubAutoSetup["github-auto-setup システム (API + CLI)"] 
     end
     
 
-    User -- "Web UI / CLI 操作" --> GitHubAutoSetup
+    User -- "Web UI (静的サイト) / CLI 操作" --> GitHubAutoSetup
     GitHubAutoSetup -- "ファイル読み込み" --> InputFile
     GitHubAutoSetup -- "設定読み込み" --> ConfigFile
     GitHubAutoSetup -- "設定読み込み" --> EnvVars
@@ -33,7 +33,7 @@ graph TD
 
 **図の説明:**
 
-* **`github-auto-setup システム` (システム境界内 - 薄オレンジ):** これが開発対象のシステム全体を表します。内部のコンポーネント分割（Web UI, CLI, Core Logicなど）は、この図では意図的に詳細化せず、システムを一つのブラックボックスとして捉えています。
+* **`github-auto-setup システム (API + CLI)` (システム境界内 - 薄オレンジ):** これが開発対象のシステム全体を表します。内部のコンポーネント分割（Web UI, CLI, Core Logicなど）は、この図では意図的に詳細化せず、システムを一つのブラックボックスとして捉えています。
 * **外部エンティティ (水色および薄紫):**
     * **`ユーザー (開発者)` (薄紫):** システムを操作する主体です。
     * **`Issue情報ファイル (.md, .yml, .json)`:** システムへの主要な入力データです。

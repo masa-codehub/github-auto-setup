@@ -110,7 +110,7 @@ development_approach_guidelines:
 epics:
   - epic_id: "EPIC-WEBUI"
     title: "Static Web Frontend Functionality"
-    description: "ユーザーがブラウザを通じてIssue情報ファイルをアップロードし、バックエンドAPIと通信して解釈された内容を確認・選択し、GitHubへの登録やローカル保存アクションをトリガーできる静的なWebフロントエンドを提供する。"
+    description: "ユーザーがブラウザを通じてIssue情報ファイルをアップロードし、バックエンドAPI（Django REST Framework）と通信して解釈された内容を確認・選択し、GitHubへの登録やローカル保存アクションをトリガーできる静的なWebフロントエンド（HTML+Bootstrap5+最小限JS）を提供する。DjangoテンプレートによるHTMLレンダリングは行わない。"
     user_stories:
       - "US-001"
       - "US-002"
@@ -124,8 +124,7 @@ epics:
       - "TASK-FE-API-INTEGRATION"
   - epic_id: "EPIC-BACKEND-API"
     title: "Backend API Services"
-    description: "静的フロントエンドやCLIからのリクエストを処理し、コアロジックを実行し、結果を返すためのAPIエンドポイント群を提供する。"
-    user_stories: []
+    description: "静的フロントエンドやCLIからのリクエストを処理し、コアロジックを実行し、結果を返すためのAPIエンドポイント群をDjango REST Frameworkで提供する。"
     tasks:
       - "TASK-BE-DRF-SETUP"
       - "TASK-DJANGO-SETUP"
@@ -143,16 +142,16 @@ user_stories:
     title: "Web UIでのIssueファイルのアップロード、バックエンドAPI経由でのAI解析、結果の一覧表示"
     status: "Done"
     notes: |
-      - [アーキテクチャ変更] このユーザーストーリーは静的フロントエンド + バックエンドAPI構成を前提とする。
+      - [アーキテクチャ変更] このユーザーストーリーは静的フロントエンド（HTML+JS+Bootstrap5）+ バックエンドAPI（Django REST Framework）構成を前提とする。
       - [API設計] 詳細なAPIエンドポイント、リクエスト/レスポンス形式は `docs/api_specifications.md` を参照。
       - [データフロー変更] ファイルアップロード後の全Issueデータはバックエンドで一時保存され、UIとはIDベースでやり取りするよう変更されました。
       - **[2025-06-08 完了] フロントエンド・バックエンドの基本機能を実装。ファイルアップロードから解析結果のUI表示までの一連のフローが完成。保守性向上のためのリファクタリングも実施済み。**
     acceptance_criteria:
       - "静的Web UIにファイルアップロード機能があり、`.md`, `.yml`, `.json` ファイル（10MB以下）を選択できる。"
-      - "選択されたファイルデータが、フロントエンドからバックエンドのファイルアップロード/解析APIエンドポイントに送信される。"
+      - "選択されたファイルデータが、フロントエンドからバックエンドのファイルアップロード/解析APIエンドポイントにFormDataで送信される。"
       - "バックエンドAPIはファイルを受け取り、AIパーサーによって区切りルールとキーマッピングルールを推論し、それに基づいて`ParsedSourceFileContent`オブジェクトを生成する。"
       - "解析結果がサーバーサイドで一時保存され、その`session_id`と、Issueの選択に必要な最小限の情報（タイトル、temp_idなど）がJSON形式でフロントエンドに返却される。"
-      - "フロントエンドはAPIからのレスポンスを受け取り、`session_id`を保持し、`IssueData`リストをWeb UI上に一覧形式で表示する。"
+      - "フロントエンドはAPIからのレスポンスを受け取り、`session_id`を保持し、`IssueData`リストをWeb UI上にJavaScriptで動的に一覧形式で表示する。"
       - "Issueの主要な情報（タイトル、担当者候補、ラベル候補など）が一覧で確認できる。"
       - "ファイル検証エラー（API側）、API通信エラー、AI解析エラーが発生した場合、適切なエラーメッセージがフロントエンドのUIに表示される。"
     technical_tasks:
@@ -168,11 +167,11 @@ user_stories:
       - "TASK-BE-API-TEMPORARY-DATA-STORAGE"
   - story_id: "US-002"
     title: "Web UIでの処理対象Issueの選択"
-    description: "開発者として、Web UIに表示されたIssue一覧の中から、GitHubへの登録やローカル保存の対象とするIssueを個別に、または一括で選択したい。これにより、必要なIssueのみを効率的に処理できる。"
+    description: "開発者として、Web UIに表示されたIssue一覧の中から、GitHubへの登録やローカル保存の対象とするIssueを個別に、または一括で選択したい。これにより、必要なIssueのみを効率的に処理できる。選択・送信はすべてJavaScriptによるAPI呼び出しで行う。"
     acceptance_criteria:
       - "Issue一覧の各項目にチェックボックスが表示され、個別に選択/非選択できる。"
       - "「すべて選択」「すべて解除」のような一括選択機能がある。"
-      - "選択されたIssueの情報がバックエンドに正しく送信される。"
+      - "選択されたIssueの情報がJavaScriptからAPI経由でバックエンドに送信される。"
     technical_tasks:
       - "TASK-WEBUI-SELECT-JS"          # issues.yml の TASK-WEBUI-ISSUE-DISPLAY-JS と同等
       - "TASK-WEBUI-SELECT-BACKEND"     # issues.yml の TASK-WEBUI-ISSUE-DISPLAY (バックエンド連携部分)と関連

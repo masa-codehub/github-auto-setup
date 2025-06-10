@@ -1,4 +1,3 @@
-```mermaid
 graph TB
 %% Top to Bottom layout
 
@@ -18,14 +17,14 @@ graph TB
     %% Presentation Layer (Top Layer)
     subgraph "Presentation Layer"
         direction LR
-        WebUI["Web UI (Django App)"]
+        WebUI["Web UI (Static HTML/CSS/JS)"]
         CLI["CLI (Typer)"]
     end
 
-    %% Application Service Layer (Optional, between Presentation and Use Cases)
-    subgraph "Application Service Layer (検討中)"
+    %% API Layer (Django App as API Server)
+    subgraph "API Layer (Django with DRF)"
         direction LR
-        DjangoAppService["Django App Service Layer"]
+        DjangoAPIServer["Django (API Server)"]
     end
 
     %% Core Logic - Use Cases Layer
@@ -80,16 +79,16 @@ graph TB
     User -- "Interacts via" --> WebUI
     User -- "Interacts via" --> CLI
 
-    %% Presentation Layer uses Application Service Layer (or Use Cases directly if no AppService)
-    WebUI --> DjangoAppService
+    %% Presentation Layer uses API Layer
+    WebUI -- "HTTP API calls (JSON)" --> DjangoAPIServer
     CLI -- "directly calls" --> AIParseFileUC
     CLI -- "directly calls" --> CreateGitHubResourcesUC
     CLI -- "directly calls" --> LocalSaveUC
 
-    %% Application Service Layer uses Use Cases
-    DjangoAppService -- "calls" --> AIParseFileUC
-    DjangoAppService -- "calls" --> CreateGitHubResourcesUC
-    DjangoAppService -- "calls" --> LocalSaveUC
+    %% API Layer uses Use Cases
+    DjangoAPIServer -- "calls" --> AIParseFileUC
+    DjangoAPIServer -- "calls" --> CreateGitHubResourcesUC
+    DjangoAPIServer -- "calls" --> LocalSaveUC
 
     %% Use Cases use Adapters/Services and Domain Models
     AIParseFileUC -- "orchestrates" --> AIRuleInferenceEngineAdp
@@ -104,7 +103,7 @@ graph TB
     CreateGitHubResourcesUC -- "uses" --> GitHubRestClientAdp
     CreateGitHubResourcesUC -- "uses" --> GitHubGraphQLClientAdp
     CreateGitHubResourcesUC -- "uses" --> AssigneeValidatorAdp
-    CreateGitHubResourcesUC -- "consumes" --> ParsedSourceFileContentMdl
+    CreateGitHubResourcesUC -- "consumes" --> ParshedSourceFileContentMdl
     CreateGitHubResourcesUC -- "produces" --> CreateGitHubResourcesResultMdl
     %% CreateGitHubResourcesUC calls sub-usecases CreateIssuesUC & CreateRepositoryUC (internal to UC layer)
 
@@ -149,7 +148,7 @@ graph TB
     classDef user fill:#E6E6FA,stroke:#333,stroke-width:2px;
     classDef external fill:#ADD8E6,stroke:#333,stroke-width:2px;
     classDef presentation fill:#90EE90,stroke:#333,stroke-width:2px;
-    classDef app_service fill:#FFFFE0,stroke:#333,stroke-width:2px;
+    classDef api_layer fill:#FFFFE0,stroke:#333,stroke-width:2px; %% New class for API layer
     classDef core_logic_main fill:#FFDAB9,stroke:#333,stroke-width:2px;
     %% Not used for subgraphs directly 
     classDef use_case fill:#FFC0CB,stroke:#333,stroke-width:1px,text-align:center;
@@ -160,41 +159,8 @@ graph TB
     class User user;
     class InputFile,ConfigFile,GitHubSetupDefaultsFile,EnvVars,GitHubAPI,AIServiceAPI,LocalFileSystem external;
     class WebUI,CLI presentation;
-    class DjangoAppService app_service;
+    class DjangoAPIServer api_layer; %% Apply new class
     class AIParseFileUC,CreateGitHubResourcesUC,LocalSaveUC use_case;
     class IssueDataMdl,ParsedSourceFileContentMdl,AISuggestedRulesMdl,CreateIssuesResultMdl,CreateGitHubResourcesResultMdl,LocalFileSplitResultMdl domain_model;
     class InitialFileParserAdp,AIRuleInferenceEngineAdp,RuleBasedSplitterSvc,RuleBasedMapperSvc,LabelMilestoneNormalizerSvc,GitHubRestClientAdp,GitHubGraphQLClientAdp,AssigneeValidatorAdp,CliReporterAdp,LocalFileSaverAdp adapter_service;
     class ConfigLoaderInfra,DefaultsLoaderInfra,FileReaderInfra infra;
-```
-
-**図の凡例と説明の更新:**
-
-* **Core Logic (薄オレンジ):**
-    * **Use Cases (ピンク):** アプリケーションの主要な業務フロー。`AIParseFileUseCase` を追加。
-    * **Domain Models (水色):** ビジネスの概念とルールを表すデータ構造。`AISuggestedRulesMdl` を追加。
-    * **Adapters & Core Services (黄土色):** 外部システムとの連携、データ形式変換、およびAIパーサー関連の中核的なサービスコンポーネント群。`InitialFileParserAdp` の説明を更新し、`AIRuleInferenceEngineAdp`, `RuleBasedSplitterSvc`, `RuleBasedMapperSvc`, `LabelMilestoneNormalizerSvc` を追加。
-* **Infrastructure Layer (薄灰):** `DefaultsLoaderInfra` を追加。
-
-**主な変更点:**
-
-1.  **`AIParseFileUseCase` の導入:**
-    * ファイル解析処理のオーケストレーションを担当するUseCaseとして `AIParseFileUseCase` を「Use Cases」サブグラフに明示的に配置しました。
-    * Web UI (DjangoAppService経由) および CLI は、まずこの `AIParseFileUC` を呼び出して `ParsedSourceFileContentMdl` を取得する流れになります。
-2.  **AIパーサー関連コンポーネントの具体化:**
-    * 既存の `AIParserAdp` を、より具体的な責務を持つコンポーネント群に分割・名称変更しました。
-        * `AIRuleInferenceEngineAdp`: AI Service APIと連携してルールを推論するアダプター。
-        * `RuleBasedSplitterSvc`: 推論/設定された区切りルールに基づいてファイルを分割するサービス。
-        * `RuleBasedMapperSvc`: 推論されたキーマッピングルールに基づいてマッピングするサービス。
-        * `LabelMilestoneNormalizerSvc`: ラベルとマイルストーンを正規化するサービス。
-    * `InitialFileParserAdp` の説明を「前処理・フォールバック区切りロジック提供検討」と更新し、役割の変化を反映しました。
-3.  **ドメインモデルの追加:**
-    * `AISuggestedRulesMdl`: AIが推論した区切りルールとキーマッピングルールを保持するドメインモデルを「Domain Models」サブグラフに追加しました。
-4.  **設定ファイルとの連携明確化:**
-    * `DefaultsLoaderInfra` を「Infrastructure Layer」に追加し、`GitHubSetupDefaultsFile` からラベル・マイルストーン定義を読み込む役割を示しました。
-    * `ConfigLoaderInfra` の説明に「プロンプトパス、フォールバック区切り指定等」を追記し、AIパーサー戦略との関連を明確にしました。
-5.  **連携の変更・詳細化:**
-    * `AIParseFileUseCase` を中心としたファイル解析フローの連携を記述しました（FileReaderInfra → InitialFileParserAdp (オプション) → AIRuleInferenceEngineAdp → AISuggestedRulesMdl → RuleBasedSplitterSvc → RuleBasedMapperSvc → DefaultsLoaderInfra → LabelMilestoneNormalizerSvc → ParsedSourceFileContentMdl）。
-    * `AIRuleInferenceEngineAdp` が `ConfigLoaderInfra` からプロンプト設定を、`RuleBasedSplitterSvc` が `ConfigLoaderInfra` からフォールバック区切りルール設定を、`LabelMilestoneNormalizerSvc` が `DefaultsLoaderInfra` からデフォルト定義を利用する関係を示しました。
-    * `CreateGitHubResourcesUC` や `LocalSaveUC` は、`AIParseFileUC` によって生成された `ParsedSourceFileContentMdl` を入力として受け取る形になります。
-
-この修正により、アーキテクチャ図がAIパーサーの新しい処理フローとコンポーネント構成をより正確に反映し、システム全体の理解を助けるものになったかと存じます。

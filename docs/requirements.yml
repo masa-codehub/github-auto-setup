@@ -92,9 +92,8 @@ sections:
           - type: "実行形態"
             details:
               - "コンテナ上で動作するPython/Django製APIバックエンドアプリケーション。"
-              - "**Bootstrap 5と最小限のJavaScriptで構築された静的なWeb UI。**"
-              - "**Web UIはDjangoアプリケーションが静的ファイルをホスティングし、バックエンドAPIと通信する構成。将来的にGitHub Pagesのような静的サイトホスティングサービスからの利用も可能とする。**"
-              - "Python CLIアプリケーション（Typer）。"
+              - "**Bootstrap 5と最小限のJavaScriptで構築された静的なWeb UI。DjangoテンプレートによるHTMLレンダリングは行わず、静的ファイルとしてGitHub Pages等でのデプロイも可能。**"
+              - "Python CLIアプリケーション（Typer）。
       - heading: "対象範囲外（Out of Scope）"
         items:
           - "GitHub上のIssueやリポジトリの状態を読み取り、ローカルのIssue定義ファイルと双方向で同期する機能。"
@@ -104,6 +103,7 @@ sections:
           - "GitHub以外のプラットフォーム連携 (Jira, GitLab等)。"
           - "高度なAPI呼び出しリトライ機構 (現状)。"
           - "**Web UIにおけるモダンなJavaScriptフレームワーク（React, Vueなど）の利用。**"
+          - "**DjangoテンプレートによるHTMLレンダリング。**"
 
   - heading: "4. 主要なステークホルダーと役割"
     content: |
@@ -117,7 +117,7 @@ sections:
       - title: "UC-Web-001: Web UIによるIssue情報ファイルの処理とGitHubリソース作成"
         actor: "開発者"
         description: |
-          Web UIを通じてIssue情報ファイルをアップロードし、内容を解析・プレビュー後、選択したIssueに基づいてGitHub上にリポジトリ、ラベル、マイルストーン、Issueを作成し、必要に応じてプロジェクトに連携する。オプションとしてローカルにも保存できる。
+          静的Web UI（HTML+JS+Bootstrap5）を通じてIssue情報ファイルをアップロードし、内容をAPIサーバー（Django REST Framework）経由で解析・プレビュー後、選択したIssueに基づいてGitHub上にリポジトリ、ラベル、マイルストーン、Issueを作成し、必要に応じてプロジェクトに連携する。オプションとしてローカルにも保存できる。
           (関連ユーザーストーリー: US-001, US-002, US-003, US-004, US-WEBUI-AI-CONFIG など)
       - title: "UC-CLI-001: CLIによるGitHubリソース一括登録"
         actor: "開発者"
@@ -152,10 +152,10 @@ sections:
       主要な機能要件は以下の通りです。各機能要件の詳細な受け入れ基準や背景となるユーザーストーリーは `docs/backlog.yml` を参照してください。
     items:
       - id: "FR-InputProcessing"
-        description: "システムは、指定された単一のIssue情報ファイル（Markdown, YAML, JSON）を読み込み、AIパーサーを用いてIssueの区切りルールとキーマッピングルールを推論し、それに基づいて構造化データ `ParsedSourceFileContent` を生成できること。 (US-001 など)"
+        description: "システムは、指定された単一のIssue情報ファイル（Markdown, YAML, JSON）を読み込み、AIパーサーを用いてIssueの区切りルールとキーマッピングルールを推論し、それに基づいて構造化データ `ParsedSourceFileContent` を生成できること。プレビュー表示はJavaScriptによる動的なDOM操作で行う。 (US-001 など)"
         priority: must_have
       - id: "FR-WebUI-Interaction"
-        description: "Web UIは、ファイルアップロード、Issue一覧表示・選択、GitHub登録指示、ローカル保存指示、AI設定などの対話的な操作を提供すること。 (US-001, US-002, US-003, US-004, US-WEBUI-AI-CONFIG など)"
+        description: "Web UIは、静的HTML+Bootstrap5+最小限のJavaScriptで構築され、ファイルアップロード、Issue一覧表示・選択、GitHub登録指示、ローカル保存指示、AI設定などの対話的な操作を、すべてAPIサーバー（Django REST Framework等）との通信を通じて実現する。DjangoテンプレートによるHTMLレンダリングは行わない。 (US-001, US-002, US-003, US-004, US-WEBUI-AI-CONFIG など)"
         priority: must_have
       - id: "FR-CLI-Execution"
         description: "CLIは、コマンドライン引数を通じて、Web UIの主要なGitHubリソース作成フローを実行できること。 (US-005 など)"
@@ -167,7 +167,7 @@ sections:
         description: "システムは、Web UIとCLIの両方でDry Runモードを提供し、実際の変更を伴わないシミュレーション実行ができること。 (US-006 など)"
         priority: must_have
       - id: "FR-LocalSave"
-        description: "システムは、Web UIからの指示に基づき、解析されたIssue情報をローカルファイルシステムにYAML形式で分割保存し、目次ファイル(`index.html`)を生成できること。 (US-004 など)"
+        description: "システムは、Web UIからの指示に基づき、解析されたIssue情報をローカルファイルシステムにYAML形式で分割保存し、目次ファイル(`index.html`)を生成できること。保存処理もAPI経由で行う。 (US-004 など)"
         priority: should_have
       - id: "FR-Parse-001"
         description: "AIがファイル構造から区切りルールとマッピングルールを推論する。推論の信頼性に関する基準を設け、信頼性が低い場合はエラーまたは警告をユーザーに提示する。"
