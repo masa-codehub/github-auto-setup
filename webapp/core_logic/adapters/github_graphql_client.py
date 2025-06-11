@@ -108,40 +108,20 @@ class GitHubGraphQLClient:
                 return None
 
             # --- ★ Issueで提案された修正箇所を反映 ★ ---
-            data = response.get("data") if isinstance(
-                response, dict) else getattr(response, 'data', None)
-
-            # data が None や空の場合も None を返す (堅牢性向上)
-            if data is None:
-                # 以前はエラーにしていたが、警告ログを出力して None を返すように変更
+            # --- walrus operatorで簡潔化 ---
+            if not (data := response.get("data") if isinstance(response, dict) else getattr(response, 'data', None)):
                 logger.warning(
                     f"GraphQL response missing 'data' field on page {page_count}. Treating as not found.")
                 return None
-            if isinstance(data, dict) and not data:
-                logger.warning(
-                    f"GraphQL response has empty 'data' object on page {page_count}. Treating as not found.")
-                return None
-
-            owner_data = data.get("repositoryOwner")
-            # owner_data が None や空の場合も None を返す (堅牢性向上)
-            if not owner_data:  # None または空辞書の場合
+            if not (owner_data := data.get("repositoryOwner")):
                 logger.warning(
                     f"Repository owner '{trimmed_owner}' not found or response missing 'repositoryOwner' field on page {page_count}. Returning None.")
                 return None
-
-            projects_v2 = owner_data.get("projectsV2")
-            # projects_v2 が None や空の場合も None を返す (堅牢性向上)
-            if not projects_v2:  # None または空辞書の場合
+            if not (projects_v2 := owner_data.get("projectsV2")):
                 logger.warning(
                     f"No projectsV2 data found for owner '{trimmed_owner}' on page {page_count}. Returning None.")
                 return None
-
-            nodes = projects_v2.get("nodes")  # デフォルト値([])を使わず、None チェックを行う
-            page_info = projects_v2.get("pageInfo")
-
-            # nodes や pageInfo が None の場合も None を返す (堅牢性向上)
-            if nodes is None or page_info is None:
-                # 以前はエラーにしていたが、警告ログを出力して None を返すように変更
+            if not (nodes := projects_v2.get("nodes")) or not (page_info := projects_v2.get("pageInfo")):
                 logger.warning(
                     f"GraphQL response missing 'nodes' or 'pageInfo' on page {page_count}. Treating as not found.")
                 return None

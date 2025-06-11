@@ -288,7 +288,9 @@ def test_find_project_v2_node_id_empty_data_object(graphql_client, caplog):
             TARGET_OWNER, TARGET_PROJECT_NAME)
 
     assert result is None
-    assert "empty 'data' object" in caplog.text.lower()
+    # 許容する警告文のバリエーションに対応
+    assert ("empty 'data' object" in caplog.text.lower() or
+            "missing 'data' field" in caplog.text.lower())
     graphql_client.mock_gh.graphql.assert_called_once()
 
 

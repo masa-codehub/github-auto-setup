@@ -1,0 +1,83 @@
+# BE-API-DRF-SETUP-plan.yml
+
+issue_id: BE-API-DRF-SETUP
+issue_title: DRFの導入とAPI認証基盤の構築
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/207
+labels:
+  - backend
+  - API
+  - security
+  - DRF
+
+objectives:
+  - Django REST Framework（DRF）とdjango-cors-headersの導入・設定
+  - API認証（APIキー方式）のカスタム認証・パーミッション実装
+  - /api/healthcheck/エンドポイントの実装とテスト
+  - CORS設定の追加とテスト
+  - ルーティングの設定
+
+implementation_steps:
+  - step: 1
+    title: requirements.txtへDRF・CORSヘッダー追加＆インストール
+    command: |
+      pip install djangorestframework django-cors-headers && echo -e "djangorestframework\ndjango-cors-headers" >> requirements.txt
+    verification: |
+      pip show djangorestframework && pip show django-cors-headers
+      # requirements.txtに両パッケージが記載されていることを確認
+  - step: 2
+    title: settings.pyへDRF・CORS設定追加
+    command: |
+      # settings.pyに'rest_framework'と'corsheaders'をINSTALLED_APPSへ追加し、CORS_ALLOWED_ORIGINS等を設定
+      # MIDDLEWAREに'corsheaders.middleware.CorsMiddleware'を追加
+      # REST_FRAMEWORK設定を追加
+    verification: |
+      # Djangoを起動し、設定エラーが出ないことを確認
+  - step: 3
+    title: /api/healthcheck/エンドポイントの実装
+    command: |
+      # webapp/app/views.pyにhealth_check_api_viewを実装
+      # urls.pyでルーティング
+    verification: |
+      curl -i http://localhost:8000/api/healthcheck/ | grep '200 OK'
+      # JSONレスポンスで"status": "ok"が返ること
+  - step: 4
+    title: カスタムAPIキー認証クラスの実装
+    command: |
+      # webapp/app/authentication.pyにBaseAuthentication継承クラスを実装
+    verification: |
+      # テストで有効・無効なAPIキーの判定ができること
+  - step: 5
+    title: カスタムパーミッションクラスの実装
+    command: |
+      # webapp/app/permissions.pyにBasePermission継承クラスを実装
+    verification: |
+      # テストで不正なリクエストが拒否されること
+  - step: 6
+    title: healthcheck APIへ認証・パーミッション適用
+    command: |
+      # health_check_api_viewにカスタム認証・パーミッションを適用
+    verification: |
+      # 有効なAPIキーでのみアクセス可能なことをテスト
+  - step: 7
+    title: CORS設定のテスト
+    command: |
+      # テストコードでCORS設定の動作を確認
+    verification: |
+      # 指定オリジンからのリクエストが許可されること
+  - step: 8
+    title: ルーティング設定のテスト
+    command: |
+      # urls.pyのAPIルーティングが正しいことをテスト
+    verification: |
+      # /api/healthcheck/等にアクセスできること
+  - step: 9
+    title: すべてのテストを実行し、DoDを満たすことを確認
+    command: |
+      python manage.py test
+    verification: |
+      # すべてのテストがパスすること
+
+notes:
+  - クリーンアーキテクチャ・TDD・DDD原則を厳守
+  - 既存要件との矛盾なし
+  - エラーや自己修正ループは内部ログに記録

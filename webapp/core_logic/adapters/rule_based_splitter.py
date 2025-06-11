@@ -70,7 +70,9 @@ class RuleBasedSplitterSvc:
     def _split_json(self, content: str) -> IntermediateParsingResult:
         try:
             data = json.loads(content)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.warning(
+                f"Failed to parse JSON content due to JSONDecodeError: {e}")
             return []
         if isinstance(data, list):
             return data

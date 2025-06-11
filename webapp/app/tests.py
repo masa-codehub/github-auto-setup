@@ -14,6 +14,7 @@ from core_logic.adapters.github_rest_client import GitHubRestClient
 from rest_framework.test import APIClient, force_authenticate
 from django.contrib.auth import get_user_model
 from core_logic.domain.exceptions import AiParserError, ParsingError
+import os
 
 
 class AuthenticatedAPITestMixin:
@@ -24,13 +25,22 @@ class AuthenticatedAPITestMixin:
         self.client.force_authenticate(user=self.user)
 
 
+@override_settings(API_KEY='test-api-key')
 class HealthCheckAPITest(TestCase):
+    def setUp(self):
+        self.api_key = 'test-api-key'
+        self.client = APIClient()
+        self.client.credentials(HTTP_X_API_KEY=self.api_key)
+        os.environ['API_KEY'] = self.api_key
+
     def test_health_check_api_status_code(self):
-        response = self.client.get('/api/v1/healthcheck/')
+        response = self.client.get(
+            '/api/v1/healthcheck/', HTTP_X_API_KEY=self.api_key)
         self.assertEqual(response.status_code, 200)
 
     def test_health_check_api_content(self):
-        response = self.client.get('/api/v1/healthcheck/')
+        response = self.client.get(
+            '/api/v1/healthcheck/', HTTP_X_API_KEY=self.api_key)
         self.assertTrue(response.get(
             'Content-Type', '').startswith('application/json'))
         self.assertEqual(response.json(), {
@@ -38,7 +48,7 @@ class HealthCheckAPITest(TestCase):
 
     def test_browsable_api_enabled(self):
         response = self.client.get(
-            '/api/v1/healthcheck/', HTTP_ACCEPT='text/html')
+            '/api/v1/healthcheck/', HTTP_ACCEPT='text/html', HTTP_X_API_KEY=self.api_key)
         self.assertEqual(response.status_code, 200)
         self.assertIn('text/html', response.get('Content-Type', ''))
         self.assertContains(response, 'Django REST framework')
@@ -233,18 +243,29 @@ class ParsedDataCacheModelTest(TestCase):
 
 
 class CORSTest(TestCase):
+    def setUp(self):
+        self.api_key = 'test-api-key'
+        os.environ['API_KEY'] = self.api_key
+        from django.conf import settings as dj_settings
+        dj_settings.API_KEY = self.api_key
+        self.client = APIClient()
+        self.client.credentials(HTTP_X_API_KEY=self.api_key)
+
     def test_allowed_origin(self):
-        client = Client(HTTP_ORIGIN='http://localhost:3000')
-        response = client.get(reverse('api_v1:health_check_api'))
+        response = self.client.get(reverse('api_v1:health_check_api'),
+                                   HTTP_ORIGIN='http://localhost:3000', HTTP_X_API_KEY=self.api_key)
         self.assertEqual(response.status_code, 200)
-        # DEBUG=True時は'*'、DEBUG=False時はオリジンが返る
         self.assertIn(response.get('Access-Control-Allow-Origin'),
                       ['*', 'http://localhost:3000'])
 
     def test_disallowed_origin(self):
         with override_settings(DEBUG=False, CORS_ALLOW_ALL_ORIGINS=False, CORS_ALLOWED_ORIGINS=["http://localhost:3000"]):
-            client = Client(HTTP_ORIGIN='http://evil.com')
-            response = client.get(reverse('api_v1:health_check_api'))
+            from django.conf import settings as dj_settings
+            dj_settings.API_KEY = self.api_key
+            client = APIClient()
+            client.credentials(HTTP_X_API_KEY=self.api_key)
+            response = client.get(reverse('api_v1:health_check_api'),
+                                  HTTP_ORIGIN='http://evil.com', HTTP_X_API_KEY=self.api_key)
             self.assertNotIn('Access-Control-Allow-Origin', response)
 
 
@@ -255,6 +276,34 @@ class SecurityHeadersTest(TestCase):
         self.assertEqual(response.get('X-Frame-Options'), 'DENY')
         # Content-Security-Policy等も必要に応じて追加
 
+
+class CustomAPIKeyAuthenticationTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.valid_key = 'test-api-key'
+        os.environ['API_KEY'] = self.valid_key
+        self.url = '/api/v1/healthcheck/'
+
+    def tearDown(self):
+        if 'API_KEY' in os.environ:
+            del os.environ['API_KEY']
+
+    def test_valid_api_key_allows_access(self):
+        response = self.client.get(self.url, HTTP_X_API_KEY=self.valid_key)
+        self.assertNotIn(response.status_code, [401, 403])
+
+    def test_invalid_api_key_denies_access(self):
+        response = self.client.get(self.url, HTTP_X_API_KEY='wrong-key')
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_missing_api_key_denies_access(self):
+        response = self.client.get(self.url)
+        self.assertIn(response.status_code, [401, 403])
+
+    def test_no_server_api_key_configured(self):
+        del os.environ['API_KEY']
+        response = self.client.get(self.url, HTTP_X_API_KEY=self.valid_key)
+        self.assertIn(response.status_code, [401, 403])
 
 class UserAiSettingsAPITest(AuthenticatedAPITestMixin, TestCase):
     def test_get_default_ai_settings(self):

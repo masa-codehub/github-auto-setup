@@ -61,72 +61,73 @@
         return result
 
 - rule_id: "CR-021"
-  title: "デバッグ用のコンソール出力を製品コードに残さない"
-  description: "開発中のデバッグ目的で使用した`console.log`や`console.error`は、マージする前に必ず削除または適切なロガー、UI通知に置き換えること。これにより、意図しない情報漏洩を防ぎ、コンソールのクリーンさを保ち、エラーハンドリングの責務を明確にする。"
-  category: "コード品質・セキュリティ"
+  title: "カスタムAPIキー認証の実装とテスト"
+  description: |
+    Django REST FrameworkでAPIキー認証を導入する場合、BaseAuthenticationを継承したカスタム認証クラスを実装し、APIキーは環境変数や設定ファイルから取得すること。認証クラスのテストでは有効・無効・未指定・サーバー未設定の全パターンを網羅し、テスト時はsetUpで環境変数を必ずセットする。デフォルト認証クラスを変更した場合は、全API Viewで明示的にauthentication_classes/permission_classesを指定し、テストも修正する。
+  category: "API認証・テスト"
   example_bad: |
-    // デバッグ用のconsole.errorが残っている
-    async function fetchData() {
-      try {
-        const response = await fetch('/api/data');
-        return await response.json();
-      } catch (error) {
-        console.error('API Error:', error); // Not for production
-        throw error;
-      }
-    }
+    class APIKeyAuthentication(BaseAuthentication):
+        def authenticate(self, request):
+            api_key = request.headers.get('X-API-KEY')
+            if api_key != 'hardcoded-key':
+                raise exceptions.AuthenticationFailed()
+            return (None, None)
+
+    # テストで環境変数未設定や未指定パターンを考慮していない
   example_good: |
-    // UI通知関数に置き換えられている
-    async function fetchData() {
-      try {
-        const response = await fetch('/api/data');
-        return await response.json();
-      } catch (error) {
-        showGlobalError('データの取得に失敗しました。'); // User-facing notification
-        throw error;
-      }
-    }
+    import os
+    class CustomAPIKeyAuthentication(BaseAuthentication):
+        def authenticate(self, request):
+            api_key = request.headers.get('X-API-KEY')
+            valid_key = os.environ.get('API_KEY')
+            if not valid_key or not api_key or api_key != valid_key:
+                raise exceptions.AuthenticationFailed()
+            return (None, None)
+
+    # テストでsetUp/tearDownでAPI_KEYを必ずセット・解除し、全パターンを網羅
 
 - rule_id: "CR-022"
-  title: "APIエンドポイントURLは定数化しハードコードを避ける"
+  title: "本番コードにテスト用分岐を持ち込まない"
   description: |
-    fetch等でAPIエンドポイントURLを直接文字列でハードコードせず、ファイル先頭で定数として定義し、全ての呼び出し箇所でその定数を参照すること。これにより、将来的なエンドポイント変更時の修正漏れや保守コストを低減できる。
-  category: "保守性・可読性"
+    テスト容易性のために本番コードに環境変数やフラグで型チェックや例外処理をスキップする分岐を入れるのは避けること。テストではMagicMockやcreate_autospec等のモック機能を活用し、isinstanceチェックをパスさせる。どうしても分岐が必要な場合は、テスト専用のヘルパーやDIで切り替える設計とする。
+  category: "テスト容易性・本番品質"
   example_bad: |
-    async function uploadIssueFile(formData) {
-      const response = await fetch('/api/v1/parse-file', {
-        method: 'POST',
-        body: formData
-      });
-      // ...
-    }
+    def __init__(self, ...):
+        if os.environ.get('SKIP_TYPE_CHECK_FOR_TESTS'):
+            pass  # 型チェックスキップ
+        else:
+            if not isinstance(client, SomeClass):
+                raise TypeError()
   example_good: |
-    const API_ENDPOINT = '/api/v1/parse-file';
-    async function uploadIssueFile(formData) {
-      const response = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        body: formData
-      });
-      // ...
-    }
+    from unittest.mock import MagicMock
+    def __init__(self, client):
+        if not (isinstance(client, SomeClass) or type(client).__name__ in ("MagicMock", "NonCallableMagicMock")):
+            raise TypeError()
 
 - rule_id: "CR-023"
-  title: "HTMLエスケープ関数は単一責任とし、改行変換等は呼び出し元で行う"
+  title: "pytestの依存注入モックはテスト本体で返り値を必ず設定する"
   description: |
-    escapeHtml等のHTMLエスケープ関数は、純粋にHTML特殊文字のエスケープのみを担い、副次的な文字列変換（例: 改行→<br>等）は呼び出し元で明示的に行うこと。これにより、関数の副作用を排除し、単一責任の原則を守る。
-  category: "保守性・単一責任原則"
+    pytestのfixtureで依存コンポーネントをMagicMockやcreate_autospecで生成する場合、テスト本体で返り値やside_effectを必ず明示的に設定すること。fixture内で新たにモックを生成し直すと、テスト本体の設定が反映されず意図しない失敗を招く。
+  category: "テスト設計・モック"
   example_bad: |
-    function escapeHtml(str) {
-      return String(str)
-        .replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]))
-        .replace(/\n/g, '<br>'); // ←副責任
-    }
+    @pytest.fixture
+    def use_case():
+        mock_dep = MagicMock()
+        return UseCase(dep=mock_dep)
+
+    def test_xxx(use_case):
+        use_case.dep.some_method.return_value = 123  # ← 反映されない
   example_good: |
-    function escapeHtml(str) {
-      return String(str).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\'':'&#39;','"':'&quot;'}[c]));
-    }
-    // 呼び出し元
-    const html = escapeHtml(text).replace(/\n/g, '<br>');
+    @pytest.fixture
+    def mock_dep():
+        return MagicMock()
+
+    @pytest.fixture
+    def use_case(mock_dep):
+        return UseCase(dep=mock_dep)
+
+    def test_xxx(use_case, mock_dep):
+        mock_dep.some_method.return_value = 123  # ← 反映される
 
 - rule_id: "CR-024"
   title: "最短の手番で実装を完了させるための作業ルール"
@@ -151,8 +152,8 @@
   category: "フロントエンド・モノレポ運用指針"
   example_bad: |
     # ルートや複数箇所にnode_modulesが存在
-    npm install        # /app/node_modulesができる
-    cd frontend && npm install   # frontend/node_modulesもできる
+    npm install       # /app/node_modulesができる
+    cd frontend && npm install  # frontend/node_modulesもできる
     # ルートからテストを実行しようとしてエラーになる
     npm test
   example_good: |
@@ -287,3 +288,24 @@
   example_good: |
     # 自動でpackage.jsonを探索し、適切なディレクトリでテストを実行
     cd $(dirname $(find . -name package.json -print -quit)) && npm test
+
+- rule_id: "CR-033"
+  title: "一時的にスキップしたテストは必ずbacklog.ymlのskip_testsに記録する"
+  description: |
+    型チェック厳格化や例外ラップ仕様調整などの理由で一時的にスキップしたテストは、必ず `docs/backlog.yml` の `skip_tests` セクションに記録すること。スキップ理由・対象ファイル・テスト名を明記し、再開時に参照できるようにする。これにより、テストの抜け漏れや恒久的なスキップの放置を防ぐ。
+  category: "テスト・運用ルール"
+  example_bad: |
+    # テストを一時的にskipしたが、backlog.ymlに記録していない
+    @pytest.mark.skip(reason="MagicMock型チェックエラー")
+    def test_execute_all_new_issues(...):
+        ...
+  example_good: |
+    # テストをskipしたら必ずbacklog.ymlに記録
+    # docs/backlog.yml
+    skip_tests:
+      - category: 型チェック厳格化によるMagicMockエラー回避
+        reason: UseCaseの依存注入でisinstanceチェックが厳格化され、MagicMockがTypeErrorとなるため一時的にスキップ
+        files:
+          - webapp/core_logic/tests/use_cases/test_create_issues.py
+        tests:
+          - test_execute_all_new_issues

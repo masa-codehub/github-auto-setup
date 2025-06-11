@@ -1,6 +1,6 @@
 import pytest
 # pytestmark = pytest.mark.skip(reason="一時的に全テストをスキップします")
-from unittest.mock import MagicMock, patch, call, ANY
+from unittest.mock import MagicMock, patch, call, ANY, create_autospec
 from pathlib import Path
 import logging  # caplog をインポート
 
@@ -76,10 +76,10 @@ def mock_create_issues_uc() -> MagicMock:
 
 @pytest.fixture
 def create_resources_use_case(
-    mock_rest_client: MagicMock,
-    mock_graphql_client: MagicMock,
-    mock_create_repo_uc: MagicMock,
-    mock_create_issues_uc: MagicMock
+    mock_rest_client,
+    mock_graphql_client,
+    mock_create_repo_uc,
+    mock_create_issues_uc
 ) -> CreateGitHubResourcesUseCase:
     """テスト対象 UseCase (依存を修正)"""
     return CreateGitHubResourcesUseCase(
