@@ -31,17 +31,6 @@ MOCK_VALID_RESPONSE_DICT = {  # JSON を dict にしておく
     ]
 }
 
-# 不正な構造のモックレスポンス（title がない）
-MOCK_INVALID_STRUCTURE = {
-    "issues": [
-        {
-            # "title": "Missing title", # title フィールドが欠落
-            "description": "This structure is invalid",
-            "labels": ["invalid"]
-        }
-    ]
-}
-
 
 # Settings フィクスチャ (max_tokens 調整を反映させるため修正)
 @pytest.fixture

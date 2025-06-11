@@ -74,19 +74,48 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
         if(uploadForm) {
             uploadForm.addEventListener('submit', handleUploadFormSubmit(uploadForm, uploadIssueFile, showUploadError));
         }
+        // === GitHub登録・ローカル保存ボタンのイベントリスナー追加 ===
+        const githubSubmitButton = document.getElementById('github-submit-button');
+        const localSaveButton = document.getElementById('local-save-button');
+        if (githubSubmitButton) {
+            githubSubmitButton.addEventListener('click', async function () {
+                await handleGithubSubmit();
+            });
+        }
+        if (localSaveButton) {
+            localSaveButton.addEventListener('click', async function () {
+                await handleLocalSave();
+            });
+        }
     });
 }
 
 // === APIクライアント関数 ===
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 async function uploadIssueFile(formData) {
     try {
-        // パス末尾のスラッシュ有無を吸収
         const endpoint = API_ENDPOINT;
-        const response = await fetch(endpoint + '/', {
+        // CSRFトークンをヘッダーに付与
+        const csrfToken = getCookie('csrftoken');
+        const headers = csrfToken ? { 'X-CSRFToken': csrfToken } : {};
+        const response = await fetch(endpoint, {
             method: 'POST',
             body: formData,
-            // CSRFトークンヘッダーを追加する必要がある場合
-            // headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            headers: headers
         });
         if (!response.ok) {
             let errorMsg = `APIエラー: ${response.status}`;
@@ -97,14 +126,12 @@ async function uploadIssueFile(formData) {
                 } else if (errJson && errJson.message) {
                     errorMsg = errJson.message;
                 }
-            } catch (_) {
-                // JSONデコードに失敗した場合は、ステータスコードベースのエラーを使用
-            }
+            } catch (_) {}
             throw new Error(errorMsg);
         }
         return await response.json();
     } catch (error) {
-        throw error; // エラーを再スローして呼び出し元で捕捉
+        throw error;
     }
 }
 
@@ -130,13 +157,13 @@ function showUploadError(message) {
 function handleUploadFormSubmit(uploadForm, uploadIssueFileFn, showUploadErrorFn) {
     return async function (e) {
         e.preventDefault();
-        const fileInput = uploadForm.querySelector('input[type="file"][name="issue_file"]');
+        const fileInput = uploadForm.querySelector('input[type="file"]');
         if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
             showUploadErrorFn('ファイルを選択してください。');
             return;
         }
         const formData = new FormData();
-        formData.append('issue_file', fileInput.files[0]);
+        formData.append('issue_file', fileInput.files[0]); // ←キー名を統一
 
         const uploadSpinner = document.getElementById('upload-spinner');
         const uploadButton = document.getElementById('upload-button');
@@ -160,6 +187,167 @@ function handleUploadFormSubmit(uploadForm, uploadIssueFileFn, showUploadErrorFn
         }
     };
 }
+
+// GitHub登録API呼び出し
+async function handleGithubSubmit() {
+    const repoInput = document.getElementById('repo-name-input');
+    const projectInput = document.getElementById('project-name-input');
+    const dryRunCheckbox = document.getElementById('dry-run-checkbox');
+    const selectedIdsInput = document.getElementById('selected-issue-ids-input');
+    const area = document.getElementById('result-notification-area');
+    if (!repoInput || !selectedIdsInput) return;
+    const repoName = repoInput.value.trim();
+    const projectName = projectInput ? projectInput.value.trim() : '';
+    const dryRun = dryRunCheckbox ? dryRunCheckbox.checked : true;
+    const selectedIds = selectedIdsInput.value.split(',').filter(Boolean);
+    if (selectedIds.length === 0) {
+        showUploadError('1件以上のIssueを選択してください。');
+        return;
+    }
+    try {
+        const csrfToken = getCookie('csrftoken');
+        const res = await fetch('/api/v1/github-create-issues/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+            },
+            body: JSON.stringify({
+                repo_name: repoName,
+                project_name: projectName,
+                dry_run: dryRun,
+                issue_ids: selectedIds
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showUploadError('GitHub登録成功: ' + (data.detail || '完了しました。'));
+        } else {
+            showUploadError('GitHub登録失敗: ' + (data.detail || 'エラー'));
+        }
+    } catch (e) {
+        showUploadError('GitHub登録API呼び出し失敗: ' + (e.message || 'エラー'));
+    }
+}
+
+// ローカル保存API呼び出し
+async function handleLocalSave() {
+    const localPathInput = document.getElementById('local-path-input');
+    const selectedIdsInput = document.getElementById('selected-issue-ids-input');
+    if (!selectedIdsInput) return;
+    const localPath = localPathInput ? localPathInput.value.trim() : '';
+    const selectedIds = selectedIdsInput.value.split(',').filter(Boolean);
+    if (selectedIds.length === 0) {
+        showUploadError('1件以上のIssueを選択してください。');
+        return;
+    }
+    try {
+        const csrfToken = getCookie('csrftoken');
+        const res = await fetch('/api/v1/local-save-issues/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+            },
+            body: JSON.stringify({
+                local_path: localPath,
+                issue_ids: selectedIds
+            })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showUploadError('ローカル保存成功: ' + (data.detail || '完了しました。'));
+        } else {
+            showUploadError('ローカル保存失敗: ' + (data.detail || 'エラー'));
+        }
+    } catch (e) {
+        showUploadError('ローカル保存API呼び出し失敗: ' + (e.message || 'エラー'));
+    }
+}
+
+// === AI設定フォーム連携 ===
+const AI_SETTINGS_API = '/api/v1/ai-settings/';
+
+async function loadAiSettings() {
+    try {
+        const res = await fetch(AI_SETTINGS_API, { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const data = await res.json();
+        // プロバイダー
+        if (data.ai_provider === 'gemini') {
+            document.getElementById('ai_provider_gemini').checked = true;
+            document.getElementById('gemini-model-selection-area').style.display = '';
+            document.getElementById('openai-model-selection-area').style.display = 'none';
+        } else {
+            document.getElementById('ai_provider_openai').checked = true;
+            document.getElementById('openai-model-selection-area').style.display = '';
+            document.getElementById('gemini-model-selection-area').style.display = 'none';
+        }
+        // モデル
+        if (data.openai_model) document.getElementById('openai-model-select').value = data.openai_model;
+        if (data.gemini_model) document.getElementById('gemini-model-select').value = data.gemini_model;
+        // APIキー
+        if (data.ai_provider === 'openai' && data.openai_api_key)
+            document.getElementById('api-key-input').value = data.openai_api_key;
+        if (data.ai_provider === 'gemini' && data.gemini_api_key)
+            document.getElementById('api-key-input').value = data.gemini_api_key;
+    } catch (e) { /* 無視 */ }
+}
+
+async function saveAiSettings(e) {
+    e.preventDefault();
+    const aiProvider = document.querySelector('input[name="ai_provider"]:checked').value;
+    const openaiModel = document.getElementById('openai-model-select').value;
+    const geminiModel = document.getElementById('gemini-model-select').value;
+    const apiKey = document.getElementById('api-key-input').value;
+    const payload = {
+        ai_provider: aiProvider,
+        openai_model: aiProvider === 'openai' ? openaiModel : '',
+        gemini_model: aiProvider === 'gemini' ? geminiModel : '',
+        openai_api_key: aiProvider === 'openai' ? apiKey : '',
+        gemini_api_key: aiProvider === 'gemini' ? apiKey : ''
+    };
+    const csrfToken = getCookie('csrftoken');
+    try {
+        const res = await fetch(AI_SETTINGS_API, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+            },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            showUploadError('AI設定を保存しました。');
+        } else {
+            showUploadError('AI設定保存に失敗しました。');
+        }
+    } catch (e) {
+        showUploadError('AI設定保存API呼び出し失敗: ' + (e.message || 'エラー'));
+    }
+}
+
+function setupAiSettingsForm() {
+    // プロバイダー切替でモデル選択欄の表示切替
+    document.getElementById('ai_provider_openai').addEventListener('change', function() {
+        document.getElementById('openai-model-selection-area').style.display = '';
+        document.getElementById('gemini-model-selection-area').style.display = 'none';
+    });
+    document.getElementById('ai_provider_gemini').addEventListener('change', function() {
+        document.getElementById('openai-model-selection-area').style.display = 'none';
+        document.getElementById('gemini-model-selection-area').style.display = '';
+    });
+    // フォームsubmit
+    const aiForm = document.getElementById('ai-settings-form');
+    if (aiForm) {
+        aiForm.addEventListener('submit', saveAiSettings);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    loadAiSettings();
+    setupAiSettingsForm();
+});
 
 // テスト用エクスポート（Node.js環境/Jest用）
 if (typeof module !== 'undefined' && module.exports) {

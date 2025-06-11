@@ -95,9 +95,27 @@
 - id: TR-BE-API-DRF-006
   description: urls.pyでAPIルーティングが正しく設定され、healthcheck等のエンドポイントにアクセスできることをテストで確認する。
 
+# テスト要件: フロントエンド静的サイト化・API連携移行 (FE-STATIC-001)
+- id: TR-FE-STATIC-001
+  description: frontend/base.html, frontend/top_page.html からDjangoテンプレート構文（{% ... %}, {{ ... }}, csrf_token等）が完全に除去されていること。
+- id: TR-FE-STATIC-002
+  description: Bootstrap 5がCDN経由で読み込まれており、frontend/vendor/bootstrap/ ディレクトリが削除されていること。
+- id: TR-FE-STATIC-003
+  description: frontend/assets/js/file_upload.js のファイルアップロード処理がfetch APIによる非同期HTTPリクエスト（FormData+POST）に移行されていること。
+- id: TR-FE-STATIC-004
+  description: frontend/assets/js/display_logic.js のファイル処理結果表示ロジックが、APIから受け取ったJSONデータを元にDOMを動的に操作してレンダリングする実装となっていること。
+- id: TR-FE-STATIC-005
+  description: frontend/assets/js/issue_selection.js等、全てのUIアクションがDjangoテンプレートに依存せず、API経由でデータ取得・UI操作を行うよう改修されていること。
+- id: TR-FE-STATIC-006
+  description: GitHub Issue登録・ローカル保存・設定画面の保存/取得等、全てのユーザーアクションがJavaScript経由でDjango APIサーバーのエンドポイントを呼び出す形に統一されていること。
+- id: TR-FE-STATIC-007
+  description: 設定画面でのAIサービスAPIキーやGitHubリポジトリ名等の保存・取得がAPI経由で正しく行われること。
+- id: TR-FE-STATIC-008
+  description: 既存および新規のJavaScriptテストコード（frontend/assets/js/tests/, frontend/tests/）が新しいAPIクライアント・DOM操作ロジックに合わせて更新または新規作成され、全てのテストがパスすること。
+
 # 備考
 - API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
 - フロントエンドのテスト要件は、API要件とは別に、ユーザー体験向上のためのクライアントサイドでの即時フィードバックと、バックエンドとの通信を検証するものです。
 - 【説明責任】US-001のDoD・受け入れ基準を反映し、既存要件と重複するものは統合・拡張し、矛盾はありませんでした。
-- 既存のAPI・認証・CORS関連要件と重複・矛盾はありません（2025-06-10時点）。
-- 新規要件は一貫性・重複排除・説明責任原則に基づき追加。
+- 上記の新規要件(DRF導入、静的サイト化)は、一貫性・重複排除・説明責任の原則に基づき、既存要件と重複しないよう新規IDで整理されています。
+- 重大な矛盾が発生した場合はCONFLICT_DETECTEDでエスカレーションします。

@@ -1,205 +1,183 @@
-{% extends "base.html" %}
-{% load static %}
-
-{% block page_title %}トップページ | {{ block.super }}{% endblock page_title %}
-
-{% block content %}
-<div class="container mt-4">
-    <div id="result-notification-area" class="mb-4">
-        {% if messages %}
-          {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-              {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-          {% endfor %}
-        {% endif %}
-    </div>
-
-    <!-- ウェルカムメッセージを横幅いっぱいに表示 -->
-    <div class="text-center mb-5 pt-4 pb-4 bg-light rounded">
-        <h1 class="display-4 mb-4">GitHub Automation Tool へようこそ！</h1>
-        <p class="lead">このツールは、GitHubの定型作業を自動化し、開発効率を向上させることを目的としています。</p>
-        <hr class="my-4">
-        <!-- <p>Bootstrap 5 のスタイルが正しく適用されています。</p> -->
-        <!-- <a class="btn btn-primary btn-lg" href="#" role="button">詳細はこちら (ダミー)</a> -->
-    </div>
-
-    <div class="row g-4">
-        <main class="col-lg-8">
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>トップページ | GitHub Automation Tool</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-ENjdO4Dr2bkBIFxQpeoA6DQD5P1Q3y9ctQIl1l0yQl0h+6U8zT94WrHftjDbrCEX" crossorigin="anonymous">
+    <link href="assets/css/custom.css" rel="stylesheet">
+  </head>
+  <body>
+    <header>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="top_page.html" aria-label="GitHub Automation Tool Home">
+            GitHub Automation Tool
+          </a>
+        </div>
+      </nav>
+    </header>
+    <main role="main" class="container mt-4">
+      <div class="container mt-4">
+        <div id="result-notification-area" class="mb-4"></div>
+        <div class="text-center mb-5 pt-4 pb-4 bg-light rounded">
+          <h1 class="display-4 mb-4">GitHub Automation Tool へようこそ！</h1>
+          <p class="lead">このツールは、GitHubの定型作業を自動化し、開発効率を向上させることを目的としています。</p>
+          <hr class="my-4">
+        </div>
+        <div class="row g-4">
+          <main class="col-lg-8">
             <section id="upload-section" class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">1. Upload Issue File</h5>
-                </div>
-                <div class="card-body">
-                    <form method="post" enctype="multipart/form-data" id="upload-form">
-                        {% csrf_token %}
-                        <div class="input-group">
-                            {{ upload_form.issue_file }}
-                            <button class="btn btn-primary" id="upload-button" type="submit">Upload & Preview</button>
-                        </div>
-                        <div class="form-text" id="fileHelp">
-                            {{ upload_form.issue_file.help_text|default:"Upload a Markdown, YAML, or JSON file containing issue definitions." }}
-                        </div>
-                        <div class="mt-2">
-                            <span id="upload-spinner" class="spinner-border text-primary" style="display:none;" role="status" aria-hidden="true"></span>
-                        </div>
-                    </form>
-                </div>
+              <div class="card-header">
+                <h5 class="mb-0">1. Upload Issue File</h5>
+              </div>
+              <div class="card-body">
+                <form id="upload-form">
+                  <div class="input-group">
+                    <input type="file" class="form-control" id="issue-file-input" aria-describedby="fileHelp">
+                    <button class="btn btn-primary" id="upload-button" type="button">Upload & Preview</button>
+                  </div>
+                  <div class="form-text" id="fileHelp">
+                    Upload a Markdown, YAML, or JSON file containing issue definitions.
+                  </div>
+                  <div class="mt-2">
+                    <span id="upload-spinner" class="spinner-border text-primary" style="display:none;" role="status" aria-hidden="true"></span>
+                  </div>
+                </form>
+              </div>
             </section>
             <section id="issue-list-section" class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">2. Preview & Select Issues</h5>
-                    <div>
-                        <button class="btn btn-sm btn-outline-secondary" id="select-all-button" type="button">Select All</button>
-                        <button class="btn btn-sm btn-outline-secondary ms-1" id="deselect-all-button" type="button">Deselect All</button>
-                    </div>
+              <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">2. Preview & Select Issues</h5>
+                <div>
+                  <button class="btn btn-sm btn-outline-secondary" id="select-all-button" type="button">Select All</button>
+                  <button class="btn btn-sm btn-outline-secondary ms-1" id="deselect-all-button" type="button">Deselect All</button>
                 </div>
-                <div class="card-body">
-                    <p class="text-muted" id="issue-count-indicator">{{ issue_count }} issues found.</p>
-                    <div id="issue-list-container" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                        <table id="issue-table" class="table table-hover table-sm">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th scope="col" style="width: 3rem;"><input type="checkbox" class="form-check-input" id="select-all-header-checkbox" title="Select all issues in the list"></th>
-                                    <th scope="col">Title</th>
-                                    <th scope="col" style="width: 15%;">Assignees</th>
-                                    <th scope="col" style="width: 20%;">Labels</th>
-                                </tr>
-                            </thead>
-                            <tbody id="issue-table-body">
-                            {% for issue in issue_list %}
-                                <tr data-bs-toggle="collapse" data-bs-target="#issueDetail{{ forloop.counter0 }}" aria-expanded="false" aria-controls="issueDetail{{ forloop.counter0 }}" class="issue-row-item">
-                                    <td><input type="checkbox" class="form-check-input issue-checkbox" value="{{ issue.temp_id }}" onclick="event.stopPropagation();"></td>
-                                    <td class="issue-title-clickable">{{ issue.title }} <span class="ms-2 text-muted small">(Click to expand)</span></td>
-                                    <td>{% if issue.assignees %}{% for a in issue.assignees %}<code>{{ a }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</td>
-                                    <td>{% if issue.labels %}{% for l in issue.labels %}<span class="badge bg-secondary">{{ l }}</span> {% endfor %}{% endif %}</td>
-                                </tr>
-                                <tr>
-                                    <td colspan="4" class="p-0">
-                                        <div class="collapse" id="issueDetail{{ forloop.counter0 }}">
-                                            <div class="card card-body bg-light">
-                                                <strong>Description:</strong><br>
-                                                {{ issue.description|linebreaksbr }}<br>
-                                                {% if issue.tasks %}
-                                                <strong>Tasks:</strong>
-                                                <ul>
-                                                    {% for t in issue.tasks %}<li>{{ t }}</li>{% endfor %}
-                                                </ul>
-                                                {% endif %}
-                                                {% if issue.acceptance %}
-                                                <strong>Acceptance Criteria:</strong>
-                                                <ul>
-                                                    {% for ac in issue.acceptance %}<li>{{ ac }}</li>{% endfor %}
-                                                </ul>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                            {% empty %}
-                                <!-- データが無い場合 -->
-                            {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+              </div>
+              <div class="card-body">
+                <p class="text-muted" id="issue-count-indicator">0 issues found.</p>
+                <div id="issue-list-container" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                  <table id="issue-table" class="table table-hover table-sm">
+                    <thead class="table-light sticky-top">
+                      <tr>
+                        <th scope="col" style="width: 3rem;"><input type="checkbox" class="form-check-input" id="select-all-header-checkbox" title="Select all issues in the list"></th>
+                        <th scope="col">Title</th>
+                        <th scope="col" style="width: 15%;">Assignees</th>
+                        <th scope="col" style="width: 20%;">Labels</th>
+                      </tr>
+                    </thead>
+                    <tbody id="issue-table-body">
+                      <!-- 静的HTMLなので初期は空。JSで動的に生成 -->
+                    </tbody>
+                  </table>
                 </div>
+              </div>
             </section>
             <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">機能概要</h5>
-                    <p class="card-text">Issueファイルのアップロード、GitHubへの一括登録、ローカル保存など、多彩な機能を提供します。</p>
-                    <a href="#" class="btn btn-secondary">機能一覧 (ダミー)</a>
-                </div>
+              <div class="card-body">
+                <h5 class="card-title">機能概要</h5>
+                <p class="card-text">Issueファイルのアップロード、GitHubへの一括登録、ローカル保存など、多彩な機能を提供します。</p>
+                <a href="#" class="btn btn-secondary">機能一覧 (ダミー)</a>
+              </div>
             </div>
             <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">利用開始</h5>
-                    <p class="card-text">まずはドキュメントを確認し、必要な設定を行ってください。</p>
-                    <a href="#" class="btn btn-secondary">ドキュメント (ダミー)</a>
-                </div>
+              <div class="card-body">
+                <h5 class="card-title">利用開始</h5>
+                <p class="card-text">まずはドキュメントを確認し、必要な設定を行ってください。</p>
+                <a href="#" class="btn btn-secondary">ドキュメント (ダミー)</a>
+              </div>
             </div>
-        </main>
-        <aside class="col-lg-4">
+          </main>
+          <aside class="col-lg-4">
             <div id="action-panel-section" class="card sticky-top" style="top: 2rem;">
-                <div class="card-header">
-                    <h5 class="mb-0">3. Execute Actions</h5>
-                </div>
-                <div class="card-body">
-                    <form id="action-form">
-                        <input type="hidden" name="selected_issue_ids" id="selected-issue-ids-input">
-                        <h6 class="card-title">GitHub Registration</h6>
-                        <div class="mb-3">
-                            <label for="repo-name-input" class="form-label">Repository</label>
-                            <input type="text" class="form-control" id="repo-name-input" name="repo_name" placeholder="owner/repo-name" aria-describedby="repoHelp">
-                            <div id="repoHelp" class="form-text">e.g., your-github-username/your-repo</div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="project-name-input" class="form-label">Project Name <span class="text-muted">(Optional)</span></label>
-                            <input type="text" class="form-control" id="project-name-input" name="project_name" placeholder="Project Name">
-                        </div>
-                        <div class="form-check form-switch mb-3">
-                            <input class="form-check-input" type="checkbox" role="switch" id="dry-run-checkbox" name="dry_run" checked>
-                            <label class="form-check-label" for="dry-run-checkbox">Dry Run Mode</label>
-                        </div>
-                        <div class="d-grid mb-3">
-                            <button type="submit" class="btn btn-success" id="github-submit-button">Create Issues on GitHub</button>
-                        </div>
-                        <hr class="my-4">
-                        <h6 class="card-title">Local Save</h6>
-                        <div class="mb-3">
-                            <label for="local-path-input" class="form-label">Save Directory <span class="text-muted">(Optional)</span></label>
-                            <input type="text" class="form-control" id="local-path-input" name="local_path" placeholder="./output_issues">
-                        </div>
-                        <div class="d-grid">
-                            <button type="button" class="btn btn-secondary" id="local-save-button">Save Issues Locally</button>
-                        </div>
-                        <hr class="my-4">
-                        <h6 class="card-title mt-4">AI Configuration</h6>
-                        <div class="mb-3">
-                            <label class="form-label d-block">AI Provider:</label>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="ai_provider" id="ai_provider_openai" value="openai" checked>
-                                <label class="form-check-label" for="ai_provider_openai">OpenAI</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" name="ai_provider" id="ai_provider_gemini" value="gemini">
-                                <label class="form-check-label" for="ai_provider_gemini">Google Gemini</label>
-                            </div>
-                        </div>
-                        <div class="mb-3" id="openai-model-selection-area">
-                            <label for="openai-model-select" class="form-label">OpenAI Model:</label>
-                            <select class="form-select form-select-sm" id="openai-model-select" name="openai_model_name">
-                                <option value="gpt-4o" selected>gpt-4o (Default)</option>
-                                <option value="gpt-4">gpt-4</option>
-                                <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
-                            </select>
-                        </div>
-                        <div class="mb-3" id="gemini-model-selection-area" style="display: none;">
-                            <label for="gemini-model-select" class="form-label">Gemini Model:</label>
-                            <select class="form-select form-select-sm" id="gemini-model-select" name="gemini_model_name">
-                                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                                <option value="gemini-1.5-flash" selected>gemini-1.5-flash (Default)</option>
-                                <option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
-                                <option value="gemini-1.0-pro">gemini-1.0-pro</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="api-key-input" class="form-label">API Key</label>
-                            <input type="password" class="form-control" id="api-key-input" name="api_key" placeholder="Enter API Key for selected provider" aria-describedby="apiKeyHelp">
-                            <div id="apiKeyHelp" class="form-text">
-                                Enter the API key corresponding to the selected AI Provider above.
-                            </div>
-                        </div>
-                    </form>
-                </div>
+              <div class="card-header">
+                <h5 class="mb-0">3. Execute Actions</h5>
+              </div>
+              <div class="card-body">
+                <form id="action-form">
+                  <input type="hidden" name="selected_issue_ids" id="selected-issue-ids-input">
+                  <h6 class="card-title">GitHub Registration</h6>
+                  <div class="mb-3">
+                    <label for="repo-name-input" class="form-label">Repository</label>
+                    <input type="text" class="form-control" id="repo-name-input" name="repo_name" placeholder="owner/repo-name" aria-describedby="repoHelp">
+                    <div id="repoHelp" class="form-text">e.g., your-github-username/your-repo</div>
+                  </div>
+                  <div class="mb-3">
+                    <label for="project-name-input" class="form-label">Project Name <span class="text-muted">(Optional)</span></label>
+                    <input type="text" class="form-control" id="project-name-input" name="project_name" placeholder="Project Name">
+                  </div>
+                  <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" role="switch" id="dry-run-checkbox" name="dry_run" checked>
+                    <label class="form-check-label" for="dry-run-checkbox">Dry Run Mode</label>
+                  </div>
+                  <div class="d-grid mb-3">
+                    <button type="button" class="btn btn-success" id="github-submit-button">Create Issues on GitHub</button>
+                  </div>
+                  <hr class="my-4">
+                  <h6 class="card-title">Local Save</h6>
+                  <div class="mb-3">
+                    <label for="local-path-input" class="form-label">Save Directory <span class="text-muted">(Optional)</span></label>
+                    <input type="text" class="form-control" id="local-path-input" name="local_path" placeholder="./output_issues">
+                  </div>
+                  <div class="d-grid">
+                    <button type="button" class="btn btn-secondary" id="local-save-button">Save Issues Locally</button>
+                  </div>
+                  <hr class="my-4">
+                  <h6 class="card-title mt-4">AI Configuration</h6>
+                  <form id="ai-settings-form">
+                    <div class="mb-3">
+                      <label class="form-label d-block">AI Provider:</label>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="ai_provider" id="ai_provider_openai" value="openai" checked>
+                        <label class="form-check-label" for="ai_provider_openai">OpenAI</label>
+                      </div>
+                      <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="ai_provider" id="ai_provider_gemini" value="gemini">
+                        <label class="form-check-label" for="ai_provider_gemini">Google Gemini</label>
+                      </div>
+                    </div>
+                    <div class="mb-3" id="openai-model-selection-area">
+                      <label for="openai-model-select" class="form-label">OpenAI Model:</label>
+                      <select class="form-select form-select-sm" id="openai-model-select" name="openai_model_name">
+                        <option value="gpt-4o" selected>gpt-4o (Default)</option>
+                        <option value="gpt-4">gpt-4</option>
+                        <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                      </select>
+                    </div>
+                    <div class="mb-3" id="gemini-model-selection-area" style="display: none;">
+                      <label for="gemini-model-select" class="form-label">Gemini Model:</label>
+                      <select class="form-select form-select-sm" id="gemini-model-select" name="gemini_model_name">
+                        <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                        <option value="gemini-1.5-flash" selected>gemini-1.5-flash (Default)</option>
+                        <option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
+                        <option value="gemini-1.0-pro">gemini-1.0-pro</option>
+                      </select>
+                    </div>
+                    <div class="mb-3">
+                      <label for="api-key-input" class="form-label">API Key</label>
+                      <input type="password" class="form-control" id="api-key-input" name="api_key" placeholder="Enter API Key for selected provider" aria-describedby="apiKeyHelp">
+                      <div id="apiKeyHelp" class="form-text">
+                        Enter the API key corresponding to the selected AI Provider above.
+                      </div>
+                    </div>
+                    <div class="d-grid mb-2">
+                      <button type="submit" class="btn btn-primary">AI設定を保存</button>
+                    </div>
+                  </form>
+                </form>
+              </div>
             </div>
-        </aside>
-    </div>
-</div>
-{% endblock content %}
-
-{% block extra_scripts %}
-<script src="{% static 'assets/js/file_upload.js' %}"></script>
-<script src="{% static 'assets/js/issue_selection.js' %}"></script>
-{% endblock extra_scripts %}
+          </aside>
+        </div>
+      </div>
+    </main>
+    <footer class="footer mt-auto py-3 bg-light border-top">
+      <div class="container text-center">
+        <span class="text-muted">&copy; 2024 GitHub Automation Tool. All rights reserved.</span>
+      </div>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-qQ2iX+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="assets/js/file_upload.js" integrity="sha384-PLACEHOLDER1" crossorigin="anonymous"></script>
+    <script type="module" src="assets/js/issue_selection.js" integrity="sha384-PLACEHOLDER2" crossorigin="anonymous"></script>
+  </body>
+</html>

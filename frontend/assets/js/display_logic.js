@@ -51,3 +51,10 @@ export function displayIssues(issues) {
 }
 
 export { renderIssueTableRows, escapeHtml };
+
+// ファイルアップロード成功時のイベントを受けてテーブル描画
+window.addEventListener('fileUploadSuccess', (e) => {
+  if (e.detail && Array.isArray(e.detail.issues)) {
+    displayIssues(e.detail.issues);
+  }
+});

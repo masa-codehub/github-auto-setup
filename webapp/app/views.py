@@ -7,12 +7,12 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import MultiPartParser, JSONParser
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from .models import ParsedDataCache
+from .models import ParsedDataCache, UserAiSettings
 from django.utils import timezone
 from core_logic.domain.models import ParsedRequirementData, IssueData
 from core_logic.infrastructure.config import load_settings
@@ -177,6 +177,73 @@ class CreateGitHubResourcesAPIView(APIView):
             logger.exception(
                 f"Unexpected error during GitHub resource creation: {e}")
             return Response({"detail": f"An unexpected error occurred: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GitHubCreateIssuesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request, *args, **kwargs):
+        repo_name = request.data.get('repo_name', '').strip()
+        project_name = request.data.get('project_name', '').strip() or None
+        dry_run = request.data.get('dry_run', False)
+        issue_ids = request.data.get('issue_ids', [])
+        # session_idは現状未対応のため、仮で全件取得
+        if not issue_ids:
+            return Response({'detail': 'No issue IDs provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        # TODO: 本来はParsedDataCacheからsession_idで取得し、該当issueのみ抽出
+        # ここではダミーで成功レスポンス
+        return Response({'detail': 'GitHub登録API呼び出し成功（ダミー）', 'issue_ids': issue_ids}, status=status.HTTP_200_OK)
+
+
+class LocalSaveIssuesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request, *args, **kwargs):
+        local_path = request.data.get('local_path', '').strip()
+        issue_ids = request.data.get('issue_ids', [])
+        if not issue_ids:
+            return Response({'detail': 'No issue IDs provided.'}, status=status.HTTP_400_BAD_REQUEST)
+        # TODO: 本来はParsedDataCacheからsession_idで取得し、該当issueのみ抽出しローカル保存
+        # ここではダミーで成功レスポンス
+        return Response({'detail': 'ローカル保存API呼び出し成功（ダミー）', 'issue_ids': issue_ids, 'local_path': local_path}, status=status.HTTP_200_OK)
+
+
+class UserAiSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserAiSettings
+        fields = [
+            'ai_provider', 'openai_model', 'gemini_model', 'openai_api_key', 'gemini_api_key'
+        ]
+
+
+class AiSettingsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            settings = UserAiSettings.objects.get(user=request.user)
+            serializer = UserAiSettingsSerializer(settings)
+            return Response(serializer.data, status=200)
+        except UserAiSettings.DoesNotExist:
+            # デフォルト値を返す
+            return Response({
+                'ai_provider': 'openai',
+                'openai_model': 'gpt-4o',
+                'gemini_model': 'gemini-1.5-flash',
+                'openai_api_key': '',
+                'gemini_api_key': ''
+            }, status=200)
+
+    def post(self, request):
+        obj, _ = UserAiSettings.objects.get_or_create(user=request.user)
+        serializer = UserAiSettingsSerializer(
+            obj, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=200)
+        return Response(serializer.errors, status=400)
 
 
 @ensure_csrf_cookie
