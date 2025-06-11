@@ -1,0 +1,64 @@
+#207-fix-plan.yml
+
+issue: 207
+summary: |
+  DRF導入とAPI認証基盤の実装に関するコードレビュー指摘事項への対応計画。
+  主にカスタムAPIキー認証の導入、パフォーマンス改善、テスト・ログ出力の修正を行う。
+
+implementation_steps:
+  - step: 1
+    title: "カスタムAPIキー認証クラスの新規実装"
+    command: |
+      1. webapp/app/authentication.py に BaseAuthentication を継承した CustomAPIKeyAuthentication クラスを新規作成。
+      2. APIキーは環境変数（例: API_KEY）または設定ファイルから取得し、リクエストヘッダー 'X-API-KEY' と照合。
+    verification: |
+      - authentication.py の CustomAPIKeyAuthentication クラスが正しく実装されていること。
+      - 有効なAPIキーで認証が通ること、無効または未指定の場合は認証エラーとなることを手動・自動テストで確認。
+
+  - step: 2
+    title: "APIビューの認証方式をカスタムAPIキー認証に変更"
+    command: |
+      1. webapp/app/views.py の FileUploadAPIView, CreateGitHubResourcesAPIView など該当APIの permission_classes, authentication_classes を CustomAPIKeyAuthentication に差し替え。
+      2. 不要な IsAuthenticated, AllowAny などの記述を削除。
+    verification: |
+      - views.py の該当APIがカスタム認証のみで保護されていること。
+      - 認証なし・無効なAPIキーでアクセスした場合に 401/403 となることを確認。
+
+  - step: 3
+    title: "カスタムAPIキー認証のテスト追加・修正"
+    command: |
+      1. webapp/app/tests.py に CustomAPIKeyAuthentication の正常系・異常系テストを追加。
+      2. 既存の force_authenticate などセッション認証依存のテストをAPIキー認証に合わせて修正。
+    verification: |
+      - 有効なAPIキーでのアクセス成功、無効・未指定でのアクセス拒否テストが全てパスすること。
+
+  - step: 4
+    title: "サービスクラスの初期化タイミング改善（パフォーマンス対応）"
+    command: |
+      1. webapp/app/views.py の FileUploadAPIView, CreateGitHubResourcesAPIView で、AIParser, GitHubRestClient, CreateGitHubResourcesUseCase などのインスタンス化を __init__ で一度だけ行うようリファクタリング。
+      2. モジュールレベルのグローバル変数初期化も排除。
+    verification: |
+      - 各サービスクラスがリクエスト毎に再生成されていないこと。
+      - テスト・手動確認でパフォーマンス劣化がないこと。
+
+  - step: 5
+    title: "テスト用ロジックの削除とテスト有効化"
+    command: |
+      1. webapp/core_logic/use_cases/create_github_resources.py の __init__ から SKIP_TYPE_CHECK_FOR_TESTS 分岐を削除。
+      2. webapp/core_logic/tests/use_cases/test_create_github_resources.py のスキップテストを有効化し、MagicMock(spec=True/spec_set=True) で isinstance チェックをパスさせるよう修正。
+    verification: |
+      - テスト用分岐が削除されていること。
+      - すべてのテストがパスすること。
+
+  - step: 6
+    title: "ログ出力ロジックの改善"
+    command: |
+      1. webapp/core_logic/adapters/github_graphql_client.py の find_project_v2_node_id メソッドで walrus operator (:=) を用いたリファクタリング。
+      2. データ欠損時のログが重複せず、原因特定しやすい内容になっていること。
+    verification: |
+      - ログ出力がレビュー指摘通りに改善されていること。
+      - テスト・手動確認で意図通りのログが出ること。
+
+notes: |
+  - 各ステップの実施後、必ずテストと手動検証を行い、失敗時は原因・解決策を内部ログとして記録すること。
+  - 完了後は coding-rules.yml の更新と修正完了報告コメントの作成を行う。

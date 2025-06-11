@@ -1,6 +1,8 @@
 import logging
 from typing import Any, Dict, List, Optional
 
+from core_logic.domain.models import IssueData
+
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +50,6 @@ class LabelMilestoneNormalizerSvc:
         logger.warning(f"[LabelMilestoneNormalizer] 未定義マイルストーン: '{milestone}'")
         return milestone
 
-    def normalize_issue(self, issue_data: Any) -> None:
-        # issue_data: IssueData互換オブジェクト
+    def normalize_issue(self, issue_data: IssueData) -> None:
         issue_data.labels = self.normalize_labels(issue_data.labels)
         issue_data.milestone = self.normalize_milestone(issue_data.milestone)

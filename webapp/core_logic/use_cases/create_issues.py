@@ -116,28 +116,32 @@ class CreateIssuesUseCase:
                         body_parts.append(issue_data.description)
 
                     # タスクリストを追加
-                    if issue_data.tasks:
+                    tasks = [t for t in (issue_data.tasks or []) if t]
+                    if tasks:
                         body_parts.append("\n## タスク\n")
-                        for task in issue_data.tasks:
-                            body_parts.append(f"- [ ] {task}")
+                        body_parts.extend(f"- [ ] {task}" for task in tasks)
 
                     # 関連要件を追加
-                    if issue_data.relational_definition:
+                    reqs = [r for r in (
+                        issue_data.relational_definition or []) if r]
+                    if reqs:
                         body_parts.append("\n## 関連要件\n")
-                        for req in issue_data.relational_definition:
-                            body_parts.append(f"- {req}")
+                        body_parts.extend(f"- {req}" for req in reqs)
 
                     # 関連Issueを追加
-                    if issue_data.relational_issues:
+                    issues = [i for i in (
+                        issue_data.relational_issues or []) if i]
+                    if issues:
                         body_parts.append("\n## 関連Issue\n")
-                        for issue_ref in issue_data.relational_issues:
-                            body_parts.append(f"- {issue_ref}")
+                        body_parts.extend(
+                            f"- {issue_ref}" for issue_ref in issues)
 
                     # 受け入れ基準を追加
-                    if issue_data.acceptance:
+                    accs = [a for a in (issue_data.acceptance or []) if a]
+                    if accs:
                         body_parts.append("\n## 受け入れ基準\n")
-                        for criteria in issue_data.acceptance:
-                            body_parts.append(f"- [ ] {criteria}")
+                        body_parts.extend(
+                            f"- [ ] {criteria}" for criteria in accs)
 
                     # 全体をNewlineで結合
                     constructed_body = "\n".join(body_parts)

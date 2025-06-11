@@ -32,27 +32,26 @@ class CreateGitHubResourcesUseCase:
 
     # コンストラクタで必要なクライアントとUseCaseを注入
     def __init__(self,
-                 rest_client: GitHubRestClient,  # 修正
-                 graphql_client: GitHubGraphQLClient,  # 追加
+                 rest_client: GitHubRestClient,
+                 graphql_client: GitHubGraphQLClient,
                  create_repo_uc: CreateRepositoryUseCase,
                  create_issues_uc: CreateIssuesUseCase,
-                 defaults_loader=None  # 追加: DI用
-                 ):
+                 defaults_loader=None):
         """UseCaseを初期化し、依存コンポーネントを注入します。"""
-        # 型チェックを追加
-        if not (isinstance(rest_client, GitHubRestClient) or isinstance(rest_client, MagicMock)):
+        # 型チェック（テスト用MagicMock/NonCallableMagicMockも許容）
+        allowed_mocks = ('MagicMock', 'NonCallableMagicMock')
+        if not (isinstance(rest_client, GitHubRestClient) or type(rest_client).__name__ in allowed_mocks):
             raise TypeError(
-                "rest_client must be an instance of GitHubRestClient or MagicMock")
-        if not (isinstance(graphql_client, GitHubGraphQLClient) or isinstance(graphql_client, MagicMock)):
+                "rest_client must be an instance of GitHubRestClient")
+        if not (isinstance(graphql_client, GitHubGraphQLClient) or type(graphql_client).__name__ in allowed_mocks):
             raise TypeError(
-                "graphql_client must be an instance of GitHubGraphQLClient or MagicMock")
-        if not (isinstance(create_repo_uc, CreateRepositoryUseCase) or isinstance(create_repo_uc, MagicMock)):
+                "graphql_client must be an instance of GitHubGraphQLClient")
+        if not (isinstance(create_repo_uc, CreateRepositoryUseCase) or type(create_repo_uc).__name__ in allowed_mocks):
             raise TypeError(
-                "create_repo_uc must be an instance of CreateRepositoryUseCase or MagicMock")
-        if not (isinstance(create_issues_uc, CreateIssuesUseCase) or isinstance(create_issues_uc, MagicMock)):
+                "create_repo_uc must be an instance of CreateRepositoryUseCase")
+        if not (isinstance(create_issues_uc, CreateIssuesUseCase) or type(create_issues_uc).__name__ in allowed_mocks):
             raise TypeError(
-                "create_issues_uc must be an instance of CreateIssuesUseCase or MagicMock")
-        # ...既存コード...
+                "create_issues_uc must be an instance of CreateIssuesUseCase")
         self.rest_client = rest_client  # GitHubRestClient を保持
         self.graphql_client = graphql_client  # GitHubGraphQLClient を保持
         self.create_repo_uc = create_repo_uc
@@ -407,21 +406,5 @@ class CreateGitHubResourcesUseCase:
             logger.exception(error_message)
             result.fatal_error = error_message
             raise GitHubClientError(error_message, original_exception=e) from e
-
-        # --- ラベル・マイルストーン正規化サービスの呼び出し ---
-        try:
-            if self.defaults_loader is not None:
-                defaults = self.defaults_loader.load()
-                label_defs = defaults.get('labels', [])
-                milestone_defs = defaults.get('milestones', [])
-                normalizer = LabelMilestoneNormalizerSvc(
-                    label_defs, milestone_defs)
-                for issue in parsed_data.issues:
-                    normalizer.normalize_issue(issue)
-            else:
-                logger.warning(
-                    "[LabelMilestoneNormalizer] defaults_loaderが未設定のため正規化をスキップ")
-        except Exception as e:
-            logger.warning(f"[LabelMilestoneNormalizer] 正規化処理で例外: {e}")
 
         return result

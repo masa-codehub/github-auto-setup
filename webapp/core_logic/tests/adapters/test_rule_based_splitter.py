@@ -51,3 +51,13 @@ def test_split_yaml_logs_warning_on_invalid_yaml(caplog):
     assert result == []
     assert any(
         "Failed to parse YAML content due to YAMLError" in record.message for record in caplog.records)
+
+
+def test_split_json_logs_warning_on_invalid_json(caplog):
+    svc = RuleBasedSplitterSvc()
+    invalid_json = '{"foo": [}'  # 不正なJSON
+    with caplog.at_level('WARNING'):
+        result = svc._split_json(invalid_json)
+    assert result == []
+    assert any(
+        "Failed to parse JSON content due to JSONDecodeError" in record.message for record in caplog.records)

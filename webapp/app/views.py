@@ -29,6 +29,8 @@ from core_logic.adapters.assignee_validator import AssigneeValidator
 from core_logic.use_cases.create_repository import CreateRepositoryUseCase
 from core_logic.use_cases.create_issues import CreateIssuesUseCase
 from core_logic.domain.exceptions import GitHubClientError, GitHubAuthenticationError, GitHubValidationError
+from core_logic.services import parse_issue_file_service
+from .authentication import CustomAPIKeyAuthentication
 
 import logging
 import os
@@ -38,10 +40,11 @@ logger = logging.getLogger(__name__)
 
 settings = load_settings()
 ai_parser = AIParser(settings=settings)
+parse_issue_file_service = parse_issue_file_service.ParseIssueFileService(
+    ai_parser)
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
 def health_check_api_view(request):
     """
     シンプルなヘルスチェックAPI。
@@ -59,32 +62,10 @@ def api_root(request):
     })
 
 
-def _parse_uploaded_file_content(file_name: str, file_content_bytes: bytes) -> ParsedRequirementData:
-    file_content = file_content_bytes.decode('utf-8')
-    ext = os.path.splitext(file_name)[1].lower()
-    if ext in ['.md', '.markdown']:
-        initial_parser = MarkdownIssueParser()
-    elif ext in ['.yml', '.yaml']:
-        initial_parser = YamlIssueParser()
-    elif ext == '.json':
-        initial_parser = JsonIssueParser()
-    else:
-        raise ParsingError(f"Unsupported file extension: {ext}")
-    raw_issue_blocks = initial_parser.parse(file_content)
-    if not raw_issue_blocks:
-        return ParsedRequirementData(issues=[])
-    # settings, ai_parserはモジュールレベルで初期化済み
-    if ext in ['.md', '.markdown']:
-        combined_content = '\n---\n'.join(raw_issue_blocks)
-        parsed_data: ParsedRequirementData = ai_parser.parse(combined_content)
-    else:
-        parsed_data: ParsedRequirementData = ai_parser.parse(raw_issue_blocks)
-    return parsed_data
-
-
 class FileUploadAPIView(APIView):
     parser_classes = [MultiPartParser]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [CustomAPIKeyAuthentication]
+    permission_classes = []
 
     def post(self, request, *args, **kwargs):
         uploaded_file = request.FILES.get('issue_file')
@@ -95,7 +76,7 @@ class FileUploadAPIView(APIView):
         if uploaded_file.size > max_size:
             return Response({"detail": "File size exceeds 10MB limit."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            parsed_data = _parse_uploaded_file_content(
+            parsed_data = parse_issue_file_service.parse(
                 uploaded_file.name, uploaded_file.read())
             if not parsed_data.issues:
                 return Response({"detail": "No issues extracted from file."}, status=status.HTTP_400_BAD_REQUEST)
@@ -133,6 +114,9 @@ class FileUploadAPIView(APIView):
 
 
 class CreateGitHubResourcesAPIView(APIView):
+    authentication_classes = [CustomAPIKeyAuthentication]
+    permission_classes = []
+
     def post(self, request, *args, **kwargs):
         repo_name = request.data.get('repo_name', '').strip()
         project_name = request.data.get('project_name', '').strip() or None
@@ -154,7 +138,7 @@ class CreateGitHubResourcesAPIView(APIView):
                 if issue.temp_id in selected_issue_temp_ids
             ]
             if not selected_issues:
-                return Response({"detail": "No valid issues found for the provided IDs or session."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"detail": "No selected issues found matching the provided IDs within the cached data."}, status=status.HTTP_400_BAD_REQUEST)
             parsed_data_for_use_case = ParsedRequirementData(
                 issues=selected_issues)
         except ParsedDataCache.DoesNotExist:

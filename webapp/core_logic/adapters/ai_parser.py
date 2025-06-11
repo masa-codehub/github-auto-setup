@@ -1,8 +1,9 @@
 from .rule_based_splitter import RuleBasedSplitterSvc  # 相対importで再度試行
 import logging
-from typing import Type
+from typing import Type, Union, List, Dict, Any
 # pydantic.ValidationError をインポート
 from pydantic import ValidationError
+from langchain_core.messages import AIMessage
 
 # 設定、データモデル、カスタム例外をインポート
 from core_logic.infrastructure.config import Settings
@@ -84,9 +85,10 @@ class AIParser:
 
         # ★ 改善点: モデル別に適切な max_tokens を設定 ★
         # OpenAI モデルには 32K トークン以下の制限を設定（GPT-4 の制限に合わせる）
-        openai_max_tokens = 32000  # 32768 より少し余裕を持たせる
+        openai_max_tokens = getattr(self.settings, 'openai_max_tokens', 32000)
         # Gemini モデルはより大きな出力トークンをサポート
-        gemini_max_output_tokens = 262144  # テスト要件に合わせて修正
+        gemini_max_output_tokens = getattr(
+            self.settings, 'gemini_max_output_tokens', 262144)
 
         try:
             if model_type == "openai":
@@ -199,13 +201,21 @@ class AIParser:
             raise AiParserError(
                 f"Failed to build LangChain chain: {e}", original_exception=e) from e
 
-    def parse(self, markdown_text: str) -> ParsedRequirementData:
-        """Markdownテキストを解析し、構造化されたIssueデータを抽出します。"""
+    def parse(self, content_input: Union[str, List[Dict[str, Any]]]) -> ParsedRequirementData:
+        """
+        Markdown/YAML/JSONテキストまたはlist[dict]を解析し、構造化されたIssueデータを抽出します。
+        """
         logger.info(
-            f"Starting AI parsing for Markdown text (length: {len(markdown_text)})...")
-        if not markdown_text or not markdown_text.strip():
+            f"Starting AI parsing for input type: {type(content_input)}...")
+        if isinstance(content_input, list):
+            import json
+            content_to_parse = json.dumps(
+                content_input, indent=2, ensure_ascii=False)
+        else:
+            content_to_parse = content_input
+        if not content_to_parse or not str(content_to_parse).strip():
             logger.warning(
-                "Input markdown text is empty or whitespace only, returning empty data.")
+                "Input content is empty or whitespace only, returning empty data.")
             return ParsedRequirementData(issues=[])
         if not hasattr(self, 'chain') or self.chain is None:
             logger.error("AI processing chain is not initialized.")
@@ -213,55 +223,41 @@ class AIParser:
         try:
             logger.debug(
                 "Invoking AI processing chain with structured output...")
-            # invoke に渡す辞書のキーは PromptTemplate の input_variables と一致させる
-            result = self.chain.invoke({"markdown_text": markdown_text})
-
+            result = self.chain.invoke({"markdown_text": content_to_parse})
             if not isinstance(result, ParsedRequirementData):
-                # 通常、with_structured_output が成功すれば型は一致するはずだが念のため
                 logger.error(
                     f"AI output parsing resulted in unexpected type: {type(result)}")
                 raise AiParserError(
                     f"AI parsing resulted in unexpected data type: {type(result)}")
-
             if not result.issues:
                 logger.warning(
-                    "AI parsing finished, but no issues were extracted from the provided Markdown.")
+                    "AI parsing finished, but no issues were extracted from the provided input.")
             else:
                 logger.info(
                     f"Successfully parsed {len(result.issues)} issue(s).")
-
             return result
-
-        # ★ 改善点: エラーハンドリング更新 ★
-        except ValidationError as e:  # Pydantic のバリデーションエラーを直接捕捉
-            # with_structured_output が失敗して不正な構造を返した場合に発生しうる
+        except ValidationError as e:
             logger.error(f"AI output validation failed: {e}", exc_info=False)
             raise AiParserError(
                 f"AI output validation failed: {e}", original_exception=e) from e
-        # OutputGenerationException は利用できないため、RuntimeError や ValueError など
-        # 一般的な例外を使用してエラーハンドリングを実装
-        except (RuntimeError, ValueError) as e:  # 構造化出力生成時の一般的なエラー
-            # 注意: 文字列マッチング（"structured output" in str(e).lower()）は
-            # ライブラリの実装変更によりエラーメッセージが変わると脆弱になる可能性があります。
-            # 将来的に、より具体的な例外クラスが利用可能になった場合は、そちらへの移行を検討します。
+        except (RuntimeError, ValueError) as e:
             if "structured output" in str(e).lower() or "schema" in str(e).lower():
                 logger.error(
                     f"AI output generation failed: {e}", exc_info=True)
                 raise AiParserError(
                     "Failed to generate structured AI output.", original_exception=e) from e
             else:
-                # その他のランタイムエラーは一般的な例外として処理
                 logger.exception(
                     f"An unexpected error occurred during AI parsing: {e}")
                 raise AiParserError(
                     "An unexpected error occurred during AI parsing.", original_exception=e) from e
-        except (*_OPENAI_ERRORS, *_GOOGLE_ERRORS) as e:  # APIエラーはそのまま
+        except (*_OPENAI_ERRORS, *_GOOGLE_ERRORS) as e:
             error_type = type(e).__name__
             logger.error(
                 f"AI API call failed during parse: {error_type} - {e}")
             raise AiParserError(
                 f"AI API call failed during parse ({error_type}): {e}", original_exception=e) from e
-        except Exception as e:  # その他の予期せぬエラー
+        except Exception as e:
             logger.exception(
                 f"An unexpected error occurred during AI parsing: {e}")
             raise AiParserError(
@@ -322,14 +318,16 @@ class AIParser:
         )
 
     def _parse_json_result(self, result, key=None):
-        """AIレスポンスからJSONを抽出し、必要に応じてkeyで部分抽出。key指定時はdictで返す"""
         import json
-        if isinstance(result, str):
-            data = json.loads(result)
+        text_content = ""
+        if isinstance(result, AIMessage):
+            text_content = result.content
+        elif isinstance(result, str):
+            text_content = result
         else:
-            data = result
+            raise ValueError(f"Unexpected result type: {type(result)}")
+        data = json.loads(text_content)
         if key:
-            # キーマッピングはdict、区切りパターンはdictで返す
             if key == "separator_pattern":
                 return {"separator_pattern": data[key]} if key in data else {}
             if key == "key_mapping":

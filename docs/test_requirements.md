@@ -81,7 +81,23 @@
 - id: TR-Normalization-003
   description: 正規化に失敗したラベルやマイルストーンは警告ログが出力されること。
 
+# テスト要件: DRF導入・API認証基盤 (BE-API-DRF-SETUP)
+- id: TR-BE-API-DRF-001
+  description: requirements.txtにdjangorestframeworkとdjango-cors-headersが追加され、pipでインストールされていることを確認する。
+- id: TR-BE-API-DRF-002
+  description: /api/healthcheck/エンドポイントがJSONレスポンスを返し、200 OKとなることを確認するテストが存在し、パスすること。
+- id: TR-BE-API-DRF-003
+  description: カスタムAPIキー認証クラス（BaseAuthentication継承）が正しくAPIキーを検証し、テストで有効・無効なキーの判定ができること。
+- id: TR-BE-API-DRF-004
+  description: カスタムパーミッションクラス（BasePermission継承）が有効なAPIキーのみアクセスを許可し、テストで不正なリクエストが拒否されること。
+- id: TR-BE-API-DRF-005
+  description: settings.pyのCORS設定により、指定フロントエンドからのリクエストが許可されることをテストで確認する。
+- id: TR-BE-API-DRF-006
+  description: urls.pyでAPIルーティングが正しく設定され、healthcheck等のエンドポイントにアクセスできることをテストで確認する。
+
 # 備考
 - API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
 - フロントエンドのテスト要件は、API要件とは別に、ユーザー体験向上のためのクライアントサイドでの即時フィードバックと、バックエンドとの通信を検証するものです。
 - 【説明責任】US-001のDoD・受け入れ基準を反映し、既存要件と重複するものは統合・拡張し、矛盾はありませんでした。
+- 既存のAPI・認証・CORS関連要件と重複・矛盾はありません（2025-06-10時点）。
+- 新規要件は一貫性・重複排除・説明責任原則に基づき追加。
