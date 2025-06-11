@@ -413,9 +413,15 @@ technical_tasks:
     title: "Backend: US-001 ファイル処理APIエンドポイントの実装"
     description: "Web UIからのファイルアップロードを受け付け、AIパーサーで解析し、結果を一時保存して最小限の情報を返すAPIエンドポイント（`/api/upload-issue-file/`）を実装する。"
     related_epic_ids: ["EPIC-BACKEND-API", "EPIC-DATAPARSING"]
-    status: "Done"
+    status: "Done" # 最終ステータス
     priority: "High"
     size_estimate: "[SP: 8]"
+    notes: |
+      [2025-06-12 完了] レビュー指摘に基づき、以下のリファクタリングとテスト追加を実施。
+      - 認証方式をDRF標準に統一し、セキュリティを強化。
+      - サービスインスタンス化を最適化し、パフォーマンスを改善。
+      - Serializerを`serializers.py`に分離し、保守性を向上。
+      - 新規Viewに対するテストケースを追加し、カバレッジを確保。
   - task_id: "TASK-BE-API-GITHUB-RESOURCE-CREATION"
     title: "Backend: GitHubリソース作成APIエンドポイントの実装"
     description: "Web UIから提供された`session_id`と`selected_issue_temp_ids`に基づき、一時保存されたIssueデータをロードし、GitHubリポジトリ、Issue等を一括作成するAPIエンドポイント（`/api/create-github-resources/`）を実装する。"
@@ -640,5 +646,27 @@ skip_tests:
   priority: High
   related_to:
     - coding-rules.yml: CR-021, CR-022, CR-023
-    - #207-fix-plan.yml
-    - TASK-CORELOGIC-AUTH-APIKEY-fix-report.md
+
+# --- 申し送り事項（2025-06-11 BE-API-FILE-PROCESS修正対応）---
+- date: "2025-06-11"
+  title: "BE-API-FILE-PROCESS修正の申し送り"
+  description: |
+    コードレビュー指摘に基づき、以下の修正・改善を実施済み：
+    - UploadAndParseViewの認証・権限クラスをDRF標準方式に統一（CustomAPIKeyAuthentication/HasValidAPIKey）。
+    - サービスインスタンス（AIParser等）のライフサイクルを最適化し、リクエスト毎の初期化を排除。
+    - Serializerの責務分離（views.pyからserializers.pyへ移管）。
+    - UploadAndParseView用の正常系・異常系テストを追加し、全テストパスを確認。
+    - テスト容易性のため、AI外部APIや重いサービスの初期化はmock/patchで副作用を回避するルールを新設（coding-rules.yml: CR-023）。
+  related_files:
+    - docs/plans/BE-API-FILE-PROCESS-fix-plan.yml
+    - docs/review-request/BE-API-FILE-PROCESS-fix-report.md
+    - docs/coding-rules.yml
+    - webapp/app/views.py
+    - webapp/app/serializers.py
+    - webapp/app/tests.py
+    - webapp/app/authentication.py
+    - webapp/app/permissions.py
+    - webapp/app/urls.py
+  notes: |
+    - 今後もテスト容易性・保守性を重視し、依存注入やmock設計を徹底すること。
+    - 認証・権限クラスの統一、責務分離、テスト網羅性の観点で新規API実装時も本対応を参考にすること。

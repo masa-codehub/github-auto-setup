@@ -309,3 +309,39 @@
           - webapp/core_logic/tests/use_cases/test_create_issues.py
         tests:
           - test_execute_all_new_issues
+
+- rule_id: "CR-BE-API-001"
+  description: |
+    Django REST Frameworkでファイルアップロード＋AI解析APIを実装する際は、
+    - ファイル拡張子・サイズの厳格なバリデーションを行うこと
+    - APIキー（GitHub PAT, AIサービスキー）はリクエストヘッダーから受け取り、メモリ上で一時的に保持し、永続化しないこと
+    - 解析結果モデルはDRFシリアライザでJSON化し、異常系も明確なHTTPステータス・メッセージで返すこと
+    - すべての正常・異常系をpytest等で網羅的にテストすること
+  category: "API設計・セキュリティ・テスト"
+  example_good: |
+    class UploadAndParseView(APIView):
+        def post(self, request, ...):
+            # ...バリデーション...
+            github_pat = request.headers.get('X-GitHub-PAT')
+            ai_api_key = request.headers.get('X-AI-API-KEY')
+            # ...AI解析...
+            return Response(serializer.data, status=200)
+  example_bad: |
+    # APIキーをDB等に保存してしまう
+    save_api_key_to_db(api_key)
+    # バリデーションや異常系レスポンスが曖昧
+
+- rule_id: "CR-023"
+  title: "Djangoアプリのテストで依存サービスの副作用を回避する"
+  description: |
+    AI外部APIや重いサービスの初期化がViewのモジュールロード時に発生する場合、テストではpatchや依存注入で副作用を回避する。mockの適用範囲はインスタンス生成・メソッド呼び出しの両方をカバーすること。
+  category: "テスト・依存注入"
+  example_bad: |
+    # Viewのモジュールロード時にAIParser等を直接初期化
+    ai_parser = AIParser(settings=settings)
+    parse_service = ParseIssueFileService(ai_parser)
+  example_good: |
+    # テスト時はpatchでAIParser/ParseIssueFileServiceの初期化・メソッドをモック
+    @patch('core_logic.adapters.ai_parser.AIParser.__init__', return_value=None)
+    @patch('core_logic.services.parse_issue_file_service.ParseIssueFileService.parse')
+    def test_upload_valid_file(...):
