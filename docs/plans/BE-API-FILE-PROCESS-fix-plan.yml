@@ -1,0 +1,72 @@
+# BE-API-FILE-PROCESS 修正計画
+
+plan_id: BE-API-FILE-PROCESS-fix-plan
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/208
+created_at: 2025-06-11
+
+summary: |
+  コードレビューで指摘されたセキュリティ・パフォーマンス・責務分離・テスト網羅性の課題を解決し、修正タスク完了定義（DoD）をすべて満たすための修正計画。
+
+implementation_steps:
+  - step: 1
+    title: "認証方式の統一（Critical）"
+    description: |
+      UploadAndParseView から手動のAPIキー検証ロジックを削除し、DRFの authentication_classes/permission_classes を用いる方式に統一する。CustomAPIKeyAuthentication/HasValidAPIKey を新規または既存のものから適用する。
+    command: |
+      1. webapp/app/views.py の UploadAndParseView から手動ヘッダー検証を削除。
+      2. authentication_classes = [CustomAPIKeyAuthentication]、permission_classes = [HasValidAPIKey] を設定。
+      3. 必要に応じて webapp/app/authentication.py を新規作成または修正。
+    verification: |
+      - UploadAndParseView で手動ヘッダー検証が消えていること。
+      - 認証・権限クラスが正しく設定されていること。
+      - テストで401/403が返ることを確認。
+
+  - step: 2
+    title: "サービスインスタンスのライフサイクル最適化（Major）"
+    description: |
+      AIParser, ParseIssueFileService のインスタンス化をリクエスト毎からモジュールロード時に一度だけ行うよう修正。
+    command: |
+      1. webapp/app/views.py の UploadAndParseView で、AIParser等の初期化をモジュールレベルに移動。
+      2. postメソッドでは既存インスタンスを参照するだけにする。
+    verification: |
+      - サービスインスタンスが毎回生成されていないこと。
+      - テストでパフォーマンス劣化がないこと。
+
+  - step: 3
+    title: "Serializer責務分離（Major）"
+    description: |
+      views.py のインラインSerializer定義（IssueDataSerializer, ParsedRequirementDataSerializer）を削除し、serializers.py へ移動。Viewからはimportして利用。
+    command: |
+      1. webapp/app/views.py からインラインSerializer定義を削除。
+      2. webapp/app/serializers.py に移動し、必要なimportを整理。
+      3. views.py でserializers.pyからimportして利用。
+    verification: |
+      - views.py からインラインSerializerが消えていること。
+      - serializers.py に定義が移動していること。
+      - テストでシリアライズが正しく動作すること。
+
+  - step: 4
+    title: "UploadAndParseView用テスト追加（Must）"
+    description: |
+      UploadAndParseView を直接テストする新しいテストクラスを tests.py に追加。正常系・異常系（APIキー欠損、ファイル不正）を網羅。
+    command: |
+      1. webapp/app/tests.py に UploadAndParseViewTest クラスを新規作成。
+      2. 正常系（200 OK）、APIキー欠損（401/403）、ファイル不正（400）をテスト。
+    verification: |
+      - 新テストクラスで全ケースが網羅されていること。
+      - pytest で全テストがパスすること。
+
+  - step: 5
+    title: "不要なFileUploadAPIViewの削除（Should）"
+    description: |
+      FileUploadAPIView が不要なら、関連コードとurls.pyのエントリを削除。
+    command: |
+      1. webapp/app/views.py から FileUploadAPIView を削除。
+      2. webapp/app/urls.py から該当URLパターンを削除。
+      3. 関連テストやimportも整理。
+    verification: |
+      - FileUploadAPIView 関連コードが全て消えていること。
+      - 既存・新規テストが全てパスすること。
+
+notes: |
+  各ステップの検証で失敗した場合は、原因・修正内容を内部ログとして記録し、完了フェーズでコーディングルールに反映する。

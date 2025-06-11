@@ -31,10 +31,12 @@ from core_logic.use_cases.create_issues import CreateIssuesUseCase
 from core_logic.domain.exceptions import GitHubClientError, GitHubAuthenticationError, GitHubValidationError
 from core_logic.services import parse_issue_file_service
 from .authentication import CustomAPIKeyAuthentication
+from webapp.app.permissions import HasValidAPIKey
+from .serializers import ParsedRequirementDataSerializer
 
 import logging
+import sys
 import os
-import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -250,3 +252,69 @@ class AiSettingsAPIView(APIView):
 def top_page_view(request):
     form = FileUploadForm()
     return render(request, 'top_page.html', {'upload_form': form, 'issue_count': 0, 'issue_list': []})
+
+
+# --- Serializerをインライン定義（import問題回避）---
+# class IssueDataSerializer(serializers.Serializer):
+#     temp_id = serializers.CharField()
+#     title = serializers.CharField()
+#     description = serializers.CharField()
+#     tasks = serializers.ListField(
+#         child=serializers.CharField(), required=False)
+#     relational_definition = serializers.ListField(
+#         child=serializers.CharField(), required=False)
+#     relational_issues = serializers.ListField(
+#         child=serializers.CharField(), required=False)
+#     acceptance = serializers.ListField(
+#         child=serializers.CharField(), required=False)
+#     labels = serializers.ListField(
+#         child=serializers.CharField(), allow_null=True, required=False)
+#     milestone = serializers.CharField(allow_null=True, required=False)
+#     assignees = serializers.ListField(
+#         child=serializers.CharField(), allow_null=True, required=False)
+
+
+# class ParsedRequirementDataSerializer(serializers.Serializer):
+#     issues = IssueDataSerializer(many=True)
+
+
+class UploadAndParseView(APIView):
+    parser_classes = [MultiPartParser]
+    authentication_classes = [CustomAPIKeyAuthentication]
+    permission_classes = [HasValidAPIKey]
+
+    def post(self, request, *args, **kwargs):
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return Response({"detail": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+        max_size = 10 * 1024 * 1024
+        if uploaded_file.size > max_size:
+            return Response({"detail": "File size exceeds 10MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+        allowed_exts = ['md', 'yml', 'yaml', 'json']
+        ext = uploaded_file.name.split('.')[-1].lower()
+        if ext not in allowed_exts:
+            return Response({"detail": "Unsupported file extension."}, status=status.HTTP_400_BAD_REQUEST)
+        github_pat = request.headers.get('X-GitHub-PAT')
+        ai_api_key = request.headers.get('X-AI-API-KEY')
+        if not github_pat or not ai_api_key:
+            return Response({"detail": "API key missing."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            # 設定を一時的に上書きしてAIParserを再生成（APIキーを永続保存しない）
+            # temp_settings = load_settings()
+            # if hasattr(temp_settings, 'openai_api_key'):
+            #     temp_settings.openai_api_key = ai_api_key
+            # if hasattr(temp_settings, 'gemini_api_key'):
+            #     temp_settings.gemini_api_key = ai_api_key
+            # if hasattr(temp_settings, 'github_pat'):
+            #     temp_settings.github_pat = github_pat
+            # temp_ai_parser = AIParser(settings=temp_settings)
+            # temp_parse_service = parse_issue_file_service.ParseIssueFileService(temp_ai_parser)
+            # parsed_data = temp_parse_service.parse(uploaded_file.name, uploaded_file.read())
+            parsed_data = parse_issue_file_service.parse(
+                uploaded_file.name, uploaded_file.read())
+            serializer = ParsedRequirementDataSerializer(parsed_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except (ParsingError, AiParserError) as e:
+            return Response({"detail": f"File parsing failed: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": f"Unexpected error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
