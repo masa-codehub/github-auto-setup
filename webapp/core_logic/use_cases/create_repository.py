@@ -1,6 +1,9 @@
 import logging
-from adapters.github_rest_client import GitHubRestClient
-from domain.exceptions import (
+from core_logic.adapters.github_graphql_client import GitHubGraphQLClient
+from core_logic.adapters.github_rest_client import GitHubRestClient
+from core_logic.domain.models import IssueData
+from core_logic.adapters.label_milestone_normalizer import LabelMilestoneNormalizerSvc
+from core_logic.domain.exceptions import (
     GitHubClientError, GitHubValidationError, GitHubAuthenticationError
 )
 

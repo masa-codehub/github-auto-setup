@@ -31,10 +31,14 @@ from core_logic.use_cases.create_issues import CreateIssuesUseCase
 from core_logic.domain.exceptions import GitHubClientError, GitHubAuthenticationError, GitHubValidationError
 from core_logic.services import parse_issue_file_service
 from .authentication import CustomAPIKeyAuthentication
+from core_logic.use_cases.local_save_use_case import LocalSaveUseCase
 
 import logging
 import os
 import uuid
+import sys
+
+from .serializers import CreateGitHubResourcesResultSerializer  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +173,9 @@ class CreateGitHubResourcesAPIView(APIView):
                 project_name=project_name,
                 dry_run=dry_run
             )
-            return Response(result.model_dump(), status=status.HTTP_200_OK)
+            serializer = CreateGitHubResourcesResultSerializer(
+                result.model_dump())
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except (GitHubAuthenticationError, GitHubClientError, GitHubValidationError) as e:
             logger.error(f"GitHub operation failed: {e}", exc_info=True)
             return Response({"detail": f"GitHub operation failed: {e}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -196,18 +202,44 @@ class GitHubCreateIssuesAPIView(APIView):
         return Response({'detail': 'GitHub登録API呼び出し成功（ダミー）', 'issue_ids': issue_ids}, status=status.HTTP_200_OK)
 
 
-class LocalSaveIssuesAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]
+class SaveLocallyAPIView(APIView):
+    authentication_classes = [CustomAPIKeyAuthentication]
+    permission_classes = []
 
     def post(self, request, *args, **kwargs):
-        local_path = request.data.get('local_path', '').strip()
-        issue_ids = request.data.get('issue_ids', [])
-        if not issue_ids:
-            return Response({'detail': 'No issue IDs provided.'}, status=status.HTTP_400_BAD_REQUEST)
-        # TODO: 本来はParsedDataCacheからsession_idで取得し、該当issueのみ抽出しローカル保存
-        # ここではダミーで成功レスポンス
-        return Response({'detail': 'ローカル保存API呼び出し成功（ダミー）', 'issue_ids': issue_ids, 'local_path': local_path}, status=status.HTTP_200_OK)
+        session_id = request.data.get('session_id')
+        selected_issue_temp_ids = request.data.get(
+            'selected_issue_temp_ids', [])
+        dry_run = request.data.get('dry_run', False)
+        if not session_id or not selected_issue_temp_ids:
+            return Response({"detail": "Missing session ID or selected issues."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            cached_entry = ParsedDataCache.objects.get(id=session_id)
+            if cached_entry.expires_at < timezone.now():
+                cached_entry.delete()
+                return Response({"detail": "Parsed data session expired."}, status=status.HTTP_400_BAD_REQUEST)
+            full_parsed_data = ParsedRequirementData(**cached_entry.data)
+            selected_issues = [
+                issue for issue in full_parsed_data.issues
+                if issue.temp_id in selected_issue_temp_ids
+            ]
+            if not selected_issues:
+                return Response({"detail": "No selected issues found matching the provided IDs within the cached data."}, status=status.HTTP_400_BAD_REQUEST)
+            parsed_data_for_use_case = ParsedRequirementData(
+                issues=selected_issues)
+        except ParsedDataCache.DoesNotExist:
+            return Response({"detail": "Parsed data session not found or expired."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(
+                f"Failed to load or process cached data: {e}", exc_info=True)
+            return Response({"detail": "Failed to retrieve parsed issue data."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            result = LocalSaveUseCase().execute(
+                parsed_data=parsed_data_for_use_case, dry_run=dry_run)
+            return Response(result, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception(f"Unexpected error during local save: {e}")
+            return Response({"detail": f"An unexpected error occurred: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserAiSettingsSerializer(serializers.ModelSerializer):

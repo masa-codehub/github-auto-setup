@@ -113,6 +113,24 @@
 - id: TR-FE-STATIC-008
   description: 既存および新規のJavaScriptテストコード（frontend/assets/js/tests/, frontend/tests/）が新しいAPIクライアント・DOM操作ロジックに合わせて更新または新規作成され、全てのテストがパスすること。
 
+# テスト要件: GitHubリソース作成・ローカル保存API (BE-API-GITHUB-ACTION)
+- id: TR-API-001
+  description: /api/create-github-resources/ エンドポイントに有効なIssue情報をPOSTすると、GitHub上にリソース（Issue, リポジトリ, ラベル, マイルストーン）が作成され、正常なJSONレスポンス（CreateGitHubResourcesResultMdl）が返ること。
+- id: TR-API-002
+  description: /api/create-github-resources/ で認証エラー（無効なGitHub PATやAIサービスAPIキー）が発生した場合、HTTP 401/403エラーと標準化されたエラーレスポンスが返ること。
+- id: TR-API-003
+  description: /api/save-locally/ エンドポイントに有効なIssue情報をPOSTすると、ローカルファイルに保存され、正常なJSONレスポンスが返ること。
+- id: TR-API-004
+  description: /api/save-locally/ でファイルシステムエラー（書き込み権限不足等）が発生した場合、HTTP 500エラーと標準化されたエラーレスポンスが返ること。
+- id: TR-API-005
+  description: いずれのAPIも、リクエストヘッダーやボディからAPIキー（GitHub PAT, AIサービスキー）を安全に抽出し、UseCaseに渡していることをテストで確認する。
+- id: TR-API-006
+  description: dry_runパラメータをリクエストで受け付け、UseCaseに正しく渡されていることをテストで確認する。
+- id: TR-API-007
+  description: GitHub APIやファイルシステムのエラー発生時、HTTPステータスコードとエラー詳細を含む標準化JSONで返却されること。
+- id: TR-API-008
+  description: 上記APIの正常系・異常系を網羅するユニットテストが実装され、全てのテストがパスすること。
+
 # 備考
 - API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
 - フロントエンドのテスト要件は、API要件とは別に、ユーザー体験向上のためのクライアントサイドでの即時フィードバックと、バックエンドとの通信を検証するものです。

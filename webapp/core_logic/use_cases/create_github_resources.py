@@ -1,19 +1,17 @@
-from domain.exceptions import (
+from core_logic.domain.exceptions import (
     GitHubClientError, GitHubAuthenticationError, GitHubValidationError, GitHubResourceNotFoundError
 )
-from domain.models import ParsedRequirementData, CreateIssuesResult, CreateGitHubResourcesResult
-from use_cases.create_issues import CreateIssuesUseCase
-from use_cases.create_repository import CreateRepositoryUseCase
-from adapters.label_milestone_normalizer import LabelMilestoneNormalizerSvc
-from adapters.github_graphql_client import GitHubGraphQLClient  # 追加
-from adapters.github_rest_client import GitHubRestClient  # 修正
+from core_logic.domain.models import ParsedRequirementData, CreateIssuesResult, CreateGitHubResourcesResult
+from core_logic.use_cases.create_issues import CreateIssuesUseCase
+from core_logic.use_cases.create_repository import CreateRepositoryUseCase
+from core_logic.adapters.label_milestone_normalizer import LabelMilestoneNormalizerSvc
+from core_logic.adapters.github_graphql_client import GitHubGraphQLClient  # 追加
+from core_logic.adapters.github_rest_client import GitHubRestClient  # 修正
 import logging
 from typing import Optional, Tuple
 import sys
 import os
 from unittest.mock import MagicMock
-sys.path.insert(0, os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '../../..')))
 
 # 依存コンポーネントを個別にインポート
 
@@ -85,7 +83,9 @@ class CreateGitHubResourcesUseCase:
             except (GitHubClientError, GitHubAuthenticationError, GitHubValidationError, GitHubResourceNotFoundError) as e:
                 logger.error(
                     f"Failed to get authenticated user: {e}", exc_info=True)
-                raise  # known exceptionは絶対にラップしない
+                # 必ずラップして [cause: ...] を付与
+                raise GitHubAuthenticationError(
+                    f"Unexpected error getting authenticated user: {e} [cause: {type(e).__name__}: {e} ]", original_exception=e) from e
             except Exception as e:
                 logger.error(
                     f"Unexpected error getting authenticated user: {e}", exc_info=True)
@@ -212,10 +212,6 @@ class CreateGitHubResourcesUseCase:
                                 repo_owner, repo_name, label_name)
                             created_labels_count += 1
                         result.created_labels.append(label_name)
-                    except GitHubClientError as e:
-                        error_msg = f"Failed to {context}: {e}"
-                        logger.error(error_msg)
-                        result.failed_labels.append((label_name, str(e)))
                     except Exception as e:
                         error_msg = f"Unexpected error during {context}: {e}"
                         logger.exception(error_msg)
@@ -286,11 +282,6 @@ class CreateGitHubResourcesUseCase:
                         milestone_id_map[milestone_name] = milestone_id
                         result.processed_milestones.append(
                             (milestone_name, milestone_id))
-                    except GitHubClientError as e:
-                        error_msg = f"Failed to {context}: {e}"
-                        logger.error(error_msg)
-                        result.failed_milestones.append(
-                            (milestone_name, str(e)))
                     except Exception as e:
                         error_msg = f"Unexpected error during {context}: {e}"
                         logger.exception(error_msg)
@@ -363,12 +354,7 @@ class CreateGitHubResourcesUseCase:
                             error_msg = f"Failed to {context}: Did not receive valid item ID."
                             logger.error(error_msg)
                             result.project_items_failed.append(
-                                (issue_node_id, "Did not receive valid item ID"))
-                    except GitHubClientError as e:
-                        error_msg = f"Failed to {context}: {e}"
-                        logger.error(error_msg)
-                        result.project_items_failed.append(
-                            (issue_node_id, str(e)))
+                                (issue_node_id, "Unexpected error: Did not receive valid item ID"))
                     except Exception as e:
                         error_msg = f"Unexpected error during {context}: {e}"
                         logger.exception(error_msg)
@@ -398,10 +384,14 @@ class CreateGitHubResourcesUseCase:
             logger.error(
                 f"Workflow halted due to error: {type(e).__name__} - {e}")
             result.fatal_error = f"Workflow halted due to error: {type(e).__name__} - {e}"
-            # 既知例外は絶対にラップしない
-            raise
+            # 既知例外も必ずGitHubClientErrorでラップし、cause情報を付与
+            # すでにGitHubClientErrorなら多重ラップを避ける
+            if isinstance(e, GitHubClientError) and getattr(e, 'original_exception', None):
+                raise e  # すでにラップ済みなら再ラップしない
+            raise GitHubClientError(
+                f"Workflow halted due to error: {type(e).__name__} - {e} [cause: {type(e).__name__}: {e} ]", original_exception=e) from e
         except Exception as e:
-            # 未知例外のみラップ
+            # 未知例外も同様にラップ
             error_message = f"An unexpected critical error occurred during resource creation workflow: {e} [cause: {type(e).__name__}: {e} ]"
             logger.exception(error_message)
             result.fatal_error = error_message

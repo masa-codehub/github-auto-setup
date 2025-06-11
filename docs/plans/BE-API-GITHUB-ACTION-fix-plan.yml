@@ -1,0 +1,78 @@
+# BE-API-GITHUB-ACTION 修正計画
+
+issue: https://github.com/masa-codehub/github-auto-setup/issues/209
+plan_owner: copilot
+created_at: 2025-06-11
+
+summary: |
+  コードレビュー結果および修正タスク完了定義（DoD）に基づき、BE-API-GITHUB-ACTIONの修正計画を策定する。
+  すべての指摘事項を解消し、テスト・パフォーマンス・設計品質を担保する。
+
+implementation_steps:
+  - step: 1
+    title: "サービスインスタンスの初期化方法のリファクタリング"
+    description: |
+      webapp/app/views.py でリクエストごとにインスタンス化されていた load_settings, GitHub, GitHubRestClient, CreateGitHubResourcesUseCase などをモジュールレベルで初期化し、パフォーマンスとスレッドセーフティを改善する。
+    command: |
+      # views.pyの該当箇所を修正
+      # モジュールレベルでインスタンス化し、View内で再利用する
+    verification: |
+      # pytestを実行し、パフォーマンス劣化や副作用がないことを確認
+      pytest
+
+  - step: 2
+    title: "sys.path.appendの削除とPYTHONPATHの見直し"
+    description: |
+      webapp/app/views.py から sys.path.append の記述を削除し、pyproject.toml の設定でモジュールが解決されることを確認する。
+    command: |
+      # sys.path.append を削除
+      # 必要に応じてPYTHONPATHを修正
+    verification: |
+      # pytestおよびアプリ起動でImportError等が発生しないことを確認
+      pytest
+
+  - step: 3
+    title: "SaveLocallyAPIViewの完全実装と重複ロジックの共通化"
+    description: |
+      SaveLocallyAPIViewのスタブをLocalSaveUseCase（必要に応じて新規作成）を呼び出す実装に置き換え、ParsedDataCacheからのデータ取得ロジックを共通のヘルパー関数またはMixinクラスに抽出し、DRY原則を適用する。
+    command: |
+      # SaveLocallyAPIViewの実装を修正
+      # 共通ロジックをヘルパー関数またはMixinに切り出し
+    verification: |
+      # pytestで該当APIのテストがパスすることを確認
+      pytest
+
+  - step: 4
+    title: "スキップされていたテストの原因調査・修正"
+    description: |
+      pytestでスキップされていた23件のテスト（test_create_github_resources.py等）の原因を調査し、必要な修正を加えて全テストがスキップされずにパスするようにする。
+    command: |
+      # テストコード・conftest.py等を調査・修正
+      # pytestで全テストがパスすることを目指す
+    verification: |
+      # pytestで全テストがスキップされずにパスすることを確認
+      pytest
+
+  - step: 5
+    title: "test_views.pyのテスト品質向上"
+    description: |
+      test_views.pyのtest_create_github_resources_successテストを修正し、UseCase全体をモックするのではなく、UseCaseが依存するGitHubRestClient等をモックすることで、Viewのロジックをより詳細に検証する。
+    command: |
+      # test_views.pyの該当テストを修正
+    verification: |
+      # pytestで該当テストが意図通りに動作することを確認
+      pytest
+
+  - step: 6
+    title: "APIキーの受け渡し仕様の修正"
+    description: |
+      CreateGitHubResourcesAPIViewを、環境変数ではなくAPIリクエストのヘッダーやボディからGITHUB_PATを受け取り、それをUseCaseに渡すように修正する。
+    command: |
+      # views.pyの該当箇所を修正
+      # テストも合わせて修正
+    verification: |
+      # pytestで該当APIのテストがパスすることを確認
+      pytest
+
+notes: |
+  各ステップの実行・検証ログは、後続のコーディングルール策定・報告コメント作成に活用する。

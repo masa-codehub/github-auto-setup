@@ -1,9 +1,12 @@
 import logging
 # 依存関係を修正
-from adapters.github_rest_client import GitHubRestClient
-from adapters.assignee_validator import AssigneeValidator
-from domain.models import ParsedRequirementData, IssueData, CreateIssuesResult
-from domain.exceptions import GitHubClientError
+from core_logic.adapters.github_rest_client import GitHubRestClient
+from core_logic.adapters.assignee_validator import AssigneeValidator
+from core_logic.adapters.label_milestone_normalizer import LabelMilestoneNormalizerSvc
+from core_logic.domain.models import ParsedRequirementData, IssueData, CreateIssuesResult
+from core_logic.domain.exceptions import GitHubClientError
+from core_logic.adapters.github_graphql_client import GitHubGraphQLClient
+from core_logic.use_cases.create_repository import CreateRepositoryUseCase
 
 logger = logging.getLogger(__name__)
 

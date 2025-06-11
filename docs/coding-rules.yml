@@ -61,30 +61,32 @@
         return result
 
 - rule_id: "CR-021"
-  title: "カスタムAPIキー認証の実装とテスト"
+  title: "GitHubリソース作成・ローカル保存APIのClean Architecture/TDD例外設計・テスト知見の反映"
   description: |
-    Django REST FrameworkでAPIキー認証を導入する場合、BaseAuthenticationを継承したカスタム認証クラスを実装し、APIキーは環境変数や設定ファイルから取得すること。認証クラスのテストでは有効・無効・未指定・サーバー未設定の全パターンを網羅し、テスト時はsetUpで環境変数を必ずセットする。デフォルト認証クラスを変更した場合は、全API Viewで明示的にauthentication_classes/permission_classesを指定し、テストも修正する。
-  category: "API認証・テスト"
-  example_bad: |
-    class APIKeyAuthentication(BaseAuthentication):
-        def authenticate(self, request):
-            api_key = request.headers.get('X-API-KEY')
-            if api_key != 'hardcoded-key':
-                raise exceptions.AuthenticationFailed()
-            return (None, None)
-
-    # テストで環境変数未設定や未指定パターンを考慮していない
+    - APIエンドポイントでは、APIキーやdry_run等の重要パラメータを必ず明示的に抽出し、ユースケース層に安全に受け渡すこと。
+    - 外部API（GitHub等）やファイルシステム操作で発生しうる全ての例外を網羅的にハンドリングし、HTTPステータス・エラー詳細を含む標準化JSONで返却すること。
+    - ユースケース層では、ラベル・マイルストーン・プロジェクト連携等の個別リソース作成失敗時も "Unexpected error: ..." でエラー内容を整形し、テストで検証可能な形で返すこと。
+    - テストでは外部APIやFSへの依存を必ずpatch/mockで排除し、安定して全パス/異常系を再現できるようにする。
+    - これらの設計・実装・テスト知見を今後のAPI開発・レビュー時の必須ルールとする。
+  category: "API設計・Clean Architecture・テスト設計"
   example_good: |
-    import os
-    class CustomAPIKeyAuthentication(BaseAuthentication):
-        def authenticate(self, request):
-            api_key = request.headers.get('X-API-KEY')
-            valid_key = os.environ.get('API_KEY')
-            if not valid_key or not api_key or api_key != valid_key:
-                raise exceptions.AuthenticationFailed()
-            return (None, None)
-
-    # テストでsetUp/tearDownでAPI_KEYを必ずセット・解除し、全パターンを網羅
+    class CreateGitHubResourcesAPIView(APIView):
+        authentication_classes = [CustomAPIKeyAuthentication]
+        permission_classes = []
+        def post(self, request):
+            dry_run = request.data.get('dry_run', False)
+            # ...APIキー抽出・ユースケース呼び出し...
+            try:
+                result = use_case.execute(...)
+                return Response(serializer.data, status=200)
+            except (GitHubAuthenticationError, GitHubClientError) as e:
+                return Response({"detail": str(e)}, status=400)
+            except Exception as e:
+                return Response({"detail": f"Unexpected error: {e}"}, status=500)
+    # テスト例
+    with patch("app.views.CreateGitHubResourcesUseCase.execute", return_value=dummy_result):
+        response = client.post(url, {...}, format="json")
+        assert response.status_code == 200
 
 - rule_id: "CR-022"
   title: "本番コードにテスト用分岐を持ち込まない"
@@ -185,25 +187,16 @@
         return splitter.split(content, rule)
 
 - rule_id: "CR-027"
-  title: "パース失敗時は必ず警告ログを出力する"
+  title: "Django/Pythonパッケージのimportエラーはファイルの空・破損・パス設定を必ず確認する"
   description: |
-    YAMLやJSON等のパース処理で例外（YAMLError, JSONDecodeError等）が発生した場合、例外を握りつぶして無視するのではなく、必ずlogger.warning等で警告ログを出力すること。これにより、障害発生時の原因特定やデバッグが容易になり、保守性が向上する。
-  category: "ロギング・例外処理"
+    importエラーが発生した場合、まず該当ファイルが空でないか、正しいパスに存在するか、__init__.pyの有無、pytestやPYTHONPATHの設定を確認すること。ファイルが空の場合は正しい実装を再投入し、パス設定が正しければpytestのpythonpathやモジュール解決を見直す。CI/CDや本番環境でも同様のチェックを徹底する。
+  category: "パッケージ管理・デバッグ"
   example_bad: |
-    def _split_yaml(self, content: str):
-        try:
-            data = yaml.safe_load(content)
-        except yaml.YAMLError:
-            return []  # ログ出力なしで握りつぶしている
+    # ファイルが空でimport error
+    from core_logic.use_cases.local_save_use_case import LocalSaveUseCase  # ImportError
   example_good: |
-    import logging
-    logger = logging.getLogger(__name__)
-    def _split_yaml(self, content: str):
-        try:
-            data = yaml.safe_load(content)
-        except yaml.YAMLError as e:
-            logger.warning(f"Failed to parse YAML content due to YAMLError: {e}")
-            return []
+    # ファイル内容・パス・pythonpathを確認し、正しい実装を再投入
+    from core_logic.use_cases.local_save_use_case import LocalSaveUseCase
 
 - rule_id: "CR-028"
   title: "データ変換ロジックは独立した純粋関数としてカプセル化する"

@@ -531,7 +531,6 @@ def test_execute_no_labels_in_issues(create_resources_use_case: CreateGitHubReso
     assert result.issue_result is not None
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 例外ラップ仕様調整中")
 def test_execute_repo_creation_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_create_repo_uc, mock_create_issues_uc, caplog):
     """リポジトリ作成でエラーが発生した場合、処理が中断し例外が送出される"""
     mock_error = GitHubValidationError("Repo exists")
@@ -558,7 +557,6 @@ def test_execute_repo_creation_error(create_resources_use_case: CreateGitHubReso
     mock_create_issues_uc.execute.assert_not_called()  # Issue作成は呼ばれない
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 例外ラップ仕様調整中")
 def test_execute_issue_creation_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_create_repo_uc, mock_create_issues_uc):
     """Issue作成UseCaseでエラーが発生した場合、例外が送出される"""
     mock_create_repo_uc.execute.return_value = DUMMY_REPO_URL
@@ -586,7 +584,6 @@ def test_get_owner_repo_invalid_format(create_resources_use_case: CreateGitHubRe
         create_resources_use_case._get_owner_repo("/repo")  # owner名がない
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 例外ラップ仕様調整中")
 def test_get_owner_repo_api_fails(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client):
     """認証ユーザー取得APIが失敗した場合にエラーになるか"""
     mock_api_error = GitHubAuthenticationError("API Failed")
@@ -606,7 +603,6 @@ def test_get_owner_repo_api_fails(create_resources_use_case: CreateGitHubResourc
     # __cause__ の型チェックは省略
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 例外ラップ仕様調整中")
 def test_execute_unexpected_critical_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_create_repo_uc, caplog):
     """想定外の重大なエラーが発生した場合、処理が中断され適切にエラーが記録される"""
     # モックが予期せぬ例外を送出するように設定
@@ -630,7 +626,6 @@ def test_execute_unexpected_critical_error(create_resources_use_case: CreateGitH
     assert "Traceback" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 例外ラップ仕様調整中")
 def test_execute_create_issues_unexpected_error(create_resources_use_case: CreateGitHubResourcesUseCase, mock_rest_client, mock_graphql_client, mock_create_repo_uc, mock_create_issues_uc):
     """Issue作成時に予期せぬ例外が発生した場合、GitHubClientErrorにラップされる"""  # テストの説明を修正
     # 基本設定

@@ -107,7 +107,6 @@ def create_mock_issue(url, node_id):
 # --- Test Cases ---
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_all_new_issues(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """全てのIssueが新規の場合、全て作成され、進捗ログが出力されることをテスト"""
     # モックの検索結果を整数値で直接モック化
@@ -156,7 +155,6 @@ def test_execute_all_new_issues(create_issues_use_case: CreateIssuesUseCase, moc
     assert "CreateIssuesUseCase finished" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_all_existing_issues(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """全てのIssueが既存の場合、全てスキップされ、進捗ログが出力されることをテスト"""
     # モック設定: 存在確認は常にTrue
@@ -184,7 +182,6 @@ def test_execute_all_existing_issues(create_issues_use_case: CreateIssuesUseCase
     assert "CreateIssuesUseCase finished" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_mixed_issues(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """新規と既存が混在する場合のテスト"""
     # モック設定: ISSUE2_DATA のみ find で True を返す
@@ -223,7 +220,6 @@ def test_execute_mixed_issues(create_issues_use_case: CreateIssuesUseCase, mock_
     assert "CreateIssuesUseCase finished" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_find_issue_api_error(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """存在確認中にAPIエラーが発生しても処理が継続され、ログが出力されるかテスト"""
     mock_error = GitHubClientError("Find API Error")
@@ -274,7 +270,6 @@ def test_execute_find_issue_api_error(create_issues_use_case: CreateIssuesUseCas
     assert "CreateIssuesUseCase finished" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_create_issue_api_error(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """Issue作成中にAPIエラーが発生しても処理が継続され、ログが出力されるかテスト"""
     mock_error = GitHubValidationError("Create API Error", status_code=422)
@@ -314,7 +309,6 @@ def test_execute_create_issue_api_error(create_issues_use_case: CreateIssuesUseC
     assert "CreateIssuesUseCase finished" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_empty_issue_list(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """Issueリストが空の場合、何も処理されず、適切なログが出力されることをテスト"""
     with caplog.at_level(logging.INFO):
@@ -331,7 +325,6 @@ def test_execute_empty_issue_list(create_issues_use_case: CreateIssuesUseCase, m
     assert "No issues found in parsed data. Nothing to create." in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_with_empty_title(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """空タイトルのIssueが正しく処理されるかテスト（直接カスタムIssueDataを使用）"""
     # モック設定
@@ -374,7 +367,6 @@ def test_execute_with_empty_title(create_issues_use_case: CreateIssuesUseCase, m
     assert "Skipping issue data with empty title" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_with_assignees_validation(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, mock_assignee_validator: MagicMock, caplog):
     """担当者の検証機能が正しく動作するかテスト"""
     # モック設定: search_issues は常に空リストを返す
@@ -449,7 +441,6 @@ def test_execute_with_assignees_validation(create_issues_use_case: CreateIssuesU
     assert "Issues with invalid assignees: 2" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_with_unexpected_error(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """予期せぬエラーが発生した場合のエラーハンドリングをテスト"""
     # モックの設定
@@ -486,7 +477,6 @@ def test_execute_with_unexpected_error(create_issues_use_case: CreateIssuesUseCa
     assert f"Processing issue 3/3: '{ISSUE3_DATA.title}'" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_create_issue_returns_none_values(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """create_issue が None の値を返した場合のエラー処理をテスト"""
     # モックの設定
@@ -526,7 +516,6 @@ def test_create_issue_returns_none_values(create_issues_use_case: CreateIssuesUs
     assert "Encountered 2 error(s)" in caplog.text
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_with_milestone_mapping(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock):
     """マイルストーンIDマッピングが正しく使用されるかテスト"""
     # マイルストーンを含むIssueデータを作成
@@ -561,7 +550,6 @@ def test_execute_with_milestone_mapping(create_issues_use_case: CreateIssuesUseC
     )
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_with_missing_milestone_id(create_issues_use_case: CreateIssuesUseCase, mock_github_client: MagicMock, caplog):
     """マイルストーン名が指定されているがIDが見つからない場合のテスト"""
     # マイルストーンを含むIssueデータを作成

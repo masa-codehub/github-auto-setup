@@ -642,3 +642,16 @@ skip_tests:
     - coding-rules.yml: CR-021, CR-022, CR-023
     - #207-fix-plan.yml
     - TASK-CORELOGIC-AUTH-APIKEY-fix-report.md
+
+- id: BE-API-GITHUB-ACTION
+  title: "API: GitHubリソース作成とローカル保存"
+  status: "Done"
+  owner: "team-backend"
+  points: 8
+  description: "解析済みのIssue情報から、GitHubリソース（Issue, Label, Milestone, Project）を作成またはローカルに保存するAPIエンドポイントを実装する。"
+  dependencies:
+    - "TD-003"
+    - "TD-004"
+    - "TD-005"
+  notes: |
+    本タスクの完了に伴い、依存していた技術的負債 TD-003, TD-004, TD-005（UseCaseテストのスキップ問題）はすべて解消された。
