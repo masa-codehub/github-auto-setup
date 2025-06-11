@@ -1,0 +1,50 @@
+# BE-API-GITHUB-ACTION-plan.yml
+
+issue_id: BE-API-GITHUB-ACTION
+issue_title: GitHubリソース作成とローカル保存APIエンドポイントの実装
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/209
+labels:
+  - backend
+  - API
+  - feature
+  - GitHub
+
+definition_of_done:
+  - /api/create-github-resources/ エンドポイントが POST リクエストを受け付け、CreateGitHubResourcesUseCase を呼び出してGitHub上にリソースを作成できる
+  - /api/save-locally/ エンドポイントが POST リクエストを受け付け、LocalSaveUseCase を呼び出してローカル保存できる
+  - UseCaseから返却されたドメインモデル（CreateGitHubResourcesResultMdl等）がDRFシリアライザでJSON化される
+  - APIキー（GitHub PAT, AIサービスキー）を安全に抽出しUseCaseに渡せる
+  - dry_runパラメータをリクエストで受け付け、UseCaseに渡せる
+  - GitHub APIやファイルシステムのエラーを標準化JSONで返却できる
+  - 上記機能のユニットテストが全てパスする
+
+implementation_steps:
+  - step: 1
+    title: APIエンドポイントのURLパターン追加
+    command: webapp/app/urls.py に /api/create-github-resources/ および /api/save-locally/ のURLパターンを追加
+    verification: それぞれのエンドポイントにルーティングされることをcurl等で確認
+  - step: 2
+    title: APIViewの作成
+    command: webapp/app/views.py に CreateGitHubResourcesAPIView, SaveLocallyAPIView を作成し、POSTリクエストを受け付ける
+    verification: POSTリクエストで405/200等のレスポンスが返ることをcurl等で確認
+  - step: 3
+    title: シリアライザの実装
+    command: webapp/app/serializers.py に CreateGitHubResourcesResultMdl 等のシリアライザを実装
+    verification: UseCaseの戻り値が正しくJSON化されることをテストで確認
+  - step: 4
+    title: UseCase呼び出し・APIキー抽出・dry_run対応
+    command: APIViewでリクエストからAPIキー・dry_runを抽出し、CreateGitHubResourcesUseCase/LocalSaveUseCaseを呼び出す
+    verification: APIキー・dry_runが正しくUseCaseに渡ることをテストで確認
+  - step: 5
+    title: エラーハンドリング・標準化レスポンス
+    command: GitHub APIやファイルシステムのエラーを捕捉し、HTTPステータス・エラー詳細を含むJSONで返す
+    verification: 各種異常系で標準化エラーレスポンスが返ることをテストで確認
+  - step: 6
+    title: ユニットテストの実装
+    command: webapp/app/tests/test_views.py に正常系・異常系のAPIテストを追加
+    verification: test_requirements.md の全要件を満たすテストがパスすること
+
+notes:
+  - クリーンアーキテクチャ・TDD・一貫性原則を厳守
+  - 既存要件との矛盾なし
+  - エラーや自己修正ループは内部ログに記録

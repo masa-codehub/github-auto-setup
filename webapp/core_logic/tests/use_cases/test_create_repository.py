@@ -26,7 +26,7 @@ def use_case(mock_github_client):
     return CreateRepositoryUseCase(github_client=mock_github_client)
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
+# @pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_success(use_case):
     """リポジトリの作成に成功するケース"""
     repo_name = "test-repo"
@@ -40,7 +40,7 @@ def test_execute_success(use_case):
     )
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
+# @pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_github_client_error(use_case):
     """GitHub クライアントエラーが発生した場合、例外が再送出されること"""
     repo_name = "test-repo"
@@ -54,7 +54,7 @@ def test_execute_github_client_error(use_case):
     use_case.github_client.create_repository.assert_called_once()
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
+# @pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_unexpected_error(use_case, caplog):
     """予期せぬエラーが発生した場合、適切にログが出力され、GitHubClientErrorがスローされること"""
     repo_name = "test-repo"
@@ -72,7 +72,7 @@ def test_execute_unexpected_error(use_case, caplog):
     use_case.github_client.create_repository.assert_called_once()
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
+# @pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_empty_name(use_case):
     """空のリポジトリ名の場合、エラーを返すこと"""
     # 空文字や空白だけの名前
@@ -84,7 +84,7 @@ def test_execute_empty_name(use_case):
         use_case.github_client.create_repository.assert_not_called()
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
+# @pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_invalid_name_with_slash(use_case):
     """スラッシュを含むリポジトリ名の場合、エラーを返すこと"""
     pass
@@ -96,7 +96,7 @@ def test_execute_none_client():
         CreateRepositoryUseCase(github_client=None)
 
 
-@pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
+# @pytest.mark.skip(reason="一時的にスキップ: 型チェック厳格化によるMagicMockエラー回避")
 def test_execute_logs_debug_info(use_case, caplog):
     """実行中のデバッグ情報が適切にログ出力されること"""
     repo_name = "test-repo"

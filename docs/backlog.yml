@@ -230,7 +230,7 @@ user_stories:
     technical_tasks:
       - "TASK-CLI-ARGS-PARSE"         # issues.yml から
       - "TASK-CLI-CORELOGIC-CALL"     # issues.yml から
-      - "TASK-CLI-REFACTOR"         # issues.yml の TASK-CLI-MAINTENANCE と関連
+      - "TASK-CLI-REFACTOR"           # issues.yml の TASK-CLI-MAINTENANCE と関連
     related_epic_ids: ["EPIC-CLI-MAINTENANCE", "EPIC-GITHUB-INTEGRATION"]
     size_estimate: "[SP: 5]"
     dependencies_guessed:
@@ -302,11 +302,6 @@ user_stories:
     * `TASK-FE-US001-ERROR-HANDLING-plan.yml`
       *これらのタスクは、新しいアーキテクチャ（静的サイト + API連携）に合わせて内容が大幅に修正されるか、あるいは新しいタスクに置き換えられます。*
 
-    **定義済みラベル（例）:**
-    * `feature`
-    * `frontend`
-    * `refactoring`
-    * `architecture`
   status: "Done"
   priority: "Very High"
   labels: ["feature", "frontend", "refactoring", "architecture"]
@@ -324,11 +319,6 @@ user_stories:
   description: |
     現在Web UIのレンダリングを担っているDjangoアプリケーションを、純粋なHTTP APIサーバーとして再構築します。これにより、フロントエンド（静的サイト）からのリクエストに応答し、ビジネスロジック (`core_logic`) を実行するバックエンドAPIレイヤーを確立します。
     
-    **目標:**
-    * DjangoをAPIサーバーとして動作させ、フロントエンドからのすべてのリクエストをAPI経由で処理できるようにする。
-    * Django REST Framework (DRF) を導入し、効率的かつセキュアなAPI開発基盤を構築する。
-    * 既存のコアロジックをAPIから呼び出し、必要な認証・認可、入出力データ形式、エラーハンドリングを定義する。
-    * APIキーの管理方法（永続化しない方針）を実装に反映する。
   status: "To Do"
   priority: "Very High"
   labels: ["backend", "API", "migration", "architecture"]
@@ -503,7 +493,7 @@ technical_tasks:
   - task_id: "TT-008"
     title: "[TechnicalTask][Optimization] Dockerfile及びコンテナ起動スクリプトの最適化検討"
     description: |
-      Dockerfileに関して、ビルドキャッシュの効率化やマルチステージビルドによる最終的なイメージサイズの削減を検討する。
+      Dockerfileに関して、ビルドキャッシュの効率化やマルチステージビルdによる最終的なイメージサイズの削減を検討する。
       また、コンテナ起動時に `run.sh` で実行されるリポジトリクローン処理 (`clone-repositories.sh`) の必要性や、
       ビルドプロセスへの移行、あるいは開発環境に応じた条件分岐などを検討し、コンテナのビルド時間短縮と起動プロセスの効率化を図る。
     status: "提案"
@@ -646,6 +636,8 @@ skip_tests:
   priority: High
   related_to:
     - coding-rules.yml: CR-021, CR-022, CR-023
+    - #207-fix-plan.yml
+    - TASK-CORELOGIC-AUTH-APIKEY-fix-report.md
 
 # --- 申し送り事項（2025-06-11 BE-API-FILE-PROCESS修正対応）---
 - date: "2025-06-11"
@@ -670,3 +662,17 @@ skip_tests:
   notes: |
     - 今後もテスト容易性・保守性を重視し、依存注入やmock設計を徹底すること。
     - 認証・権限クラスの統一、責務分離、テスト網羅性の観点で新規API実装時も本対応を参考にすること。
+
+# --- BE-API-GITHUB-ACTION 完了報告 ---
+- id: BE-API-GITHUB-ACTION
+  title: "API: GitHubリソース作成とローカル保存"
+  status: "Done"
+  owner: "team-backend"
+  points: 8
+  description: "解析済みのIssue情報から、GitHubリソース（Issue, Label, Milestone, Project）を作成またはローカルに保存するAPIエンドポイントを実装する。"
+  dependencies:
+    - "TD-003"
+    - "TD-004"
+    - "TD-005"
+  notes: |
+    本タスクの完了に伴い、依存していた技術的負債 TD-003, TD-004, TD-005（UseCaseテストのスキップ問題）はすべて解消された。

@@ -32,11 +32,13 @@ from core_logic.domain.exceptions import GitHubClientError, GitHubAuthentication
 from core_logic.services import parse_issue_file_service
 from .authentication import CustomAPIKeyAuthentication
 from webapp.app.permissions import HasValidAPIKey
-from .serializers import ParsedRequirementDataSerializer
+from .serializers import ParsedRequirementDataSerializer, CreateGitHubResourcesResultSerializer
+from core_logic.use_cases.local_save_use_case import LocalSaveUseCase
+
 
 import logging
-import sys
 import os
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +173,9 @@ class CreateGitHubResourcesAPIView(APIView):
                 project_name=project_name,
                 dry_run=dry_run
             )
-            return Response(result.model_dump(), status=status.HTTP_200_OK)
+            serializer = CreateGitHubResourcesResultSerializer(
+                result.model_dump())
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except (GitHubAuthenticationError, GitHubClientError, GitHubValidationError) as e:
             logger.error(f"GitHub operation failed: {e}", exc_info=True)
             return Response({"detail": f"GitHub operation failed: {e}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -198,18 +202,75 @@ class GitHubCreateIssuesAPIView(APIView):
         return Response({'detail': 'GitHub登録API呼び出し成功（ダミー）', 'issue_ids': issue_ids}, status=status.HTTP_200_OK)
 
 
-class LocalSaveIssuesAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-    parser_classes = [JSONParser]
+class SaveLocallyAPIView(APIView):
+    authentication_classes = [CustomAPIKeyAuthentication]
+    permission_classes = []
 
     def post(self, request, *args, **kwargs):
-        local_path = request.data.get('local_path', '').strip()
-        issue_ids = request.data.get('issue_ids', [])
-        if not issue_ids:
-            return Response({'detail': 'No issue IDs provided.'}, status=status.HTTP_400_BAD_REQUEST)
-        # TODO: 本来はParsedDataCacheからsession_idで取得し、該当issueのみ抽出しローカル保存
-        # ここではダミーで成功レスポンス
-        return Response({'detail': 'ローカル保存API呼び出し成功（ダミー）', 'issue_ids': issue_ids, 'local_path': local_path}, status=status.HTTP_200_OK)
+        session_id = request.data.get('session_id')
+        selected_issue_temp_ids = request.data.get(
+            'selected_issue_temp_ids', [])
+        dry_run = request.data.get('dry_run', False)
+        if not session_id or not selected_issue_temp_ids:
+            return Response({"detail": "Missing session ID or selected issues."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            cached_entry = ParsedDataCache.objects.get(id=session_id)
+            if cached_entry.expires_at < timezone.now():
+                cached_entry.delete()
+                return Response({"detail": "Parsed data session expired."}, status=status.HTTP_400_BAD_REQUEST)
+            full_parsed_data = ParsedRequirementData(**cached_entry.data)
+            selected_issues = [
+                issue for issue in full_parsed_data.issues
+                if issue.temp_id in selected_issue_temp_ids
+            ]
+            if not selected_issues:
+                return Response({"detail": "No selected issues found matching the provided IDs within the cached data."}, status=status.HTTP_400_BAD_REQUEST)
+            parsed_data_for_use_case = ParsedRequirementData(
+                issues=selected_issues)
+        except ParsedDataCache.DoesNotExist:
+            return Response({"detail": "Parsed data session not found or expired."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(
+                f"Failed to load or process cached data: {e}", exc_info=True)
+            return Response({"detail": "Failed to retrieve parsed issue data."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            result = LocalSaveUseCase().execute(
+                parsed_data=parsed_data_for_use_case, dry_run=dry_run)
+            return Response(result, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.exception(f"Unexpected error during local save: {e}")
+            return Response({"detail": f"An unexpected error occurred: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UploadAndParseView(APIView):
+    parser_classes = [MultiPartParser]
+    authentication_classes = [CustomAPIKeyAuthentication]
+    permission_classes = [HasValidAPIKey]
+
+    def post(self, request, *args, **kwargs):
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return Response({"detail": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+        max_size = 10 * 1024 * 1024
+        if uploaded_file.size > max_size:
+            return Response({"detail": "File size exceeds 10MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+        allowed_exts = ['md', 'yml', 'yaml', 'json']
+        ext = uploaded_file.name.split('.')[-1].lower()
+        if ext not in allowed_exts:
+            return Response({"detail": "Unsupported file extension."}, status=status.HTTP_400_BAD_REQUEST)
+        github_pat = request.headers.get('X-GitHub-PAT')
+        ai_api_key = request.headers.get('X-AI-API-KEY')
+        if not github_pat or not ai_api_key:
+            return Response({"detail": "API key missing."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            parsed_data = parse_issue_file_service.parse(
+                uploaded_file.name, uploaded_file.read())
+            serializer = ParsedRequirementDataSerializer(parsed_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except (ParsingError, AiParserError) as e:
+            return Response({"detail": f"File parsing failed: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": f"Unexpected error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserAiSettingsSerializer(serializers.ModelSerializer):
@@ -252,69 +313,3 @@ class AiSettingsAPIView(APIView):
 def top_page_view(request):
     form = FileUploadForm()
     return render(request, 'top_page.html', {'upload_form': form, 'issue_count': 0, 'issue_list': []})
-
-
-# --- Serializerをインライン定義（import問題回避）---
-# class IssueDataSerializer(serializers.Serializer):
-#     temp_id = serializers.CharField()
-#     title = serializers.CharField()
-#     description = serializers.CharField()
-#     tasks = serializers.ListField(
-#         child=serializers.CharField(), required=False)
-#     relational_definition = serializers.ListField(
-#         child=serializers.CharField(), required=False)
-#     relational_issues = serializers.ListField(
-#         child=serializers.CharField(), required=False)
-#     acceptance = serializers.ListField(
-#         child=serializers.CharField(), required=False)
-#     labels = serializers.ListField(
-#         child=serializers.CharField(), allow_null=True, required=False)
-#     milestone = serializers.CharField(allow_null=True, required=False)
-#     assignees = serializers.ListField(
-#         child=serializers.CharField(), allow_null=True, required=False)
-
-
-# class ParsedRequirementDataSerializer(serializers.Serializer):
-#     issues = IssueDataSerializer(many=True)
-
-
-class UploadAndParseView(APIView):
-    parser_classes = [MultiPartParser]
-    authentication_classes = [CustomAPIKeyAuthentication]
-    permission_classes = [HasValidAPIKey]
-
-    def post(self, request, *args, **kwargs):
-        uploaded_file = request.FILES.get('file')
-        if not uploaded_file:
-            return Response({"detail": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
-        max_size = 10 * 1024 * 1024
-        if uploaded_file.size > max_size:
-            return Response({"detail": "File size exceeds 10MB limit."}, status=status.HTTP_400_BAD_REQUEST)
-        allowed_exts = ['md', 'yml', 'yaml', 'json']
-        ext = uploaded_file.name.split('.')[-1].lower()
-        if ext not in allowed_exts:
-            return Response({"detail": "Unsupported file extension."}, status=status.HTTP_400_BAD_REQUEST)
-        github_pat = request.headers.get('X-GitHub-PAT')
-        ai_api_key = request.headers.get('X-AI-API-KEY')
-        if not github_pat or not ai_api_key:
-            return Response({"detail": "API key missing."}, status=status.HTTP_401_UNAUTHORIZED)
-        try:
-            # 設定を一時的に上書きしてAIParserを再生成（APIキーを永続保存しない）
-            # temp_settings = load_settings()
-            # if hasattr(temp_settings, 'openai_api_key'):
-            #     temp_settings.openai_api_key = ai_api_key
-            # if hasattr(temp_settings, 'gemini_api_key'):
-            #     temp_settings.gemini_api_key = ai_api_key
-            # if hasattr(temp_settings, 'github_pat'):
-            #     temp_settings.github_pat = github_pat
-            # temp_ai_parser = AIParser(settings=temp_settings)
-            # temp_parse_service = parse_issue_file_service.ParseIssueFileService(temp_ai_parser)
-            # parsed_data = temp_parse_service.parse(uploaded_file.name, uploaded_file.read())
-            parsed_data = parse_issue_file_service.parse(
-                uploaded_file.name, uploaded_file.read())
-            serializer = ParsedRequirementDataSerializer(parsed_data)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except (ParsingError, AiParserError) as e:
-            return Response({"detail": f"File parsing failed: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"detail": f"Unexpected error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

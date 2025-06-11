@@ -105,7 +105,7 @@
 - id: TR-FE-STATIC-004
   description: frontend/assets/js/display_logic.js のファイル処理結果表示ロジックが、APIから受け取ったJSONデータを元にDOMを動的に操作してレンダリングする実装となっていること。
 - id: TR-FE-STATIC-005
-  description: frontend/assets/js/issue_selection.js等、全てのUIアクションがDjangoテンプレートに依存せず、API経由でデータ取得・UI操作を行うよう改修されていること。
+  description: frontend/assets/js/issue_selection.js等、全てのUIアクションがDjangoテンプレートに依存せず、API経経由でデータ取得・UI操作を行うよう改修されていること。
 - id: TR-FE-STATIC-006
   description: GitHub Issue登録・ローカル保存・設定画面の保存/取得等、全てのユーザーアクションがJavaScript経由でDjango APIサーバーのエンドポイントを呼び出す形に統一されていること。
 - id: TR-FE-STATIC-007
@@ -114,12 +114,30 @@
   description: 既存および新規のJavaScriptテストコード（frontend/assets/js/tests/, frontend/tests/）が新しいAPIクライアント・DOM操作ロジックに合わせて更新または新規作成され、全てのテストがパスすること。
 
 # テスト要件: ファイルアップロードとAI解析API (BE-API-FILE-PROCESS)
-- id: TR-API-001
+- id: TR-API-FileProcess-001
   description: /api/upload-and-parse/ エンドポイントがPOSTリクエストを受け付け、multipart-form dataでアップロードされた有効なファイル（md, yml, json）を正しく処理し、AI解析結果のJSONとHTTP 200 OKを返すこと。
-- id: TR-API-002
+- id: TR-API-FileProcess-002
   description: ファイル形式が不正、またはファイルサイズが10MBを超える場合、HTTP 400 Bad Requestと適切なエラーメッセージを返すこと。
-- id: TR-API-003
+- id: TR-API-FileProcess-003
   description: APIキー（X-GitHub-PAT, X-AI-API-KEY）が未提供または無効な場合、HTTP 401 Unauthorizedまたは403 Forbiddenを返すこと。
+
+# テスト要件: GitHubリソース作成・ローカル保存API (BE-API-GITHUB-ACTION)
+- id: TR-API-GitHubAction-001
+  description: /api/create-github-resources/ エンドポイントに有効なIssue情報をPOSTすると、GitHub上にリソース（Issue, リポジトリ, ラベル, マイルストーン）が作成され、正常なJSONレスポンス（CreateGitHubResourcesResultMdl）が返ること。
+- id: TR-API-GitHubAction-002
+  description: /api/create-github-resources/ で認証エラー（無効なGitHub PATやAIサービスAPIキー）が発生した場合、HTTP 401/403エラーと標準化されたエラーレスポンスが返ること。
+- id: TR-API-GitHubAction-003
+  description: /api/save-locally/ エンドポイントに有効なIssue情報をPOSTすると、ローカルファイルに保存され、正常なJSONレスポンスが返ること。
+- id: TR-API-GitHubAction-004
+  description: /api/save-locally/ でファイルシステムエラー（書き込み権限不足等）が発生した場合、HTTP 500エラーと標準化されたエラーレスポンスが返ること。
+- id: TR-API-GitHubAction-005
+  description: いずれのAPIも、リクエストヘッダーやボディからAPIキー（GitHub PAT, AIサービスキー）を安全に抽出し、UseCaseに渡していることをテストで確認する。
+- id: TR-API-GitHubAction-006
+  description: dry_runパラメータをリクエストで受け付け、UseCaseに正しく渡されていることをテストで確認する。
+- id: TR-API-GitHubAction-007
+  description: GitHub APIやファイルシステムのエラー発生時、HTTPステータスコードとエラー詳細を含む標準化JSONで返却されること。
+- id: TR-API-GitHubAction-008
+  description: 上記APIの正常系・異常系を網羅するユニットテストが実装され、全てのテストがパスすること。
 
 # 備考
 - API要件、クライアントサイド検証要件、API連携要件はそれぞれ独立しており、重複・矛盾はありません。
