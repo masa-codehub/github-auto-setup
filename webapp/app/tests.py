@@ -305,6 +305,7 @@ class CustomAPIKeyAuthenticationTest(TestCase):
         response = self.client.get(self.url, HTTP_X_API_KEY=self.valid_key)
         self.assertIn(response.status_code, [401, 403])
 
+
 class UserAiSettingsAPITest(AuthenticatedAPITestMixin, TestCase):
     def test_get_default_ai_settings(self):
         response = self.client.get('/api/v1/ai-settings/')
@@ -327,3 +328,61 @@ class UserAiSettingsAPITest(AuthenticatedAPITestMixin, TestCase):
         self.assertEqual(get_resp.status_code, 200)
         self.assertEqual(get_resp.json()['ai_provider'], 'gemini')
         self.assertEqual(get_resp.json()['gemini_model'], 'gemini-1.5-pro')
+
+
+class UploadAndParseViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.url = '/api/upload-and-parse/'
+        self.valid_github_pat = 'dummy-github-pat'
+        self.valid_ai_api_key = 'dummy-ai-api-key'
+        self.headers = {
+            'HTTP_X_GITHUB_PAT': self.valid_github_pat,
+            'HTTP_X_AI_API_KEY': self.valid_ai_api_key,
+        }
+
+    @patch('core_logic.services.parse_issue_file_service.ParseIssueFileService.parse')
+    @patch('core_logic.services.parse_issue_file_service.ParseIssueFileService.__init__', return_value=None)
+    @patch('core_logic.adapters.ai_parser.AIParser.__init__', return_value=None)
+    def test_upload_valid_file(self, mock_ai_init, mock_parse_service_init, mock_parse):
+        mock_parse.return_value = ParsedRequirementData(issues=[
+            IssueData(title="Test Issue", description="test body", temp_id="issue-1", labels=[], milestone=None,
+                      assignees=[], tasks=[], acceptance=[], relational_definition=[], relational_issues=[])
+        ])
+        file_content = b"# Issue\n- title: Test Issue\n- body: test body"
+        file = BytesIO(file_content)
+        file.name = 'test.md'
+        response = self.client.post(
+            self.url, {'file': file}, format='multipart', **self.headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('issues', response.json())
+        self.assertEqual(response.json()['issues'][0]['title'], 'Test Issue')
+
+    def test_missing_api_keys(self):
+        file_content = b"# Issue\n- title: Test Issue\n- body: test body"
+        file = BytesIO(file_content)
+        file.name = 'test.md'
+        response = self.client.post(
+            self.url, {'file': file}, format='multipart')
+        self.assertIn(response.status_code, [401, 403])
+        self.assertIn('detail', response.json())
+
+    def test_invalid_file_extension(self):
+        file_content = b"dummy content"
+        file = BytesIO(file_content)
+        file.name = 'test.txt'
+        response = self.client.post(
+            self.url, {'file': file}, format='multipart', **self.headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('detail', response.json())
+        self.assertIn('Unsupported file extension', response.json()['detail'])
+
+    def test_file_size_exceeded(self):
+        file_content = b"0" * (10 * 1024 * 1024 + 1)
+        file = BytesIO(file_content)
+        file.name = 'test.md'
+        response = self.client.post(
+            self.url, {'file': file}, format='multipart', **self.headers)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('detail', response.json())
+        self.assertIn('File size exceeds', response.json()['detail'])

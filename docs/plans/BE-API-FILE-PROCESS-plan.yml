@@ -1,0 +1,57 @@
+# BE-API-FILE-PROCESS 実装計画
+issue_id: BE-API-FILE-PROCESS
+issue_url: https://github.com/masa-codehub/github-auto-setup/issues/208
+summary: |
+  フロントエンドから受け取ったIssue情報ファイルをAIで解析し、結果をJSONで返すAPIエンドポイント（/api/upload-and-parse/）を実装する。
+  - ファイルアップロード（Multipart-form data）とAI解析を行うAPIエンドポイントを `webapp/app/views.py` に定義。
+  - アップロードファイルを `core_logic.use_cases.AIParseFileUseCase` に渡し、解析結果を受け取る。
+  - `ParsedSourceFileContentMdl` をJSONシリアライズするDRFシリアライザを実装。
+  - APIキー（GitHub PAT, AIサービスAPIキー）はリクエストヘッダーから受け取り、メモリ上で一時的に保持し、永続化しない。
+  - ファイルバリデーション（拡張子・サイズ）とエラーハンドリングを徹底。
+  - すべてのシナリオを網羅したテストを実装。
+definition_of_done:
+  - /api/upload-and-parse/ エンドポイントがPOSTリクエストを受け付ける
+  - Multipart-form data形式でアップロードされたファイルを正しく処理できる
+  - リクエストヘッダーからAPIキー（GitHub PAT, AIサービスキー）を抽出し、AIParseFileUseCaseに渡せる
+  - AIParseFileUseCaseを呼び出し、ParsedSourceFileContentMdlを受け取れる
+  - ParsedSourceFileContentMdlモデルをJSON形式にシリアライズするDRFシリアライザが実装されている
+  - 成功時は解析結果のJSONとHTTP 200 OKを返す
+  - ファイル形式不正・サイズ超過時は400 Bad Requestを返す
+  - APIキー不備・無効時は401/403を返す
+  - 上記シナリオを網羅したテストが全てパスする
+implementation_steps:
+  - step: 1
+    description: "APIエンドポイントの設計・ルーティング追加（urls.py）"
+    command: "webapp/app/urls.pyに/api/upload-and-parse/のルーティングを追加"
+    verification: "/api/upload-and-parse/にアクセスし、Not Implemented等のレスポンスが返ることを確認"
+  - step: 2
+    description: "ファイルアップロードAPIViewの実装（views.py）"
+    command: "webapp/app/views.pyにUploadAndParseView(APIView)を実装し、POSTでファイル受付・バリデーション・AI解析呼び出し・エラーハンドリングを記述"
+    verification: "正常・異常系で適切なHTTPレスポンスが返ることをcurl等で確認"
+  - step: 3
+    description: "AI解析用UseCase呼び出しロジックの実装"
+    command: "core_logic.use_cases.AIParseFileUseCaseを呼び出し、解析結果を取得するロジックをUploadAndParseViewに組み込む"
+    verification: "AIParseFileUseCaseの呼び出しが正常に行われ、モックで結果が返ることをテストで確認"
+  - step: 4
+    description: "DRFシリアライザの実装（serializers.py）"
+    command: "webapp/app/serializers.pyにParsedSourceFileContentMdl用のシリアライザを実装"
+    verification: "シリアライズ結果が期待通りのJSON構造になることをテストで確認"
+  - step: 5
+    description: "APIキーのヘッダー受け渡し・一時保持ロジックの実装"
+    command: "UploadAndParseViewでX-GitHub-PAT, X-AI-API-KEYヘッダーを受け取り、UseCase呼び出し時に渡す処理を追加"
+    verification: "ヘッダーが正しく取得・利用され、永続化されないことをテストで確認"
+  - step: 6
+    description: "ファイルバリデーション・エラーハンドリングの実装"
+    command: "ファイル拡張子・サイズチェック、バリデーション失敗時の400レスポンス、認証失敗時の401/403レスポンス、AI解析失敗時の400レスポンス、予期せぬ例外時の500レスポンスを実装"
+    verification: "各異常系で正しいHTTPステータス・エラーメッセージが返ることをテストで確認"
+  - step: 7
+    description: "テストケースの実装（正常系・異常系）"
+    command: "webapp/app/tests.pyにUploadAndParseViewのテスト（正常・異常系）を追加"
+    verification: "全テストがパスすること（pytest/djangoテストランナーで確認）"
+  - step: 8
+    description: "成果物・実装記録を整理し、docs/coding-rules.ymlに知見を反映。レビューコメントを作成し完了を宣言"
+    command: "記録整理・ルール追記・レビューコメント作成"
+    verification: "coding-rules.ymlにルールが追記され、レビューコメントがdocs/review-request/に作成されていること"
+notes:
+  - 設計・実装・テストの全過程でTDD・一貫性・重複排除・説明責任原則を厳守
+  - 重大な矛盾が発生した場合はCONFLICT_DETECTEDで停止

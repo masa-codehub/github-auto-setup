@@ -31,14 +31,14 @@ from core_logic.use_cases.create_issues import CreateIssuesUseCase
 from core_logic.domain.exceptions import GitHubClientError, GitHubAuthenticationError, GitHubValidationError
 from core_logic.services import parse_issue_file_service
 from .authentication import CustomAPIKeyAuthentication
+from webapp.app.permissions import HasValidAPIKey
+from .serializers import ParsedRequirementDataSerializer, CreateGitHubResourcesResultSerializer
 from core_logic.use_cases.local_save_use_case import LocalSaveUseCase
+
 
 import logging
 import os
 import uuid
-import sys
-
-from .serializers import CreateGitHubResourcesResultSerializer  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +240,37 @@ class SaveLocallyAPIView(APIView):
         except Exception as e:
             logger.exception(f"Unexpected error during local save: {e}")
             return Response({"detail": f"An unexpected error occurred: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UploadAndParseView(APIView):
+    parser_classes = [MultiPartParser]
+    authentication_classes = [CustomAPIKeyAuthentication]
+    permission_classes = [HasValidAPIKey]
+
+    def post(self, request, *args, **kwargs):
+        uploaded_file = request.FILES.get('file')
+        if not uploaded_file:
+            return Response({"detail": "No file uploaded."}, status=status.HTTP_400_BAD_REQUEST)
+        max_size = 10 * 1024 * 1024
+        if uploaded_file.size > max_size:
+            return Response({"detail": "File size exceeds 10MB limit."}, status=status.HTTP_400_BAD_REQUEST)
+        allowed_exts = ['md', 'yml', 'yaml', 'json']
+        ext = uploaded_file.name.split('.')[-1].lower()
+        if ext not in allowed_exts:
+            return Response({"detail": "Unsupported file extension."}, status=status.HTTP_400_BAD_REQUEST)
+        github_pat = request.headers.get('X-GitHub-PAT')
+        ai_api_key = request.headers.get('X-AI-API-KEY')
+        if not github_pat or not ai_api_key:
+            return Response({"detail": "API key missing."}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            parsed_data = parse_issue_file_service.parse(
+                uploaded_file.name, uploaded_file.read())
+            serializer = ParsedRequirementDataSerializer(parsed_data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except (ParsingError, AiParserError) as e:
+            return Response({"detail": f"File parsing failed: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": f"Unexpected error: {e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class UserAiSettingsSerializer(serializers.ModelSerializer):

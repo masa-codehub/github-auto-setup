@@ -21,5 +21,4 @@ urlpatterns = [
     # path('admin/', admin.site.urls),  # 管理画面不要ならコメントアウト
     path('', include(('app.urls', 'app'), namespace='app')),
     path('api/v1/', include(('app.urls', 'api_v1'), namespace='api_v1')),
-    path('api/', include('rest_framework.urls', namespace='rest_framework_docs')),
 ]
