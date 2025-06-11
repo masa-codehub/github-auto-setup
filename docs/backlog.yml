@@ -413,13 +413,15 @@ technical_tasks:
     title: "Backend: US-001 ファイル処理APIエンドポイントの実装"
     description: "Web UIからのファイルアップロードを受け付け、AIパーサーで解析し、結果を一時保存して最小限の情報を返すAPIエンドポイント（`/api/upload-issue-file/`）を実装する。"
     related_epic_ids: ["EPIC-BACKEND-API", "EPIC-DATAPARSING"]
-    status: "Done"
+    status: "Done" # 最終ステータス
     priority: "High"
     size_estimate: "[SP: 8]"
-    notes:
-      - "/api/upload-and-parse/ でファイルアップロード・AI解析・バリデーション・APIキー一時保持・エラー処理・シリアライズ・全テスト網羅の要件を満たすAPI実装が完了。全テストパス済み。"
-      - "/api/v1/create-github-resources/ のルーティングも追加し、関連テストも全てパス。"
-      - "コーディングルール（CR-BE-API-001）にAPIキー一時保持・バリデーション・テスト網羅の原則を追記。"
+    notes: |
+      [2025-06-12 完了] レビュー指摘に基づき、以下のリファクタリングとテスト追加を実施。
+      - 認証方式をDRF標準に統一し、セキュリティを強化。
+      - サービスインスタンス化を最適化し、パフォーマンスを改善。
+      - Serializerを`serializers.py`に分離し、保守性を向上。
+      - 新規Viewに対するテストケースを追加し、カバレッジを確保。
   - task_id: "TASK-BE-API-GITHUB-RESOURCE-CREATION"
     title: "Backend: GitHubリソース作成APIエンドポイントの実装"
     description: "Web UIから提供された`session_id`と`selected_issue_temp_ids`に基づき、一時保存されたIssueデータをロードし、GitHubリポジトリ、Issue等を一括作成するAPIエンドポイント（`/api/create-github-resources/`）を実装する。"
