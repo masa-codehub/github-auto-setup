@@ -157,4 +157,24 @@ python -m scripts.test_github_connection
 - スコープ不足や認証エラー時はエラーメッセージとともに終了コード1で終了します。
 - スクリプトは `githubkit` パッケージに依存します。
 
----
+## 2サーバー分離構成での起動・開発・E2E手順（静的フロントエンド＋APIサーバー）
+
+本プロジェクトは「静的フロントエンド（HTML/JS）＋APIバックエンド（Django/DRF）」の2サーバー構成を前提としています。
+
+### 1. バックエンドAPIサーバーの起動
+
+1. DockerまたはローカルでDjango/DRFサーバーを起動します。
+   - デフォルト: `http://localhost:8000/` でAPIがリッスン
+   - CORS設定でフロントエンドOrigin（例: http://localhost:3001）を許可
+
+### 2. フロントエンド（静的HTML/JS）の起動
+
+1. `frontend/` ディレクトリ配下のHTML/JS/CSSを静的サーバー（例: `python -m http.server 3001` など）で配信
+   - デフォルト: `http://localhost:3001/` でフロントエンドにアクセス
+   - `window.API_SERVER_URL` を `index.html` などで設定することでAPIサーバーURLを切り替え可能
+
+### 3. E2Eテスト・運用
+
+- フロントエンドからの全API呼び出しは絶対URL（例: `http://localhost:8000/api/v1/parse-file`）で行われます。
+- CORS・認証・エラーハンドリングを含め、2サーバー構成でE2E動作を必ず検証してください。
+- 詳細なテスト要件・運用手順は `docs/test_requirements.md` も参照。

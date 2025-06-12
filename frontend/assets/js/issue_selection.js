@@ -4,7 +4,8 @@
 import { displayIssues } from './display_logic.js';
 
 // === APIエンドポイント定数 ===
-const API_ENDPOINT = '/api/v1/parse-file';
+const API_SERVER = window.API_SERVER_URL || 'http://localhost:8000';
+const API_ENDPOINT = API_SERVER + '/api/v1/parse-file';
 
 // DOM依存部分を即時実行しないように分離
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -206,7 +207,7 @@ async function handleGithubSubmit() {
     }
     try {
         const csrfToken = getCookie('csrftoken');
-        const res = await fetch('/api/v1/github-create-issues/', {
+        const res = await fetch(API_SERVER + '/api/v1/github-create-issues/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -243,7 +244,7 @@ async function handleLocalSave() {
     }
     try {
         const csrfToken = getCookie('csrftoken');
-        const res = await fetch('/api/v1/local-save-issues/', {
+        const res = await fetch(API_SERVER + '/api/v1/local-save-issues/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -266,7 +267,7 @@ async function handleLocalSave() {
 }
 
 // === AI設定フォーム連携 ===
-const AI_SETTINGS_API = '/api/v1/ai-settings/';
+const AI_SETTINGS_API = API_SERVER + '/api/v1/ai-settings/';
 
 async function loadAiSettings() {
     try {

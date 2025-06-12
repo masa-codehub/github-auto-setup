@@ -1,0 +1,43 @@
+# DEV-ENV-REFACTOR-217-fix-plan.yml
+
+issue: 217
+summary: |
+  Djangoバックエンドと静的フロントエンドの分離に関する指摘事項（APIサーバー専用化、フロントエンドのAPI絶対パス化、CORS対応、E2E検証）を全て解消するための修正計画。
+
+implementation_steps:
+  - step: 1
+    title: "Djangoの静的ページ配信機能の削除"
+    description: |
+      webapp/app/urls.py から top_page_view を呼び出す path 定義を完全に削除し、APIサーバー専用構成に修正する。
+    command: "webapp/app/urls.py から top_page_view の path を削除する"
+    verification: |
+      webapp/app/urls.py に top_page_view 関連の path 定義が一切存在しないことを確認する。
+
+  - step: 2
+    title: "フロントエンドAPI呼び出しの絶対パス化"
+    description: |
+      frontend/assets/js/ 配下の全JSファイルで、API呼び出し(fetch)が http://localhost:8000 を基準とした絶対URLで行われるように修正する。
+      例: const API_BASE_URL = 'http://localhost:8000'; fetch(`${API_BASE_URL}/api/...`)
+    command: "frontend/assets/js/issue_selection.js, file_upload.js で API_BASE_URL を導入し、fetch 呼び出しを絶対パスに統一する"
+    verification: |
+      全ての fetch 呼び出しが API_BASE_URL を参照し、相対パスが残っていないことを確認する。
+
+  - step: 3
+    title: "CORS対応 (django-cors-headers導入)"
+    description: |
+      django-cors-headers をインストールし、webapp/webapp_project/settings.py に http://localhost:8080 からのアクセスを許可する CORS 設定を追加する。
+    command: "django-cors-headers をインストールし、settings.py に CORS 設定を追加する"
+    verification: |
+      settings.py に CORS_ALLOWED_ORIGINS で http://localhost:8080 が許可されていること、依存パッケージが追加されていることを確認する。
+
+  - step: 4
+    title: "E2E動作検証・証跡取得"
+    description: |
+      README.md の新しい起動手順に従い、2サーバーを起動。Web UI からファイルアップロード～解析表示までの一連の動作が正常に完了することを手動で検証し、チェックリストとスクリーンショットを取得する。
+    command: "2サーバーを起動し、E2E動作を手動検証。証跡を docs/review-request/DEV-ENV-REFACTOR-217-e2e-proof.md に記録する"
+    verification: |
+      チェックリストとスクリーンショットが docs/review-request/DEV-ENV-REFACTOR-217-e2e-proof.md に記載されていることを確認する。
+
+notes:
+  - 本計画は、コードレビュー指摘事項と修正タスク完了定義（DoD）に完全準拠する。
+  - 各ステップの検証で不備があれば、原因・修正内容を内部ログとして記録し、完了フェーズでコーディングルールに反映する。

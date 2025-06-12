@@ -92,7 +92,9 @@ sections:
           - type: "実行形態"
             details:
               - "コンテナ上で動作するPython/Django製APIバックエンドアプリケーション。"
-              - "**Bootstrap 5と最小限のJavaScriptで構築された静的なWeb UI。DjangoテンプレートによるHTMLレンダリングは行わず、静的ファイルとしてGitHub Pages等でのデプロイも可能。**"
+              - "**静的HTML/JS/CSSで構成されたフロントエンド（GitHub Pages等での独立デプロイ可）と、APIサーバー（Django/DRF）を完全分離して運用。**"
+              - "**CORS設定により、フロントエンドからのAPIリクエストのみ許可。**"
+              - "**E2Eテスト・運用手順・開発フローは2サーバー構成を前提に整理。**"
               - "Python CLIアプリケーション（Typer）。
       - heading: "対象範囲外（Out of Scope）"
         items:
