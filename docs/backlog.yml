@@ -18,6 +18,11 @@ document_info:
     - "docs/diagrams/context-diagram.md"
     - "docs/diagrams/architecture-diagram.md"
     - "docs/api_specifications.md (To be created/updated)"
+  notes: |
+    本バックログは「静的フロントエンド（HTML+JS）＋APIバックエンド（Django/DRF）」の2サーバー分離構成を前提とし、全てのユーザーストーリー・タスク・運用・テスト・E2E検証はこの構成に基づいています。
+    - フロントエンドは静的HTML/JS/CSSとして独立デプロイ可能
+    - バックエンドはAPIサーバーとしてCORS設定でフロントエンドからのリクエストのみ許可
+    - E2E・運用・開発手順も2サーバー構成を前提に整理
 
 development_approach_guidelines:
   preface: |

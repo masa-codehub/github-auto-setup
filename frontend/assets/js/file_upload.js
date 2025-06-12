@@ -8,6 +8,7 @@
   const fileHelp = document.getElementById('fileHelp');
   const allowedExts = ['.md', '.yml', '.yaml', '.json'];
   const maxSize = 10 * 1024 * 1024; // 10MB
+  const API_SERVER = window.API_SERVER_URL || 'http://localhost:8000';
 
   function getExt(filename) {
     // 末尾のドット区切り拡張子を返す（例: 'test.md'→'md'）
@@ -67,7 +68,7 @@
       formData.append('issue_file', file); // ←キー名を統一
       try {
         const csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
-        const response = await fetch('/api/v1/parse-file', {
+        const response = await fetch(API_SERVER + '/api/v1/parse-file', {
           method: 'POST',
           body: formData,
           headers: csrfToken ? { 'X-CSRFToken': csrfToken } : undefined

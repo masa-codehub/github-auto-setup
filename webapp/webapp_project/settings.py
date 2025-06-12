@@ -134,11 +134,13 @@ STATICFILES_DIRS = [
 
 # CORS設定
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8080",
     "http://localhost:3000",
     # "https://your-frontend-domain.com",
 ]
+# DEBUG時の全許可は本番では無効化すること
 if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_ALL_ORIGINS = False
 
 # セキュリティヘッダー例
 SECURE_CONTENT_TYPE_NOSNIFF = True

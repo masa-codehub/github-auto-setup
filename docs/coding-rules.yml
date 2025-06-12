@@ -61,32 +61,26 @@
         return result
 
 - rule_id: "CR-021"
-  title: "GitHubリソース作成・ローカル保存APIのClean Architecture/TDD例外設計・テスト知見の反映"
+  title: "フロントエンド・バックエンド分離時のAPI絶対パス化とCORS設定の徹底"
   description: |
-    - APIエンドポイントでは、APIキーやdry_run等の重要パラメータを必ず明示的に抽出し、ユースケース層に安全に受け渡すこと。
-    - 外部API（GitHub等）やファイルシステム操作で発生しうる全ての例外を網羅的にハンドリングし、HTTPステータス・エラー詳細を含む標準化JSONで返却すること。
-    - ユースケース層では、ラベル・マイルストーン・プロジェクト連携等の個別リソース作成失敗時も "Unexpected error: ..." でエラー内容を整形し、テストで検証可能な形で返すこと。
-    - テストでは外部APIやFSへの依存を必ずpatch/mockで排除し、安定して全パス/異常系を再現できるようにする。
-    - これらの設計・実装・テスト知見を今後のAPI開発・レビュー時の必須ルールとする。
-  category: "API設計・Clean Architecture・テスト設計"
+    フロントエンドとバックエンドを別サーバーで運用する場合、全てのAPI呼び出しは環境変数や定数（例: window.API_SERVER_URL, API_BASE_URL）を用いて絶対パスで指定し、相対パスを禁止する。また、バックエンド（Django等）にはCORS設定を必ず追加し、開発・本番環境ごとに許可オリジンを厳格に管理すること。E2E観点での動作検証も必須。
+  category: "アーキテクチャ・運用・セキュリティ"
+  example_bad: |
+    // 相対パスでAPI呼び出し
+    fetch('/api/v1/parse-file', { ... })
+
+    # settings.py
+    # CORS設定なし
   example_good: |
-    class CreateGitHubResourcesAPIView(APIView):
-        authentication_classes = [CustomAPIKeyAuthentication]
-        permission_classes = []
-        def post(self, request):
-            dry_run = request.data.get('dry_run', False)
-            # ...APIキー抽出・ユースケース呼び出し...
-            try:
-                result = use_case.execute(...)
-                return Response(serializer.data, status=200)
-            except (GitHubAuthenticationError, GitHubClientError) as e:
-                return Response({"detail": str(e)}, status=400)
-            except Exception as e:
-                return Response({"detail": f"Unexpected error: {e}"}, status=500)
-    # テスト例
-    with patch("app.views.CreateGitHubResourcesUseCase.execute", return_value=dummy_result):
-        response = client.post(url, {...}, format="json")
-        assert response.status_code == 200
+    // 絶対パスでAPI呼び出し
+    const API_BASE_URL = window.API_SERVER_URL || 'http://localhost:8000';
+    fetch(`${API_BASE_URL}/api/v1/parse-file`, { ... })
+
+    # settings.py
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:8080",
+        "https://your-frontend-domain.com",
+    ]
 
 - rule_id: "CR-022"
   title: "本番コードにテスト用分岐を持ち込まない"
@@ -338,3 +332,4 @@
     @patch('core_logic.adapters.ai_parser.AIParser.__init__', return_value=None)
     @patch('core_logic.services.parse_issue_file_service.ParseIssueFileService.parse')
     def test_upload_valid_file(...):
+        ...
