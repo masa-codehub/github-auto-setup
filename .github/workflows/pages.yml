@@ -1,0 +1,43 @@
+# GitHub Pagesに静的コンテンツをデプロイするためのシンプルなワークフロー
+name: Deploy Frontend to GitHub Pages
+
+on:
+  # mainブランチにプッシュされたときに自動的に実行されます
+  push:
+    branches: ["main"]
+
+  # Actionsタブから手動でワークフローを実行できるようにします
+  workflow_dispatch:
+
+# GITHUB_TOKENのパーミッションを設定し、GitHub ActionsがPagesにデプロイできるようにします
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 1つのコンカレントなデプロイメントを許可し、進行中の古い実行をキャンセルします
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  # 'deploy'という単一のジョブ
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # ここで公開したいフォルダを指定します
+          # 'frontend'フォルダの内容をアップロード
+          path: './frontend'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
