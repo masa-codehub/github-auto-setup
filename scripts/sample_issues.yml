@@ -1,0 +1,54 @@
+- title: APIのレスポンスが特定条件下で遅延する
+  description: >
+    `/api/v1/create-github-resources/` エンドポイントで50件以上のIssueを一度に送信すると、
+    応答に5秒以上かかる場合があります。データベースクエリまたはバックグラウンド処理の最適化が必要です。
+  milestone: v1.1
+  labels:
+    - bug
+    - priority: high
+  assignees:
+    - masa-codehub
+
+- title: パースしたIssueを単一のJSONファイルとして保存する機能
+  description: >
+    ユーザーとして、現在のYAML形式に加えて、パースしたIssueを単一のJSON配列ファイルとして
+    保存できるようにしたい。
+  milestone: v1.1
+  labels:
+    - enhancement
+    - story
+
+- title: GitHubRestClientをコネクションプーリングを使用するようリファクタリング
+  description: >
+    現在の実装ではリクエストごとに新しいHTTPクライアントが作成されています。
+    パフォーマンス向上のため、接続を再利用するようにリファクタリングする必要があります。
+  milestone: v2.0
+  labels:
+    - refactor
+    - task
+
+- title: GitHub Actionsのデプロイ手順をREADMEに追記
+  description: >
+    Jekyllのデフォルトビルドではなく、新しいGitHub Actionsワークフローを使用した
+    デプロイプロセスを反映するようにREADME.mdを更新する必要があります。
+  milestone: v1.0
+  labels:
+    - documentation
+
+- title: CLIモジュールのためのE2Eテストを作成
+  description: >
+    コマンドラインインターフェースに対して、ファイルパース、GitHubリソース作成、
+    ローカル保存機能をカバーする包括的なエンドツーエンドテストを記述します。
+  milestone: v1.1
+  labels:
+    - test
+    - priority: medium
+
+- title: Dependabotによる依存関係の自動更新を設定
+  description: >
+    セキュリティとメンテナンスを向上させるため、古いPythonおよびJavaScriptの
+    依存関係に対するプルリクエストを自動的に作成するようにDependabotを設定します。
+  milestone: v1.0
+  labels:
+    - CI/CD
+    - enhancement
