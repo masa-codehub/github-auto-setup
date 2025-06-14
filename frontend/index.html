@@ -35,10 +35,17 @@
                 <form id="upload-form">
                   <div class="input-group">
                     <input type="file" class="form-control" id="issue-file-input" aria-describedby="fileHelp">
-                    <button class="btn btn-primary" id="upload-button" type="button">Upload & Preview</button>
+                    <button class="btn btn-primary" id="upload-button" type="submit">Upload & Preview</button>
                   </div>
                   <div class="form-text" id="fileHelp">
                     Upload a Markdown, YAML, or JSON file containing issue definitions.
+                  </div>
+                  <div class="mb-3 mt-3">
+                    <label for="backend-api-key-input" class="form-label">Backend API Key</label>
+                    <input type="password" class="form-control" id="backend-api-key-input" name="backend_api_key" placeholder="Enter Backend API Key" aria-describedby="backendApiKeyHelp">
+                    <div id="backendApiKeyHelp" class="form-text">
+                      Django REST API認証用APIキー（環境変数: BACKEND_API_KEY）。
+                    </div>
                   </div>
                   <div class="mt-2">
                     <span id="upload-spinner" class="spinner-border text-primary" style="display:none;" role="status" aria-hidden="true"></span>
@@ -103,6 +110,13 @@
                     <div id="repoHelp" class="form-text">e.g., your-github-username/your-repo</div>
                   </div>
                   <div class="mb-3">
+                    <label for="github-pat-input" class="form-label">GitHub Personal Access Token</label>
+                    <input type="password" class="form-control" id="github-pat-input" name="github_pat" placeholder="Enter your GitHub PAT" aria-describedby="githubPatHelp">
+                    <div id="githubPatHelp" class="form-text">
+                      GitHub APIを利用するためのPersonal Access Token（環境変数: GITHUB_PAT）。
+                    </div>
+                  </div>
+                  <div class="mb-3">
                     <label for="project-name-input" class="form-label">Project Name <span class="text-muted">(Optional)</span></label>
                     <input type="text" class="form-control" id="project-name-input" name="project_name" placeholder="Project Name">
                   </div>
@@ -154,7 +168,7 @@
                       </select>
                     </div>
                     <div class="mb-3">
-                      <label for="api-key-input" class="form-label">API Key</label>
+                      <label for="api-key-input" class="form-label">API Key (AI Provider)</label>
                       <input type="password" class="form-control" id="api-key-input" name="api_key" placeholder="Enter API Key for selected provider" aria-describedby="apiKeyHelp">
                       <div id="apiKeyHelp" class="form-text">
                         Enter the API key corresponding to the selected AI Provider above.

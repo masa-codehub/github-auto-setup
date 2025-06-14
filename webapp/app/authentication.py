@@ -13,7 +13,8 @@ class CustomAPIKeyAuthentication(BaseAuthentication):
         api_key = request.headers.get('X-API-KEY')
         github_pat = request.headers.get('X-GitHub-PAT')
         ai_api_key = request.headers.get('X-AI-API-KEY')
-        valid_key = os.environ.get('API_KEY')
+        # APIキーは環境変数 'BACKEND_API_KEY' で管理
+        valid_key = os.environ.get('BACKEND_API_KEY')
         valid_github_pat = os.environ.get('GITHUB_PAT')
         valid_ai_api_key = os.environ.get('AI_API_KEY')
         if api_key and valid_key and api_key == valid_key:

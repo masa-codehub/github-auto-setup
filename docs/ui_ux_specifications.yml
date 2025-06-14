@@ -63,14 +63,17 @@ top_page_layout:
                 - type: "Form (id='upload-form')"
                   description: "ファイルアップロードはJavaScriptがFormDataを生成し、APIエンドポイントに非同期送信する。Djangoビューへの直接POSTは行わない。"
                   elements:
-                    - type: "CSRF Token" #
-                    - type: "File Input (input#issue-file-input)" #
-                      attributes: "type='file', accepts '.md, .yml, .yaml, .json'"
-                    - type: "Submit Button (button#upload-button)" #
+                    - type: "File Input (input#issue-file-input)"
+                      attributes: "type='file', accept='.md,.yml,.yaml,.json'"
+                    - type: "Submit Button (button#upload-button)"
                       label: "Upload & Preview"
-                    - type: "Help Text (div#fileHelp)" #
-                      content: "Allowed file types and size limits."
-              ux_intent: "Guide user to provide the source issue file as the first step."
+                    - type: "Help Text (div#fileHelp)"
+                      content: "Upload a Markdown, YAML, or JSON file containing issue definitions."
+                    - type: "Password Input (input#backend-api-key-input)"
+                      label: "Backend API Key"
+                      placeholder: "Enter Backend API Key"
+                      help: "Django REST API認証用APIキー（環境変数: BACKEND_API_KEY）。"
+              ux_intent: "Guide user to provide the source issue file as the first step。Backend API Keyもここで入力する。"
 
             - section_name: "Step 2: Preview & Select Issues"
               id: "issue-list-section" #
@@ -136,6 +139,10 @@ top_page_layout:
                         - type: "Text Input (input#repo-name-input)" #
                           label: "Repository"
                           placeholder: "owner/repo-name"
+                        - type: "Password Input (input#github-pat-input)"
+                          label: "GitHub Personal Access Token"
+                          placeholder: "Enter your GitHub PAT"
+                          help: "GitHub APIを利用するためのPersonal Access Token（環境変数: GITHUB_PAT）。"
                         - type: "Text Input (input#project-name-input)" #
                           label: "Project Name (Optional)"
                         - type: "Switch/Checkbox (input#dry-run-checkbox)" #
@@ -178,9 +185,10 @@ top_page_layout:
                             - { value: "gemini-1.0-pro", label: "gemini-1.0-pro" }
                           visibility_condition: "AI Provider is Google Gemini"
                         - type: "Password Input (input#api-key-input)" #
-                          label: "API Key"
+                          label: "API Key (AI Provider)"
                           name: "api_key"
                           placeholder: "Enter API Key for selected provider"
+                          help: "Enter the API key corresponding to the selected AI Provider above."
               ux_intent: "Enable users to execute primary actions (GitHub registration, local save) on selected issues, and configure AI settings for parsing, with all relevant controls grouped and readily accessible."
 
 future_enhancements_ux:

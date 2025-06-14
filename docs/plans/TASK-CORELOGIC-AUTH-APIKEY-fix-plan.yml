@@ -10,7 +10,7 @@ implementation_steps:
     title: "カスタムAPIキー認証クラスの新規実装"
     command: |
       1. webapp/app/authentication.py に BaseAuthentication を継承した CustomAPIKeyAuthentication クラスを新規作成。
-      2. APIキーは環境変数（例: API_KEY）または設定ファイルから取得し、リクエストヘッダー 'X-API-KEY' と照合。
+      2. APIキーは環境変数（例: BACKEND_API_KEY）または設定ファイルから取得し、リクエストヘッダー 'X-API-KEY' と照合。
     verification: |
       - authentication.py の CustomAPIKeyAuthentication クラスが正しく実装されていること。
       - 有効なAPIキーで認証が通ること、無効または未指定の場合は認証エラーとなることを手動・自動テストで確認。

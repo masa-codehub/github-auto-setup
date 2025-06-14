@@ -633,7 +633,7 @@ skip_tests:
 - id: TASK-20250611-APIKEY-TEST-REFINE
   title: カスタムAPIキー認証・テスト設計に関するリファクタリング・申し送り
   description: |
-    - DRFのカスタムAPIキー認証導入に伴い、テストでsetUp/tearDownで環境変数(API_KEY)を必ずセット・解除すること。
+    - DRFのカスタムAPIキー認証導入に伴い、テストでsetUp/tearDownで環境変数(BACKEND_API_KEY)を必ずセット・解除すること。
     - テスト用の依存注入（pytest fixture）は、テスト本体で返り値やside_effectを必ず明示的に設定し、fixture内で新たにモックを生成し直さないこと。
     - 本番コードにテスト用の分岐（例: SKIP_TYPE_CHECK_FOR_TESTS）は今後一切持ち込まない。型チェックはMagicMockやcreate_autospec、もしくはtype(obj).__name__ in ("MagicMock", "NonCallableMagicMock") で許容する設計とする。
     - 型チェックや依存注入の設計方針はcoding-rules.ymlにも明記済み。今後もルール逸脱がないかレビュー時に必ず確認すること。
