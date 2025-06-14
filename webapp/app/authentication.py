@@ -11,16 +11,7 @@ class CustomAPIKeyAuthentication(BaseAuthentication):
 
     def authenticate(self, request):
         api_key = request.headers.get('X-API-KEY')
-        github_pat = request.headers.get('X-GitHub-PAT')
-        ai_api_key = request.headers.get('X-AI-API-KEY')
-        # APIキーは環境変数 'BACKEND_API_KEY' で管理
         valid_key = os.environ.get('BACKEND_API_KEY')
-        valid_github_pat = os.environ.get('GITHUB_PAT')
-        valid_ai_api_key = os.environ.get('AI_API_KEY')
         if api_key and valid_key and api_key == valid_key:
-            return (None, None)
-        if github_pat and valid_github_pat and github_pat == valid_github_pat:
-            return (None, None)
-        if ai_api_key and valid_ai_api_key and ai_api_key == valid_ai_api_key:
             return (None, None)
         raise exceptions.AuthenticationFailed('有効なAPIキーが指定されていません')

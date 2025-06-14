@@ -42,49 +42,36 @@
         return;
       }
     });
-    // uploadForm.addEventListener('submit', async function(e) {
-    //   clearError(defaultHelp);
-    //   const file = fileInput.files[0];
-    //   if (!file) {
-    //     showError('ファイルを選択してください');
-    //     e.preventDefault();
-    //     return;
-    //   }
-    //   const ext = '.' + getExt(file.name);
-    //   if (!allowedExts.includes(ext)) {
-    //     showError('許可されていないファイル形式です（.md, .yml, .yaml, .json のみ可）');
-    //     e.preventDefault();
-    //     return;
-    //   }
-    //   if (file.size > maxSize) {
-    //     showError('ファイルサイズが10MBを超えています');
-    //     e.preventDefault();
-    //     return;
-    //   }
-    //   // --- fetch+FormData+POSTでAPI呼び出し ---
-    //   e.preventDefault(); // ページリロード防止
-    //   const formData = new FormData();
-    //   formData.append('issue_file', file); // ←キー名を統一
-    //   try {
-    //     const csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
-    //     const response = await fetch(API_SERVER + '/api/v1/parse-file', {
-    //       method: 'POST',
-    //       body: formData,
-    //       headers: csrfToken ? { 'X-CSRFToken': csrfToken } : undefined
-    //     });
-    //     if (!response.ok) {
-    //       const err = await response.json().catch(() => ({}));
-    //       showError(err.detail || 'アップロードに失敗しました');
-    //       return;
-    //     }
-    //     // 成功時の処理（例: 結果表示ロジックへデータ渡し）
-    //     const result = await response.json();
-    //     // window.dispatchEventやコールバックでdisplay_logic.js等に通知してもよい
-    //     window.dispatchEvent(new CustomEvent('fileUploadSuccess', { detail: result }));
-    //   } catch (err) {
-    //     showError('ネットワークエラーが発生しました');
-    //   }
-    // });
+    // --- Backend API Key inputの値を絶対にクリアしないように明示的に防止 ---
+    // localStorageに1分間だけ保存し、ページリロード時に自動復元
+    const backendApiKeyInput = document.getElementById('backend-api-key-input');
+    const STORAGE_KEY = 'backendApiKey';
+    const STORAGE_TIME_KEY = 'backendApiKey_savedAt';
+    const EXPIRE_MS = 60 * 1000; // 1分
+    // localStorageからの復元はDOMContentLoaded後に実行
+    window.addEventListener('DOMContentLoaded', function() {
+      const backendApiKeyInput = document.getElementById('backend-api-key-input');
+      if (backendApiKeyInput) {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          const savedAt = parseInt(localStorage.getItem(STORAGE_TIME_KEY), 10);
+          if (saved && savedAt && Date.now() - savedAt < EXPIRE_MS) {
+            backendApiKeyInput.value = saved;
+          } else {
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(STORAGE_TIME_KEY);
+          }
+        } catch (e) {}
+        // 入力時に保存
+        backendApiKeyInput.addEventListener('input', function() {
+          try {
+            localStorage.setItem(STORAGE_KEY, backendApiKeyInput.value);
+            localStorage.setItem(STORAGE_TIME_KEY, Date.now().toString());
+          } catch (e) {}
+        });
+      }
+    });
+    // submit時やアップロード成功時にuploadForm.reset()やinput.value=''等は絶対に呼ばない
   }
 
   // バリデーション関数を外部からもテスト可能にエクスポート

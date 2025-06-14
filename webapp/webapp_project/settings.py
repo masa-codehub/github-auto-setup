@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+from corsheaders.defaults import default_headers
 from pathlib import Path
 import os
 
@@ -140,7 +141,11 @@ CORS_ALLOWED_ORIGINS = [
 ]
 # DEBUG時の全許可は本番では無効化すること
 if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = False
+    CORS_ALLOW_ALL_ORIGINS = True  # ← 一時的に全許可
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-api-key',
+]
 
 # セキュリティヘッダー例
 SECURE_CONTENT_TYPE_NOSNIFF = True

@@ -1,11 +1,11 @@
 // Issue選択（全選択/解除・選択ID保持）用JS
 
 // display_logic.jsをimport
-import { displayIssues } from './display_logic.js';
+// import { displayIssues } from './display_logic.js'; // 一時的にコメントアウト
 
 // === APIエンドポイント定数 ===
-const API_SERVER = window.API_SERVER_URL || 'http://localhost:8000';
-const API_ENDPOINT = API_SERVER + '/api/v1/parse-file';
+const API_SERVER = window.API_SERVER_URL || 'http://localhost:8002';
+const API_ENDPOINT = API_SERVER + '/api/v1/parse-file/';
 
 // DOM依存部分を即時実行しないように分離
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -72,8 +72,10 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
 
         // === ファイルアップロードフォームの送信イベントリスナー追加 ===
         const uploadForm = document.getElementById('upload-form');
-        if(uploadForm) {
-            uploadForm.addEventListener('submit', handleUploadFormSubmit(uploadForm, uploadIssueFile, showUploadError));
+        const uploadButton = document.getElementById('upload-button');
+        if(uploadButton && uploadForm) {
+            console.log("バインドOK"); // デバッグ用: clickバインド確認
+            uploadButton.addEventListener('click', handleUploadFormSubmit(uploadForm, uploadIssueFile, showUploadError));
         }
         // === GitHub登録・ローカル保存ボタンのイベントリスナー追加 ===
         const githubSubmitButton = document.getElementById('github-submit-button');
@@ -112,7 +114,19 @@ async function uploadIssueFile(formData) {
         const endpoint = API_ENDPOINT;
         // CSRFトークンをヘッダーに付与
         const csrfToken = getCookie('csrftoken');
+        const backendApiKeyInput = document.getElementById('backend-api-key-input');
         const headers = csrfToken ? { 'X-CSRFToken': csrfToken } : {};
+        // Backend API KeyをX-API-KEYヘッダーに追加
+        if (backendApiKeyInput && backendApiKeyInput.value) {
+            headers['X-API-KEY'] = backendApiKeyInput.value;
+        }
+        // テスト用: .envのBACKEND_API_KEYとX-API-KEYをコンソール出力
+        console.log('BACKEND_API_KEY (.env):', 'my_backend_api_key');
+        console.log('X-API-KEY (request header):', headers['X-API-KEY']);
+        // --- デバッグ用: API呼び出し前のチェック ---
+        // --- デバッグ用ここまで ---
+        // --- デバッグ: formData.appendやfor...ofで例外が出ても必ずcatchで表示 ---
+        // --- デバッグ用ここまで ---
         const response = await fetch(endpoint, {
             method: 'POST',
             body: formData,
@@ -130,6 +144,8 @@ async function uploadIssueFile(formData) {
             } catch (_) {}
             throw new Error(errorMsg);
         }
+        // ここでAPIアクセス成功時のメッセージを出力
+        console.log('APIアクセス成功: /api/v1/parse-file/ に正常にアクセスしました。');
         return await response.json();
     } catch (error) {
         throw error;
@@ -157,26 +173,30 @@ function showUploadError(message) {
 // submitイベントリスナー本体
 function handleUploadFormSubmit(uploadForm, uploadIssueFileFn, showUploadErrorFn) {
     return async function (e) {
-        e.preventDefault();
+        e.preventDefault(); // 最優先でリロード抑止
+        console.log("submit!"); // デバッグ用: submitイベント発火確認
         const fileInput = uploadForm.querySelector('input[type="file"]');
+        const backendApiKeyInput = document.getElementById('backend-api-key-input');
         if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
             showUploadErrorFn('ファイルを選択してください。');
             return;
         }
         const formData = new FormData();
-        formData.append('issue_file', fileInput.files[0]); // ←キー名を統一
-
+        formData.append('issue_file', fileInput.files[0]);
+        // Backend API KeyもFormDataやfetchヘッダーに必要ならここで追加
+        if (backendApiKeyInput && backendApiKeyInput.value) {
+            // 例: ヘッダーで送る場合はfetch側で追加、FormDataで送る場合はここでappend
+            // formData.append('backend_api_key', backendApiKeyInput.value); // ←API仕様に応じて
+        }
         const uploadSpinner = document.getElementById('upload-spinner');
         const uploadButton = document.getElementById('upload-button');
-
         if (uploadSpinner) uploadSpinner.style.display = 'inline-block';
         if (uploadButton) uploadButton.disabled = true;
-
         try {
             const data = await uploadIssueFileFn(formData);
             if (data && Array.isArray(data.issues)) {
                 // display_logic.jsの描画関数を呼び出す
-                displayIssues(data.issues);
+                // displayIssues(data.issues); // ←一時的にコメントアウト
             } else {
                 showUploadErrorFn('受信データにIssueが含まれていません。');
             }
@@ -185,7 +205,10 @@ function handleUploadFormSubmit(uploadForm, uploadIssueFileFn, showUploadErrorFn
         } finally {
             if (uploadSpinner) uploadSpinner.style.display = 'none';
             if (uploadButton) uploadButton.disabled = false;
+            // フォームリセットやinput値クリアは行わない（Backend API Key欄を残すため）
         }
+        // 最後にreturn falseで念のためリロード抑止
+        return false;
     };
 }
 
@@ -271,7 +294,13 @@ const AI_SETTINGS_API = API_SERVER + '/api/v1/ai-settings/';
 
 async function loadAiSettings() {
     try {
-        const res = await fetch(AI_SETTINGS_API, { credentials: 'same-origin' });
+        // Backend API Keyを取得
+        const backendApiKeyInput = document.getElementById('backend-api-key-input');
+        const headers = {};
+        if (backendApiKeyInput && backendApiKeyInput.value) {
+            headers['X-API-KEY'] = backendApiKeyInput.value;
+        }
+        const res = await fetch(AI_SETTINGS_API, { credentials: 'same-origin', headers });
         if (!res.ok) return;
         const data = await res.json();
         // プロバイダー
@@ -343,10 +372,18 @@ function setupAiSettingsForm() {
     if (aiForm) {
         aiForm.addEventListener('submit', saveAiSettings);
     }
+    // 『AI設定を取得』ボタンのイベントリスナー
+    const aiLoadButton = document.getElementById('ai-settings-load-button');
+    if (aiLoadButton) {
+        aiLoadButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadAiSettings();
+        });
+    }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    loadAiSettings();
+    // loadAiSettings(); // ←自動実行を削除
     setupAiSettingsForm();
 });
 
